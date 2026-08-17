@@ -4,7 +4,7 @@ with hierarchy;
 
 define behavior for ZA_PP_SubmitSync
 {
-  association _Items { create; }
+  association _Items;
 }
 
 define behavior for ZA_PP_SubmitSyncItem
