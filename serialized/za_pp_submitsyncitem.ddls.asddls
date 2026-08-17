@@ -1,6 +1,7 @@
 @EndUserText.label: 'Tham số chi tiết đồng bộ di động'
 define abstract entity ZA_PP_SubmitSyncItem
 {
+  _Parent : association to parent ZA_PP_SubmitSync;
   ExternalItemID : abap.char(64);
   TransactionType : abap.char(20);
   ProductionOrder : abap.char(12);

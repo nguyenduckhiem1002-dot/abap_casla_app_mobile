@@ -9,4 +9,5 @@ define behavior for ZA_PP_SubmitSync
 
 define behavior for ZA_PP_SubmitSyncItem
 {
+  association _Parent;
 }
