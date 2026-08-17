@@ -1,7 +1,7 @@
 # ABAP RAP Mobile Production Sync
 
 Source bundle for the ABAP RAP backend described in
-[`ABAP_RAP_MOBILE_SYNC_PLAN.md`](../ABAP_RAP_MOBILE_SYNC_PLAN.md).
+[`ABAP_RAP_MOBILE_SYNC_PLAN.md`](docs/ABAP_RAP_MOBILE_SYNC_PLAN.md).
 
 ## Target
 
