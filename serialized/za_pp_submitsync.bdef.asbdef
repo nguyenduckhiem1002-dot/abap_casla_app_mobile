@@ -1,5 +1,6 @@
 abstract;
 strict ( 2 );
+with hierarchy;
 
 define behavior for ZA_PP_SubmitSync
 {
