@@ -1423,3 +1423,21 @@ bảng audit riêng nếu retention/reporting không đáp ứng được bằng
 5. Expose projection trong `ZUI_PP_OPALLOC`, republish V4 Web API.
 6. Xây proxy tự host giữ technical credential.
 7. Hoàn thiện bgPF/APJ, reconciliation, monitoring và acceptance tests.
+
+### 21.9. Phân chia package
+
+```text
+ZPK_XNSL_SM_BACKEND
+├── Domain production allocation, sync inbox, async worker
+├── Service definition ZUI_PP_OPALLOC
+└── ZPK_XNSL_MOB_AUTH
+    ├── ZTB_MOB_*
+    ├── ZI_MOB_* / ZC_MOB_*
+    ├── ZA_MOB_*
+    ├── ZBP_I_MOB_USER
+    └── ZCL_MOB_TOKEN_VALIDATOR
+```
+
+`ZPK_XNSL_MOB_AUTH` không phụ thuộc domain allocation. Backend sync được phép
+phụ thuộc auth để validate session và identity snapshot; auth không được phụ
+thuộc ngược lại backend nhằm tránh dependency cycle.
