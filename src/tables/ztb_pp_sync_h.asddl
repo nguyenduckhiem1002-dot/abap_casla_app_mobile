@@ -7,7 +7,11 @@ define table ztb_pp_sync_h {
   key client            : abap.clnt not null;
   key sync_uuid         : sysuuid_x16 not null;
   external_id           : abap.char(64) not null;
-  device_id             : abap.char(64) not null;
+  device_id             : abap.char(120) not null;
+  user_uuid             : sysuuid_x16;
+  session_id            : sysuuid_x16;
+  authenticated_at      : abap.utclong;
+  request_hash          : abap.char(128);
   sync_status           : abap.char(20) not null;
   total_items           : abap.int4 not null;
   success_items         : abap.int4 not null;

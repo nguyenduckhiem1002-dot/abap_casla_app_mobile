@@ -1314,3 +1314,101 @@ Trường hợp CL00001 còn 5.000 và chuyển 3.000 cho CL00002 phải đượ
 - [Background Processing Framework](https://help.sap.com/docs/sap-btp-abap-environment/abap-environment/background-processing-framework)
 - [Controlled SAP LUW](https://help.sap.com/docs/abap-cloud/abap-concepts/controlled-sap-luw)
 - [Application Job API `CL_APJ_RT_API`](https://help.sap.com/docs/ABAP_PLATFORM_NEW/b5670aaaa2364a29935f40b16499972d/1491e6c075c04e7c9a485a2e24b82653.html)
+
+---
+
+## 21. Xác thực mobile tự quản lý gắn với đồng bộ
+
+### 21.1. Kiến trúc
+
+```text
+Mobile -- custom Bearer --> Proxy tự host
+Proxy  -- SAP technical authentication --> RAP OData V4
+RAP    --> validate session --> Sync Inbox --> bgPF/APJ
+```
+
+Technical credential chỉ nằm trên proxy, không nhúng trong mobile. Ba bảng hiện
+có giữ vai trò authoritative: `ZTB_USER_QR` quản lý user,
+`ZTB_USER_CRED_QR` quản lý credential và `ZTB_SESSION_QR` quản lý hash token,
+expiry, device và revoke. Custom token là authorization ứng dụng sau lớp
+authentication của SAP Gateway.
+
+### 21.2. Bảng mới `ZTB_USER_WORKER_QR`
+
+Bảng liên kết tài khoản đăng nhập với nhân công nghiệp vụ:
+
+| Field | Ý nghĩa |
+|---|---|
+| `USER_WORKER_UUID` | Khóa kỹ thuật |
+| `USER_UUID` | Tài khoản trong `ZTB_USER_QR` |
+| `WORKER_ID` | Nhân công trong `ZTB_KB_NHANCONG` |
+| `PLANT`, `WORK_CENTER` | Phạm vi được phép thao tác |
+| `VALID_FROM`, `VALID_TO` | Thời gian hiệu lực |
+| `STATUS` | `A` hoạt động, `I` ngừng |
+
+Rule: `VALID_FROM <= VALID_TO`, không overlap cùng user/worker/plant/work
+center; ExecutionDate phải nằm trong hiệu lực của cả worker master và mapping.
+
+### 21.3. Mở rộng `ZTB_PP_SYNC_H`
+
+| Field | Ý nghĩa |
+|---|---|
+| `USER_UUID` | Người đã xác thực |
+| `SESSION_ID` | Session dùng để submit |
+| `AUTHENTICATED_AT` | Thời điểm kiểm tra token |
+| `REQUEST_HASH` | Hash canonical payload |
+| `DEVICE_ID` | Tăng lên 120, khớp bảng session |
+
+Không lưu raw access/refresh token vào inbox. Async worker chỉ dùng identity
+snapshot để audit và không kiểm tra lại token có thể đã hết hạn.
+
+Idempotency:
+
+```text
+Unique DeviceID + ExternalID
+Cùng key, cùng REQUEST_HASH: trả SyncUUID cũ
+Cùng key, khác REQUEST_HASH: IDEMPOTENCY_PAYLOAD_CONFLICT
+```
+
+### 21.4. Luồng sync khi nhận request
+
+1. Validate access token, session `A`, expiry và DeviceID.
+2. Validate user active và mapping user-worker.
+3. Canonicalize payload, tính `REQUEST_HASH`.
+4. Lock `DeviceID + ExternalID`, xử lý idempotency.
+5. Tạo header/items `QUEUED`, lưu identity snapshot.
+6. Trả SyncUUID ngay; không chạy nghiệp vụ nặng trong HTTP request.
+
+### 21.5. Luồng async worker
+
+1. Nhận UUID inbox, không nhận raw token.
+2. Lock ProductionOrder + Operation.
+3. Đọc live quantity, UoM, Plant, WorkCenter và status.
+4. Validate lại worker/mapping theo ExecutionDate.
+5. Gọi domain BO bằng EML; ghi balance và ledger cùng LUW.
+6. Cập nhật item/header qua EML privileged.
+7. Chỉ retry `TECHNICAL_ERROR`.
+
+### 21.6. Index bắt buộc
+
+```text
+ZTB_USER_QR: UNIQUE NORMALIZED_USERNAME
+ZTB_SESSION_QR: ACCESS_TOKEN_HASH; REFRESH_TOKEN_HASH; USER_UUID + STATUS
+ZTB_USER_WORKER_QR: USER_UUID + STATUS + VALID_FROM + VALID_TO
+ZTB_PP_SYNC_H: UNIQUE DEVICE_ID + EXTERNAL_ID; USER_UUID + RECEIVED_AT
+ZTB_PP_SYNC_I: UNIQUE SYNC_UUID + EXTERNAL_ITEM_ID; ITEM_STATUS + NEXT_RETRY_AT
+ZTB_PP_ALLOC_TXN: SYNC_ITEM_UUID; OPERATION_UUID + CREATED_AT
+```
+
+Failed login, refresh, revoke và đổi mật khẩu ghi Application Log. Chỉ tạo
+bảng audit riêng nếu retention/reporting không đáp ứng được bằng Application Log.
+
+### 21.7. Thứ tự triển khai
+
+1. Activate bảng mapping và mở rộng sync header.
+2. Tạo indexes, nạp mapping user-worker.
+3. Hoàn thiện token validator và sửa password/token hashing.
+4. Xây Sync RAP BO, `submitSync deep parameter`, status query và retry.
+5. Expose projection trong `ZUI_PP_OPALLOC`, republish V4 Web API.
+6. Xây proxy tự host giữ technical credential.
+7. Hoàn thiện bgPF/APJ, reconciliation, monitoring và acceptance tests.

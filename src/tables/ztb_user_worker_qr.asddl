@@ -1,0 +1,21 @@
+@EndUserText.label : 'Liên kết tài khoản và nhân công'
+@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #A
+@AbapCatalog.dataMaintenance : #RESTRICTED
+define table ztb_user_worker_qr {
+  key client            : abap.clnt not null;
+  key user_worker_uuid  : sysuuid_x16 not null;
+  user_uuid             : sysuuid_x16 not null;
+  worker_id             : abap.char(8) not null;
+  plant                 : werks_d not null;
+  work_center           : arbpl not null;
+  valid_from            : datum not null;
+  valid_to              : datum not null;
+  status                : abap.char(1) not null;
+  created_by            : abp_creation_user;
+  created_at            : abp_creation_tstmpl;
+  last_changed_by       : abp_lastchange_user;
+  last_changed_at       : abp_lastchange_tstmpl;
+  local_last_changed_at : abp_locinst_lastchange_tstmpl;
+}
