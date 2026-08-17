@@ -3,7 +3,7 @@
 @AbapCatalog.tableCategory : #TRANSPARENT
 @AbapCatalog.deliveryClass : #A
 @AbapCatalog.dataMaintenance : #RESTRICTED
-define table ztb_user_worker_qr {
+define table ztb_mob_usr_wrk {
   key client            : abap.clnt not null;
   key user_worker_uuid  : sysuuid_x16 not null;
   user_uuid             : sysuuid_x16 not null;

@@ -1,0 +1,15 @@
+@EndUserText.label : 'Thông tin xác thực ứng dụng di động'
+@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #A
+@AbapCatalog.dataMaintenance : #RESTRICTED
+define table ztb_mob_cred {
+  key client          : abap.clnt not null;
+  key user_uuid       : sysuuid_x16 not null;
+  password_hash       : abap.char(128) not null;
+  password_salt       : abap.char(128) not null;
+  hash_algorithm      : abap.char(20) not null;
+  hash_iterations     : abap.int4 not null;
+  password_changed_at : abap.utclong;
+  credential_status   : abap.char(1) not null;
+}
