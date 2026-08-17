@@ -6,10 +6,10 @@ CLASS zcl_pp_worker_validator DEFINITION
   PUBLIC SECTION.
     CLASS-METHODS is_worker_active
       IMPORTING
-        worker_id      TYPE c LENGTH 8
-        plant          TYPE c LENGTH 4
-        work_center    TYPE c LENGTH 8
-        execution_date TYPE d
+        worker_id      TYPE ztb_kb_nhancong-worker_id
+        plant          TYPE ztb_kb_nhancong-plant
+        work_center    TYPE ztb_kb_nhancong-work_center
+        execution_date TYPE ztb_kb_nhancong-from_date
       RETURNING
         VALUE(result)  TYPE abap_bool.
 ENDCLASS.

@@ -1,0 +1,13 @@
+{
+  "global": {
+    "files": "/serialized/**/*.*",
+    "skipGeneratedGatewayClasses": true
+  },
+  "syntax": {
+    "version": "Cloud",
+    "errorNamespace": "."
+  },
+  "rules": {
+    "parser_error": true
+  }
+}

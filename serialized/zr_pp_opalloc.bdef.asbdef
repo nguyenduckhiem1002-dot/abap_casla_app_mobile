@@ -10,7 +10,8 @@ etag master LocalLastChangedAt
   create;
   update;
 
-  field ( readonly, numbering : managed ) OperationUUID;
+  field ( readonly ) OperationUUID;
+  field ( numbering : managed ) OperationUUID;
   field ( mandatory ) ProductionOrder, Operation, Plant, WorkCenter,
                       OperationQuantity, UnitOfMeasure;
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy,
@@ -51,7 +52,8 @@ etag master LocalLastChangedAt
 {
   update;
 
-  field ( readonly, numbering : managed ) EmployeeAllocationUUID;
+  field ( readonly ) EmployeeAllocationUUID;
+  field ( numbering : managed ) EmployeeAllocationUUID;
   field ( readonly ) OperationUUID, CreatedBy, CreatedAt,
                      LastChangedBy, LocalLastChangedAt;
 
@@ -82,7 +84,8 @@ persistent table ztb_pp_alloc_txn
 lock dependent by _Operation
 authorization dependent by _Operation
 {
-  field ( readonly, numbering : managed ) TransactionUUID;
+  field ( readonly ) TransactionUUID;
+  field ( numbering : managed ) TransactionUUID;
   field ( readonly ) OperationUUID, OriginalTransactionUUID,
                      SyncItemUUID, TransactionType, FromWorkerID,
                      ToWorkerID, WorkerID, Quantity, UnitOfMeasure,
