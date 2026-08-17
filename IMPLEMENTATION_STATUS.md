@@ -13,6 +13,12 @@
 - Managed RAP interface behavior with root locking and ETag.
 - Root validation and worker validation utility class.
 - Service definition `ZUI_PP_OPALLOC`.
+- Mobile authentication RAP foundation:
+  - `ZI_MOB_User` composition with credential, sessions and worker mappings.
+  - `ZC_MOB_User` API projection exposing actions only.
+  - Managed BDEF and behavior pool `ZBP_I_MOB_USER`.
+  - Abstract contracts for login, refresh, logout, create user and password change.
+  - Token/session lookup helper `ZCL_MOB_TOKEN_VALIDATOR`.
 
 ## Deliberately fail-closed
 
@@ -22,6 +28,8 @@ The following actions are declared but currently return an error message:
 - `transfer`
 - `confirm`
 - `reverse`
+- Mobile auth actions until a production secret/password KDF is configured:
+  `createUser`, `login`, `logout`, `refresh`, `changePassword`.
 
 This prevents incomplete logic from changing production quantities. They will be
 enabled incrementally after the base objects activate on the target tenant.

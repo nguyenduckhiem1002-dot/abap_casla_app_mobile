@@ -1,0 +1,9 @@
+CLASS zbp_i_mob_user DEFINITION
+  PUBLIC
+  ABSTRACT
+  FINAL
+  FOR BEHAVIOR OF zi_mob_user.
+ENDCLASS.
+
+CLASS zbp_i_mob_user IMPLEMENTATION.
+ENDCLASS.

@@ -1,0 +1,125 @@
+managed implementation in class zbp_i_mob_user unique;
+strict ( 2 );
+
+define behavior for ZI_MOB_User alias MobileUser
+persistent table ztb_mob_user
+lock master
+authorization master ( global )
+etag master LocalLastChangedAt
+{
+  create;
+  update;
+  delete;
+  field ( numbering : managed, readonly ) UserUUID;
+  field ( readonly ) NormalizedUsername, FailedLoginCount, LockedUntil,
+                     FirstLoginAt, LastLoginAt, CreatedBy, CreatedAt,
+                     LastChangedBy, LastChangedAt, LocalLastChangedAt;
+  association _Credential { create; }
+  association _Sessions { create; }
+  association _WorkerMappings { create; }
+  static action createUser parameter ZA_MOB_CreateUser result [1] $self;
+  static action login parameter ZA_MOB_Login result [1] ZA_MOB_LoginResult;
+  static action logout parameter ZA_MOB_Token;
+  static action refresh parameter ZA_MOB_Refresh result [1] ZA_MOB_LoginResult;
+  static action changePassword parameter ZA_MOB_ChangePwd;
+  mapping for ztb_mob_user {
+    UserUUID = user_uuid;
+    Username = username;
+    NormalizedUsername = normalized_username;
+    FullName = full_name;
+    Email = email;
+    Status = status;
+    FailedLoginCount = failed_login_count;
+    LockedUntil = locked_until;
+    PasswordChangeRequired = password_change_required;
+    FirstLoginAt = first_login_at;
+    LastLoginAt = last_login_at;
+    CreatedBy = created_by;
+    CreatedAt = created_at;
+    LastChangedBy = last_changed_by;
+    LastChangedAt = last_changed_at;
+    LocalLastChangedAt = local_last_changed_at;
+  }
+}
+
+define behavior for ZI_MOB_Cred alias MobileCredential
+persistent table ztb_mob_cred
+lock dependent by _User
+authorization dependent by _User
+{
+  update;
+  field ( readonly ) UserUUID;
+  association _User;
+  mapping for ztb_mob_cred {
+    UserUUID = user_uuid;
+    PasswordHash = password_hash;
+    PasswordSalt = password_salt;
+    HashAlgorithm = hash_algorithm;
+    HashIterations = hash_iterations;
+    PasswordChangedAt = password_changed_at;
+    CredentialStatus = credential_status;
+  }
+}
+
+define behavior for ZI_MOB_Session alias MobileSession
+persistent table ztb_mob_session
+lock dependent by _User
+authorization dependent by _User
+etag master LocalLastChangedAt
+{
+  update;
+  delete;
+  field ( numbering : managed, readonly ) SessionID;
+  field ( readonly ) UserUUID, CreatedAt, CreatedBy, LastChangedAt,
+                     LastChangedBy, LocalLastChangedAt;
+  association _User;
+  mapping for ztb_mob_session {
+    SessionID = session_id;
+    UserUUID = user_uuid;
+    AccessTokenHash = access_token_hash;
+    RefreshTokenHash = refresh_token_hash;
+    TokenVersion = token_version;
+    LoginAt = login_at;
+    LastActivityAt = last_activity_at;
+    ExpiresAt = expires_at;
+    RefreshExpiresAt = refresh_expires_at;
+    LogoutAt = logout_at;
+    Status = status;
+    DeviceID = device_id;
+    RevokedReason = revoked_reason;
+    CreatedAt = created_at;
+    CreatedBy = created_by;
+    LastChangedAt = last_changed_at;
+    LastChangedBy = last_changed_by;
+    LocalLastChangedAt = local_last_changed_at;
+  }
+}
+
+define behavior for ZI_MOB_UsrWrk alias MobileUserWorker
+persistent table ztb_mob_usr_wrk
+lock dependent by _User
+authorization dependent by _User
+etag master LocalLastChangedAt
+{
+  update;
+  delete;
+  field ( numbering : managed, readonly ) UserWorkerUUID;
+  field ( readonly ) UserUUID, CreatedBy, CreatedAt, LastChangedBy,
+                     LastChangedAt, LocalLastChangedAt;
+  association _User;
+  mapping for ztb_mob_usr_wrk {
+    UserWorkerUUID = user_worker_uuid;
+    UserUUID = user_uuid;
+    WorkerID = worker_id;
+    Plant = plant;
+    WorkCenter = work_center;
+    ValidFrom = valid_from;
+    ValidTo = valid_to;
+    Status = status;
+    CreatedBy = created_by;
+    CreatedAt = created_at;
+    LastChangedBy = last_changed_by;
+    LastChangedAt = last_changed_at;
+    LocalLastChangedAt = local_last_changed_at;
+  }
+}

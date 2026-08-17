@@ -1,0 +1,17 @@
+projection;
+strict ( 2 );
+
+define behavior for ZC_MOB_User alias MobileUser
+{
+  use action createUser;
+  use action login;
+  use action logout;
+  use action refresh;
+  use action changePassword;
+  use association _WorkerMappings;
+}
+
+define behavior for ZC_MOB_UsrWrk alias MobileUserWorker
+{
+  use association _User;
+}
