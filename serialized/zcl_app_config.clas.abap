@@ -1,0 +1,27 @@
+CLASS zcl_app_config DEFINITION
+  PUBLIC FINAL CREATE PRIVATE.
+  PUBLIC SECTION.
+    CLASS-METHODS get_password_secret RETURNING VALUE(result) TYPE string.
+    CLASS-METHODS get_token_secret RETURNING VALUE(result) TYPE string.
+  PRIVATE SECTION.
+    CLASS-METHODS get_required_value
+      IMPORTING config_key TYPE ztb_mob_config-config_key
+      RETURNING VALUE(result) TYPE string.
+ENDCLASS.
+
+CLASS zcl_app_config IMPLEMENTATION.
+  METHOD get_password_secret.
+    result = get_required_value( 'PASSWORD_PEPPER' ).
+  ENDMETHOD.
+  METHOD get_token_secret.
+    result = get_required_value( 'TOKEN_SECRET' ).
+  ENDMETHOD.
+  METHOD get_required_value.
+    SELECT SINGLE FROM ztb_mob_config FIELDS config_value
+      WHERE config_key = @config_key AND is_active = @abap_true
+      INTO @result.
+    IF sy-subrc <> 0 OR result IS INITIAL.
+      RAISE EXCEPTION NEW zcx_mob_config( config_key = CONV string( config_key ) ).
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.

@@ -1423,3 +1423,18 @@ bảng audit riêng nếu retention/reporting không đáp ứng được bằng
 5. Expose projection trong `ZUI_PP_OPALLOC`, republish V4 Web API.
 6. Xây proxy tự host giữ technical credential.
 7. Hoàn thiện bgPF/APJ, reconciliation, monitoring và acceptance tests.
+
+### 21.9. Cấu hình secret tự quản lý
+
+`ZTB_MOB_CONFIG` chỉ được quản trị trực tiếp, không expose qua CDS/OData. Sau
+khi activate, tạo hai record active với giá trị ngẫu nhiên khác nhau, tối thiểu
+32 bytes entropy:
+
+```text
+PASSWORD_PEPPER = <secret riêng để hash mật khẩu>
+TOKEN_SECRET    = <secret riêng để hash access/refresh token>
+```
+
+Không commit secret lên Git. DEV/QAS/PRD dùng secret khác nhau. Đổi
+`PASSWORD_PEPPER` cần migration password; đổi `TOKEN_SECRET` vô hiệu hóa mọi
+session và buộc đăng nhập lại.
