@@ -16,7 +16,6 @@ etag master LocalLastChangedAt
                      LastChangedBy, LastChangedAt, LocalLastChangedAt;
   association _Credential { create; }
   association _Sessions { create; }
-  association _WorkerMappings { create; }
   static action createUser parameter ZA_MOB_CreateUser result [1] $self;
   static action login parameter ZA_MOB_Login result [1] ZA_MOB_LoginResult;
   static action logout parameter ZA_MOB_Token;
@@ -41,7 +40,6 @@ etag master LocalLastChangedAt
     LocalLastChangedAt = local_last_changed_at;
   }
 }
-
 define behavior for ZI_MOB_Cred alias MobileCredential
 persistent table ztb_mob_cred
 lock dependent by _User
@@ -95,31 +93,3 @@ etag master LocalLastChangedAt
   }
 }
 
-define behavior for ZI_MOB_UsrWrk alias MobileUserWorker
-persistent table ztb_mob_usr_wrk
-lock dependent by _User
-authorization dependent by _User
-etag master LocalLastChangedAt
-{
-  update;
-  delete;
-  field ( numbering : managed, readonly ) UserWorkerUUID;
-  field ( readonly ) UserUUID, CreatedBy, CreatedAt, LastChangedBy,
-                     LastChangedAt, LocalLastChangedAt;
-  association _User;
-  mapping for ztb_mob_usr_wrk {
-    UserWorkerUUID = user_worker_uuid;
-    UserUUID = user_uuid;
-    WorkerID = worker_id;
-    Plant = plant;
-    WorkCenter = work_center;
-    ValidFrom = valid_from;
-    ValidTo = valid_to;
-    Status = status;
-    CreatedBy = created_by;
-    CreatedAt = created_at;
-    LastChangedBy = last_changed_by;
-    LastChangedAt = last_changed_at;
-    LocalLastChangedAt = local_last_changed_at;
-  }
-}

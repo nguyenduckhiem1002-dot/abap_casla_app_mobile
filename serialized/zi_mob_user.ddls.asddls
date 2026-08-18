@@ -4,7 +4,6 @@ define root view entity ZI_MOB_User
   as select from ztb_mob_user
   composition [0..1] of ZI_MOB_Cred    as _Credential
   composition [0..*] of ZI_MOB_Session as _Sessions
-  composition [0..*] of ZI_MOB_UsrWrk  as _WorkerMappings
 {
   key user_uuid                as UserUUID,
       username                 as Username,
@@ -23,6 +22,5 @@ define root view entity ZI_MOB_User
       last_changed_at          as LastChangedAt,
       local_last_changed_at    as LocalLastChangedAt,
       _Credential,
-      _Sessions,
-      _WorkerMappings
+      _Sessions
 }

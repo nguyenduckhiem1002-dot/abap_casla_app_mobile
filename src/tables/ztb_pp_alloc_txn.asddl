@@ -9,6 +9,7 @@ define table ztb_pp_alloc_txn {
   operation_uuid               : sysuuid_x16 not null;
   original_transaction_uuid    : sysuuid_x16;
   sync_item_uuid               : sysuuid_x16;
+  actor_user_uuid              : sysuuid_x16;
   transaction_type             : abap.char(20) not null;
   from_worker_id               : abap.char(8);
   to_worker_id                 : abap.char(8);

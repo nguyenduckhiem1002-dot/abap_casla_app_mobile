@@ -9,6 +9,7 @@ define view entity ZR_PP_AllocTxn
       operation_uuid            as OperationUUID,
       original_transaction_uuid as OriginalTransactionUUID,
       sync_item_uuid            as SyncItemUUID,
+      actor_user_uuid           as ActorUserUUID,
       transaction_type          as TransactionType,
       from_worker_id            as FromWorkerID,
       to_worker_id              as ToWorkerID,

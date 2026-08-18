@@ -14,7 +14,7 @@
 - Root validation and worker validation utility class.
 - Service definition `ZUI_PP_OPALLOC`.
 - Mobile authentication RAP foundation:
-  - `ZI_MOB_User` composition with credential, sessions and worker mappings.
+  - `ZI_MOB_User` composition with credential and sessions.
   - `ZC_MOB_User` API projection exposing actions only.
   - Managed BDEF and behavior pool `ZBP_I_MOB_USER`.
   - Abstract contracts for login, refresh, logout, create user and password change.

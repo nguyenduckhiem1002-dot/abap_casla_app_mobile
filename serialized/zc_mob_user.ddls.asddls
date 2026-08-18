@@ -10,6 +10,5 @@ define root view entity ZC_MOB_User
       Email,
       Status,
       PasswordChangeRequired,
-      LastLoginAt,
-      _WorkerMappings : redirected to composition child ZC_MOB_UsrWrk
+      LastLoginAt
 }

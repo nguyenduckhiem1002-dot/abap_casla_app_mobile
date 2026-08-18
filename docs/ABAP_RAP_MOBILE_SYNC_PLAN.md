@@ -1340,25 +1340,18 @@ authentication của SAP Gateway.
 | `ZTB_MOB_USER` | Hồ sơ, trạng thái và khóa đăng nhập |
 | `ZTB_MOB_CRED` | Password hash, salt, thuật toán và iterations |
 | `ZTB_MOB_SESSION` | Hash access/refresh token, expiry, device và revoke |
-| `ZTB_MOB_USR_WRK` | Mapping tài khoản với nhân công/phạm vi sản xuất |
 
 Không sử dụng `ZTB_USER_QR`, `ZTB_USER_CRED_QR` hoặc `ZTB_SESSION_QR`.
 
-### 21.3. Bảng mapping `ZTB_MOB_USR_WRK`
+### 21.3. Nhân công và người thực hiện giao dịch
 
-Bảng liên kết tài khoản đăng nhập với nhân công nghiệp vụ:
+Không mapping tài khoản mobile với nhân công. `ZTB_KB_NHANCONG` chỉ là master
+để kiểm tra nhân công nhận sản lượng tồn tại, còn hiệu lực và thuộc đúng
+Plant/Work Center tại `ExecutionDate`.
 
-| Field | Ý nghĩa |
-|---|---|
-| `USER_WORKER_UUID` | Khóa kỹ thuật |
-| `USER_UUID` | Tài khoản trong `ZTB_MOB_USER` |
-| `WORKER_ID` | Nhân công trong `ZTB_KB_NHANCONG` |
-| `PLANT`, `WORK_CENTER` | Phạm vi được phép thao tác |
-| `VALID_FROM`, `VALID_TO` | Thời gian hiệu lực |
-| `STATUS` | `A` hoạt động, `I` ngừng |
-
-Rule: `VALID_FROM <= VALID_TO`, không overlap cùng user/worker/plant/work
-center; ExecutionDate phải nằm trong hiệu lực của cả worker master và mapping.
+Quản lý thực hiện giao dịch lấy từ authenticated session và được lưu tại
+`ZTB_PP_ALLOC_TXN-ACTOR_USER_UUID`. `CREATED_BY` chỉ là SAP technical user nên
+không được dùng thay identity của quản lý mobile.
 
 ### 21.4. Mở rộng `ZTB_PP_SYNC_H`
 
@@ -1384,7 +1377,7 @@ Cùng key, khác REQUEST_HASH: IDEMPOTENCY_PAYLOAD_CONFLICT
 ### 21.5. Luồng sync khi nhận request
 
 1. Validate access token, session `A`, expiry và DeviceID.
-2. Validate user active và mapping user-worker.
+2. Validate user/session active; không kiểm tra mapping user-worker.
 3. Canonicalize payload, tính `REQUEST_HASH`.
 4. Lock `DeviceID + ExternalID`, xử lý idempotency.
 5. Tạo header/items `QUEUED`, lưu identity snapshot.
@@ -1395,7 +1388,7 @@ Cùng key, khác REQUEST_HASH: IDEMPOTENCY_PAYLOAD_CONFLICT
 1. Nhận UUID inbox, không nhận raw token.
 2. Lock ProductionOrder + Operation.
 3. Đọc live quantity, UoM, Plant, WorkCenter và status.
-4. Validate lại worker/mapping theo ExecutionDate.
+4. Validate nhân công nhận/chuyển/hoàn thành bằng `ZTB_KB_NHANCONG` theo ExecutionDate.
 5. Gọi domain BO bằng EML; ghi balance và ledger cùng LUW.
 6. Cập nhật item/header qua EML privileged.
 7. Chỉ retry `TECHNICAL_ERROR`.
@@ -1405,7 +1398,6 @@ Cùng key, khác REQUEST_HASH: IDEMPOTENCY_PAYLOAD_CONFLICT
 ```text
 ZTB_MOB_USER: UNIQUE NORMALIZED_USERNAME
 ZTB_MOB_SESSION: ACCESS_TOKEN_HASH; REFRESH_TOKEN_HASH; USER_UUID + STATUS
-ZTB_MOB_USR_WRK: USER_UUID + STATUS + VALID_FROM + VALID_TO
 ZTB_PP_SYNC_H: UNIQUE DEVICE_ID + EXTERNAL_ID; USER_UUID + RECEIVED_AT
 ZTB_PP_SYNC_I: UNIQUE SYNC_UUID + EXTERNAL_ITEM_ID; ITEM_STATUS + NEXT_RETRY_AT
 ZTB_PP_ALLOC_TXN: SYNC_ITEM_UUID; OPERATION_UUID + CREATED_AT
@@ -1416,8 +1408,8 @@ bảng audit riêng nếu retention/reporting không đáp ứng được bằng
 
 ### 21.8. Thứ tự triển khai
 
-1. Activate bảng mapping và mở rộng sync header.
-2. Tạo indexes, nạp mapping user-worker.
+1. Activate phần mở rộng sync header và ledger `ACTOR_USER_UUID`.
+2. Tạo indexes và xác nhận dữ liệu `ZTB_KB_NHANCONG`.
 3. Hoàn thiện token validator và sửa password/token hashing.
 4. Xây Sync RAP BO, `submitSync deep parameter`, status query và retry.
 5. Expose projection trong `ZUI_PP_OPALLOC`, republish V4 Web API.

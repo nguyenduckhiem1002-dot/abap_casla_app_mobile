@@ -7,6 +7,7 @@ define view entity ZC_PP_AllocTxn
       OperationUUID,
       OriginalTransactionUUID,
       SyncItemUUID,
+      ActorUserUUID,
       TransactionType,
       FromWorkerID,
       ToWorkerID,

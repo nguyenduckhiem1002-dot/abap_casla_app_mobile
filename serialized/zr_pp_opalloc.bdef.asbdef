@@ -87,7 +87,7 @@ authorization dependent by _Operation
   field ( readonly ) TransactionUUID;
   field ( numbering : managed ) TransactionUUID;
   field ( readonly ) OperationUUID, OriginalTransactionUUID,
-                     SyncItemUUID, TransactionType, FromWorkerID,
+                     SyncItemUUID, ActorUserUUID, TransactionType, FromWorkerID,
                      ToWorkerID, WorkerID, Quantity, UnitOfMeasure,
                      ExecutionDate, TransactionStatus,
                      SAPConfirmationGroup, SAPConfirmationCount,
@@ -102,6 +102,7 @@ authorization dependent by _Operation
     OperationUUID          = operation_uuid;
     OriginalTransactionUUID = original_transaction_uuid;
     SyncItemUUID           = sync_item_uuid;
+    ActorUserUUID          = actor_user_uuid;
     TransactionType        = transaction_type;
     FromWorkerID           = from_worker_id;
     ToWorkerID             = to_worker_id;

@@ -4,5 +4,4 @@ define service ZUI_PP_OPALLOC {
   expose ZC_PP_EmpAlloc as EmployeeAllocations;
   expose ZC_PP_AllocTxn as AllocationTransactions;
   expose ZC_MOB_User as MobileUsers;
-  expose ZC_MOB_UsrWrk as MobileUserWorkers;
 }
