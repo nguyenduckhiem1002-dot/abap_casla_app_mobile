@@ -198,7 +198,12 @@ CLASS lhc_mobileuser IMPLEMENTATION.
                       CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.
-    IF input_hash <> credential-password_hash.
+    IF zcl_mob_hasher=>equals_constant_time(
+         value_1 = CONV string( input_hash )
+         value_2 = CONV string( credential-password_hash ) ) = abap_false.
+      "Business failure is returned in the result payload instead of FAILED:
+      "setting FAILED would skip the save sequence and roll back the
+      "FailedLoginCount/LockedUntil update, disabling the lockout protection.
       DATA(failed_count) = user-failed_login_count + 1.
       DATA(locked_until) = COND utclong(
         WHEN failed_count >= 5 THEN utclong_add( val = now minutes = 15 )
@@ -214,8 +219,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         reported = CORRESPONDING #( reported_counter_update ).
         RETURN.
       ENDIF.
-      report_error( EXPORTING cid = cid text = 'Tên đăng nhập hoặc mật khẩu không hợp lệ'
-                    CHANGING failed = failed reported = reported ).
+      result = VALUE #( ( %cid = cid %param-Status = 'F' ) ).
       RETURN.
     ENDIF.
     TRY.
@@ -257,9 +261,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       FAILED DATA(failed_login_update)
       REPORTED DATA(reported_login_update).
     IF failed_login_update IS NOT INITIAL.
-      MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
-        ENTITY MobileSession DELETE FROM
-          VALUE #( ( SessionID = session_id ) ).
+      "FAILED rejects the whole LUW, so the session created above is
+      "discarded together with this update - no compensation needed.
       failed = CORRESPONDING #( failed_login_update ).
       reported = CORRESPONDING #( reported_login_update ).
       RETURN.
@@ -428,7 +431,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
           password = CONV string( input-CurrentPassword )
           salt = CONV string( credential-password_salt )
           iterations = credential-hash_iterations ).
-        IF current_hash <> credential-password_hash.
+        IF zcl_mob_hasher=>equals_constant_time(
+             value_1 = CONV string( current_hash )
+             value_2 = CONV string( credential-password_hash ) ) = abap_false.
           report_error( EXPORTING cid = cid text = 'Mật khẩu hiện tại không đúng'
                         CHANGING failed = failed reported = reported ).
           RETURN.
@@ -460,10 +465,13 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       RETURN.
     ENDIF.
 
+    "Revoke every other active session; the session that authorized this
+    "password change stays valid so the device is not logged out mid-flow.
     SELECT FROM ztb_mob_session
       FIELDS session_id
       WHERE user_uuid = @auth-user_uuid
         AND status = 'A'
+        AND session_id <> @auth-session_id
       INTO TABLE @DATA(active_sessions).
     IF active_sessions IS NOT INITIAL.
       MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE

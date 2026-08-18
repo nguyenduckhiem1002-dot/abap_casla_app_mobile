@@ -18,14 +18,28 @@
     "parser_error": true,
     "check_syntax": true,
     "check_ddic": true,
-    "unused_variables": false,
-    "unused_methods": false,
+    "unused_variables": {
+      "exclude": [
+        "locals_imp"
+      ]
+    },
+    "unused_methods": {
+      "exclude": [
+        "locals_imp"
+      ]
+    },
     "uncaught_exception": true,
     "select_single_full_key": true,
     "sql_escape_host_variables": true,
-    "cyclomatic_complexity": { "max": 15 },
-    "method_length": { "maxLines": 80 },
-    "line_length": { "length": 120 },
+    "cyclomatic_complexity": {
+      "max": 15
+    },
+    "method_length": {
+      "maxLines": 80
+    },
+    "line_length": {
+      "length": 120
+    },
     "constructor_visibility_public": true,
     "no_public_attributes": true
   }

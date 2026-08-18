@@ -22,6 +22,27 @@
 - Thêm validation bất biến cho `RemainingQuantity`.
 - Nâng cấu hình abaplint từ parser-only lên syntax/DDIC/runtime-oriented rules.
 
+## Đã sửa trong đợt hardening 2
+
+- Login không còn set `FAILED` khi sai mật khẩu: kết quả trả `Status = 'F'`
+  trong `ZA_MOB_LoginResult` để save sequence vẫn chạy và
+  `FailedLoginCount`/`LockedUntil` được persist (khôi phục lockout).
+  Client mobile phải đọc `Status` thay vì dựa vào HTTP error.
+- Xóa compensation DELETE session thừa trong `login` (LUW đã rollback khi
+  `FAILED` được set).
+- So sánh password hash bằng `equals_constant_time` (login và changePassword).
+- `changePassword` giữ lại session hiện tại khi revoke; chỉ các session khác
+  bị thu hồi với `RevokedReason = 'PWD_CHANGE'`.
+- Bật lại rule abaplint `unused_variables`, `unused_methods`.
+
+Chưa xử lý trong đợt này (chờ verify trên ADT/tenant):
+
+- `@Capabilities.ReadRestrictions.Readable` trên `ZC_MOB_User`: cần xác nhận
+  annotation có hiệu lực trong ABAP CDS; nếu không, thay bằng
+  `#MANDATORY` + DCL deny-all.
+- `%tky` trong result của static action `createUser`: đối chiếu signature do
+  ADT generate trước khi activate.
+
 ## Bắt buộc thực hiện trên tenant
 
 Các mục sau không được giả lập trong repo vì phụ thuộc release và repository
