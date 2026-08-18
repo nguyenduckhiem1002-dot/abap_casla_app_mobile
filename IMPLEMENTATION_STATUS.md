@@ -22,6 +22,8 @@
   - `ZCL_MOB_HASHER` và `ZCL_MOB_SEC_CONFIG` được xây mới, không phụ thuộc
     implementation login cũ.
   - `ZTB_MOB_CONFIG` lưu cấu hình môi trường; không serialize giá trị secret.
+  - Auth actions đã có implementation EML: `createUser`, `login`, `logout`,
+    `refresh`, `changePassword`, failed-login lock và refresh-token rotation.
 
 ## Deliberately fail-closed
 
@@ -31,8 +33,6 @@ The following actions are declared but currently return an error message:
 - `transfer`
 - `confirm`
 - `reverse`
-- Mobile auth actions until a production secret/password KDF is configured:
-  `createUser`, `login`, `logout`, `refresh`, `changePassword`.
 
 This prevents incomplete logic from changing production quantities. They will be
 enabled incrementally after the base objects activate on the target tenant.
