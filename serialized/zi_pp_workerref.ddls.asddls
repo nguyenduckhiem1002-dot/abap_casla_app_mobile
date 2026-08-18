@@ -6,8 +6,8 @@ define view entity ZI_PP_WorkerRef
   key uuid_nhancong as WorkerUUID,
       worker_id     as WorkerID,
       from_date     as ValidFrom,
-      case when to_date = dats'00000000'
-           then dats'99991231'
+      case when to_date = abap.dats'00000000'
+           then abap.dats'99991231'
            else to_date
       end           as ValidTo,
       work_center   as WorkCenter,

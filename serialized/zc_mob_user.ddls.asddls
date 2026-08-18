@@ -1,6 +1,5 @@
-@AccessControl.authorizationCheck: #NOT_REQUIRED
+@AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: 'API tài khoản ứng dụng di động'
-@Capabilities.ReadRestrictions.Readable: false
 define root view entity ZC_MOB_User
   provider contract transactional_query
   as projection on ZI_MOB_User

@@ -55,7 +55,7 @@ CLASS zcl_pp_worker_validator IMPLEMENTATION.
 
     LOOP AT checks ASSIGNING <check>.
       CLEAR <check>-is_active.
-      LOOP AT valid_workers ASSIGNING FIELD-SYMBOL(<worker>)
+      LOOP AT valid_workers TRANSPORTING NO FIELDS
         WHERE WorkerID = <check>-worker_id
           AND Plant = <check>-plant
           AND WorkCenter = <check>-work_center

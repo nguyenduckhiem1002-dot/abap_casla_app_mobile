@@ -37,11 +37,20 @@
 
 Chưa xử lý trong đợt này (chờ verify trên ADT/tenant):
 
-- `@Capabilities.ReadRestrictions.Readable` trên `ZC_MOB_User`: cần xác nhận
-  annotation có hiệu lực trong ABAP CDS; nếu không, thay bằng
-  `#MANDATORY` + DCL deny-all.
 - `%tky` trong result của static action `createUser`: đối chiếu signature do
   ADT generate trước khi activate.
+
+## Đã sửa trong đợt hardening 3 (verify trên ADT)
+
+- `@Capabilities.ReadRestrictions.Readable` được ADT xác nhận **không tồn tại**
+  trong ABAP CDS (annotation của OData vocabulary, không phải ABAP annotation).
+  Thay bằng `@AccessControl.authorizationCheck: #MANDATORY` trên `ZC_MOB_User`
+  cùng DCL deny-all `ZC_MOB_USER` (điều kiện luôn sai). Cả 4 action của
+  service auth đều là static action nên không bị ảnh hưởng bởi việc chặn read.
+- Sửa lỗi cú pháp typed literal tại `ZI_PP_WORKERREF`: `dats'...'` →
+  `abap.dats'...'` (ADT báo `Unexpected word`). Đây cũng chính là nguyên nhân
+  abaplint báo "zi_pp_workerref not found" (parser fail nên view không được
+  nhận diện).
 
 ## Bắt buộc thực hiện trên tenant
 
