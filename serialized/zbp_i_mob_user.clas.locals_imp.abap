@@ -15,10 +15,11 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING keys FOR ACTION MobileUser~changePassword.
     METHODS hash_password
       IMPORTING password TYPE string salt TYPE string iterations TYPE i
-      RETURNING VALUE(hash) TYPE string
+      RETURNING VALUE(hash) TYPE ztb_mob_cred-password_hash
       RAISING cx_abap_message_digest.
     METHODS hash_token
-      IMPORTING token TYPE string RETURNING VALUE(hash) TYPE string
+      IMPORTING token TYPE string
+      RETURNING VALUE(hash) TYPE ztb_mob_session-access_token_hash
       RAISING cx_abap_message_digest.
     METHODS report_error
       IMPORTING cid TYPE string text TYPE string
@@ -35,16 +36,18 @@ CLASS lhc_mobileuser IMPLEMENTATION.
   METHOD hash_password.
     DATA(hasher) = NEW zcl_mob_hasher(
       iv_secret_key = zcl_mob_sec_config=>get_password_secret( ) ).
-    hash = salt && ':' && password.
+    DATA(hash_value) = salt && ':' && password.
     DO iterations TIMES.
-      hash = hasher->calculate_hash( hash ).
+      hash_value = hasher->calculate_hash( hash_value ).
     ENDDO.
+    hash = hash_value.
   ENDMETHOD.
 
   METHOD hash_token.
     DATA(hasher) = NEW zcl_mob_hasher(
       iv_secret_key = zcl_mob_sec_config=>get_token_secret( ) ).
-    hash = hasher->calculate_hash( token ).
+    hash = CONV ztb_mob_session-access_token_hash(
+      hasher->calculate_hash( token ) ).
   ENDMETHOD.
 
   METHOD report_error.
@@ -56,7 +59,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
 
   METHOD createuser.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
-    DATA(cid) = keys[ 1 ]-%cid.
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     DATA(normalized) = to_lower( condense( CONV string( input-Username ) ) ).
     IF normalized IS INITIAL OR input-Password IS INITIAL.
       report_error( EXPORTING cid = cid text = 'Tên đăng nhập và mật khẩu là bắt buộc'
@@ -74,7 +77,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         DATA(salt) = cl_system_uuid=>create_uuid_c36_static( ).
         DATA(password_hash) = hash_password(
           password = CONV string( input-Password )
-          salt = salt iterations = c_iterations ).
+          salt = CONV string( salt ) iterations = c_iterations ).
       CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config INTO DATA(error).
         report_error( EXPORTING cid = cid text = error->get_text( )
                       CHANGING reported = reported ).
@@ -114,7 +117,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
 
   METHOD login.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
-    DATA(cid) = keys[ 1 ]-%cid.
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     DATA(now) = utclong_current( ).
     DATA(normalized) = to_lower( condense( CONV string( input-Username ) ) ).
     SELECT SINGLE FROM ztb_mob_user
@@ -162,8 +165,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
                           && cl_system_uuid=>create_uuid_c36_static( ).
         DATA(refresh_token) = cl_system_uuid=>create_uuid_c36_static( )
                            && cl_system_uuid=>create_uuid_c36_static( ).
-        DATA(access_hash) = hash_token( access_token ).
-        DATA(refresh_hash) = hash_token( refresh_token ).
+        DATA(access_hash) = hash_token( CONV string( access_token ) ).
+        DATA(refresh_hash) = hash_token( CONV string( refresh_token ) ).
       CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config INTO DATA(token_error).
         report_error( EXPORTING cid = cid text = token_error->get_text( )
                       CHANGING reported = reported ).
@@ -201,7 +204,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
 
   METHOD logout.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
-    DATA(cid) = keys[ 1 ]-%cid.
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     TRY.
         DATA(token_hash) = hash_token( CONV string( input-AccessToken ) ).
       CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
@@ -228,7 +231,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
 
   METHOD refresh.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
-    DATA(cid) = keys[ 1 ]-%cid.
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     DATA(now) = utclong_current( ).
     TRY.
         DATA(old_hash) = hash_token( CONV string( input-RefreshToken ) ).
@@ -251,8 +254,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
                           && cl_system_uuid=>create_uuid_c36_static( ).
         DATA(refresh_token) = cl_system_uuid=>create_uuid_c36_static( )
                            && cl_system_uuid=>create_uuid_c36_static( ).
-        DATA(access_hash) = hash_token( access_token ).
-        DATA(refresh_hash) = hash_token( refresh_token ).
+        DATA(access_hash) = hash_token( CONV string( access_token ) ).
+        DATA(refresh_hash) = hash_token( CONV string( refresh_token ) ).
       CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config INTO DATA(token_error).
         report_error( EXPORTING cid = cid text = token_error->get_text( )
                       CHANGING reported = reported ).
@@ -281,7 +284,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
 
   METHOD changepassword.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
-    DATA(cid) = keys[ 1 ]-%cid.
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     TRY.
         DATA(token_hash) = hash_token( CONV string( input-AccessToken ) ).
       CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
@@ -312,7 +315,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         DATA(new_salt) = cl_system_uuid=>create_uuid_c36_static( ).
         DATA(new_hash) = hash_password(
           password = CONV string( input-NewPassword )
-          salt = new_salt iterations = c_iterations ).
+          salt = CONV string( new_salt ) iterations = c_iterations ).
       CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config INTO DATA(sec_error).
         report_error( EXPORTING cid = cid text = sec_error->get_text( )
                       CHANGING reported = reported ).
