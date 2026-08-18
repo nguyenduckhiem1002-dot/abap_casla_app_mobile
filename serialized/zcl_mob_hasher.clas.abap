@@ -1,4 +1,4 @@
-CLASS zcl_password_hasher DEFINITION
+CLASS zcl_mob_hasher DEFINITION
   PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     METHODS constructor IMPORTING iv_secret_key TYPE string.
@@ -14,7 +14,7 @@ CLASS zcl_password_hasher DEFINITION
     DATA secret_key TYPE string.
 ENDCLASS.
 
-CLASS zcl_password_hasher IMPLEMENTATION.
+CLASS zcl_mob_hasher IMPLEMENTATION.
   METHOD constructor.
     IF iv_secret_key IS INITIAL.
       RAISE EXCEPTION NEW zcx_mob_config( config_key = 'EMPTY_SECRET' ).

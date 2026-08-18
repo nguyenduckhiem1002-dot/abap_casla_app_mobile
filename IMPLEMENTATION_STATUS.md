@@ -19,7 +19,7 @@
   - Managed BDEF and behavior pool `ZBP_I_MOB_USER`.
   - Abstract contracts for login, refresh, logout, create user and password change.
   - Token/session lookup helper `ZCL_MOB_TOKEN_VALIDATOR`.
-  - `ZCL_PASSWORD_HASHER` và `ZCL_APP_CONFIG` được xây mới, không phụ thuộc
+  - `ZCL_MOB_HASHER` và `ZCL_MOB_SEC_CONFIG` được xây mới, không phụ thuộc
     implementation login cũ.
   - `ZTB_MOB_CONFIG` lưu cấu hình môi trường; không serialize giá trị secret.
 

@@ -1,4 +1,4 @@
-CLASS zcl_app_config DEFINITION
+CLASS zcl_mob_sec_config DEFINITION
   PUBLIC FINAL CREATE PRIVATE.
   PUBLIC SECTION.
     CLASS-METHODS get_password_secret RETURNING VALUE(result) TYPE string.
@@ -9,7 +9,7 @@ CLASS zcl_app_config DEFINITION
       RETURNING VALUE(result) TYPE string.
 ENDCLASS.
 
-CLASS zcl_app_config IMPLEMENTATION.
+CLASS zcl_mob_sec_config IMPLEMENTATION.
   METHOD get_password_secret.
     result = get_required_value( 'PASSWORD_PEPPER' ).
   ENDMETHOD.
