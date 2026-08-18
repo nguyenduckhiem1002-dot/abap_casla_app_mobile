@@ -35,11 +35,6 @@
   bị thu hồi với `RevokedReason = 'PWD_CHANGE'`.
 - Bật lại rule abaplint `unused_variables`, `unused_methods`.
 
-Chưa xử lý trong đợt này (chờ verify trên ADT/tenant):
-
-- `%tky` trong result của static action `createUser`: đối chiếu signature do
-  ADT generate trước khi activate.
-
 ## Đã sửa trong đợt hardening 3 (verify trên ADT)
 
 - `@Capabilities.ReadRestrictions.Readable` được ADT xác nhận **không tồn tại**
@@ -51,6 +46,10 @@ Chưa xử lý trong đợt này (chờ verify trên ADT/tenant):
   `abap.dats'...'` (ADT báo `Unexpected word`). Đây cũng chính là nguyên nhân
   abaplint báo "zi_pp_workerref not found" (parser fail nên view không được
   nhận diện).
+- `createUser`: ADT xác nhận result row của static action không có `%tky`
+  (`No component exists with the name "%TKY"`). Bỏ `%tky` khỏi result và gán
+  `%param` qua `CORRESPONDING` để loại các thành phần `%` của READ result.
+  Không còn mục nào chờ verify trên ADT.
 
 ## Bắt buộc thực hiện trên tenant
 

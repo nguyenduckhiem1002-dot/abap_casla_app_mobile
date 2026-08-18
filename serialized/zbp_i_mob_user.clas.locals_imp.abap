@@ -133,8 +133,11 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       mapped_create-mobileuser[ %cid = 'USR' ]-UserUUID OPTIONAL ).
     READ ENTITIES OF zi_mob_user IN LOCAL MODE ENTITY MobileUser
       ALL FIELDS WITH VALUE #( ( UserUUID = user_uuid ) ) RESULT DATA(users).
+    "Static action: the result row only has %cid and %param (no %tky,
+    "there is no bound instance). %param is the plain entity structure,
+    "so strip the %-components from the read result via CORRESPONDING.
     result = VALUE #( FOR user IN users
-      ( %cid = cid %tky = user-%tky %param = user ) ).
+      ( %cid = cid %param = CORRESPONDING #( user ) ) ).
   ENDMETHOD.
 
   METHOD login.
