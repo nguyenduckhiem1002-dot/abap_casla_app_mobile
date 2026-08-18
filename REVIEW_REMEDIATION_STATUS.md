@@ -39,9 +39,20 @@
 
 - `@Capabilities.ReadRestrictions.Readable` được ADT xác nhận **không tồn tại**
   trong ABAP CDS (annotation của OData vocabulary, không phải ABAP annotation).
-  Thay bằng `@AccessControl.authorizationCheck: #MANDATORY` trên `ZC_MOB_User`
-  cùng DCL deny-all `ZC_MOB_USER` (điều kiện luôn sai). Cả 4 action của
-  service auth đều là static action nên không bị ảnh hưởng bởi việc chặn read.
+  Thay bằng CDS access control. Lưu ý ràng buộc DCL trên transactional query
+  (ADT: "Access condition violates restrictions in projection views"): DCL của
+  projection chỉ được phép `INHERITING CONDITIONS FROM ENTITY` hoặc full access
+  rule, và projection tự áp access control của entity gốc theo 1:1. Thiết kế:
+  - `ZI_MOB_USER` (DCL mới): deny-all bằng điều kiện luôn sai trên view gốc.
+  - `ZC_MOB_USER` (DCL): `inheriting conditions from entity ZI_MOB_User`
+    → service auth bị chặn read hoàn toàn.
+  - `ZC_MOB_USER_ADM` (DCL mới): full access rule để override deny-all của
+    gốc; việc giới hạn ai gọi được service admin nằm ở IAM/business catalog
+    (mục 3 phần tenant).
+  - `ZI_MOB_User`, `ZC_MOB_User`, `ZC_MOB_User_Adm` đều đặt
+    `@AccessControl.authorizationCheck: #MANDATORY`.
+  Cả 4 action của service auth đều là static action nên không bị ảnh hưởng
+  bởi việc chặn read qua query path.
 - Sửa lỗi cú pháp typed literal tại `ZI_PP_WORKERREF`: `dats'...'` →
   `abap.dats'...'` (ADT báo `Unexpected word`). Đây cũng chính là nguyên nhân
   abaplint báo "zi_pp_workerref not found" (parser fail nên view không được
@@ -69,6 +80,11 @@ metadata do ADT/tenant sinh:
 6. Benchmark KDF 10.000 vòng và kiểm tra KDF chuẩn nào được released trên tenant.
 7. Chuyển pepper/token secret sang secure store khi tenant cung cấp released API;
    trong giai đoạn hiện tại không expose `ZTB_MOB_CONFIG` qua CDS/service.
+8. Sau khi activate bộ DCL mới: smoke-test `login`/`createUser` bằng
+   communication user của service mobile và kiểm tra GET trên `ZC_MOB_User`
+   trả rỗng còn Fiori admin vẫn đọc được. Kỳ vọng: DCL chỉ áp trên query path
+   (SADL/OData GET), không áp trên EML `IN LOCAL MODE` của BO runtime; nếu
+   action bị chặn thì phải chuyển sang mô hình pfcg_auth cho `ZI_MOB_USER`.
 
 ## Chưa triển khai nghiệp vụ
 

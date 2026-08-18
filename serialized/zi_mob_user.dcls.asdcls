@@ -1,0 +1,6 @@
+@EndUserText.label: 'Chặn đọc mặc định ZI_MOB_User'
+@MappingRole: true
+define role ZI_MOB_USER {
+  grant select on ZI_MOB_User
+    where Status = '' and Status <> '';
+}

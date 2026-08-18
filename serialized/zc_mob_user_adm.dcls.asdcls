@@ -1,0 +1,5 @@
+@EndUserText.label: 'Đọc ZC_MOB_User_Adm - bảo vệ bằng IAM'
+@MappingRole: true
+define role ZC_MOB_USER_ADM {
+  grant select on ZC_MOB_User_Adm;
+}

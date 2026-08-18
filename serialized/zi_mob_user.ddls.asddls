@@ -1,4 +1,4 @@
-@AccessControl.authorizationCheck: #NOT_REQUIRED
+@AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: 'Tài khoản ứng dụng di động'
 define root view entity ZI_MOB_User
   as select from ztb_mob_user

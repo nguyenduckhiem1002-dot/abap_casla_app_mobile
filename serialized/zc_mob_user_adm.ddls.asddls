@@ -1,4 +1,4 @@
-@AccessControl.authorizationCheck: #NOT_REQUIRED
+@AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: 'Quản trị tài khoản giám sát'
 @UI.headerInfo: {
   typeName: 'Tài khoản giám sát',
