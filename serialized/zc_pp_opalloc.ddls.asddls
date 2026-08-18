@@ -1,4 +1,4 @@
-@AccessControl.authorizationCheck: #CHECK
+@AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'API phân bổ sản lượng công đoạn'
 define root view entity ZC_PP_OpAlloc
   provider contract transactional_query

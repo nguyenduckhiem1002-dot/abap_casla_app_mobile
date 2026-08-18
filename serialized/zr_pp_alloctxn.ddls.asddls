@@ -1,4 +1,4 @@
-@AccessControl.authorizationCheck: #CHECK
+@AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'Giao dịch phân bổ sản lượng'
 define view entity ZR_PP_AllocTxn
   as select from ztb_pp_alloc_txn
@@ -23,8 +23,11 @@ define view entity ZR_PP_AllocTxn
       sap_confirmation_count    as SAPConfirmationCount,
       sap_error_code            as SAPErrorCode,
       sap_error_text            as SAPErrorText,
+      @Semantics.user.createdBy: true
       created_by                as CreatedBy,
+      @Semantics.systemDateTime.createdAt: true
       created_at                as CreatedAt,
+      @Semantics.systemDateTime.localInstanceLastChangedAt: true
       local_last_changed_at     as LocalLastChangedAt,
       _Operation
 }

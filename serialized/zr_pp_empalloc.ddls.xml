@@ -7,7 +7,7 @@
     <DDLANGUAGE>E</DDLANGUAGE>
     <DDTEXT>Phân bổ sản lượng nhân công</DDTEXT>
     <SOURCE_TYPE>W</SOURCE_TYPE>
-   </DDLS>
+   <ABAP_LANGUAGE_VERSION>5</ABAP_LANGUAGE_VERSION></DDLS>
   </asx:values>
  </asx:abap>
 </abapGit>

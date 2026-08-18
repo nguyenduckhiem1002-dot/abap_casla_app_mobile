@@ -11,7 +11,7 @@
     <CLSCCINCL>X</CLSCCINCL>
     <FIXPT>X</FIXPT>
     <UNICODE>X</UNICODE>
-   </VSEOCLASS>
+   <ABAP_LANGUAGE_VERSION>5</ABAP_LANGUAGE_VERSION></VSEOCLASS>
   </asx:values>
  </asx:abap>
 </abapGit>

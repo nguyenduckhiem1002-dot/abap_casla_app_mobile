@@ -26,14 +26,53 @@ CLASS lhc_operationallocation DEFINITION
       RESULT result.
 ENDCLASS.
 
+CLASS lhc_employeeallocation DEFINITION
+  INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS validateBalance FOR VALIDATE ON SAVE
+      IMPORTING keys FOR EmployeeAllocation~validateBalance.
+ENDCLASS.
+
+CLASS lhc_employeeallocation IMPLEMENTATION.
+  METHOD validateBalance.
+    READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+      ENTITY EmployeeAllocation
+      FIELDS ( InitialAssignedQuantity TransferredInQuantity
+               TransferredOutQuantity CompletedQuantity RemainingQuantity )
+      WITH CORRESPONDING #( keys )
+      RESULT DATA(allocations).
+
+    LOOP AT allocations ASSIGNING FIELD-SYMBOL(<allocation>).
+      DATA(expected_remaining) =
+        <allocation>-InitialAssignedQuantity
+        + <allocation>-TransferredInQuantity
+        - <allocation>-TransferredOutQuantity
+        - <allocation>-CompletedQuantity.
+      IF expected_remaining < 0
+         OR <allocation>-RemainingQuantity <> expected_remaining.
+        APPEND VALUE #( %tky = <allocation>-%tky )
+          TO failed-employeeallocation.
+        APPEND VALUE #(
+          %tky = <allocation>-%tky
+          %element-RemainingQuantity = if_abap_behv=>mk-on
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = 'Số lượng còn lại không khớp với sổ phân bổ' ) )
+          TO reported-employeeallocation.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+ENDCLASS.
+
 CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD get_global_authorizations.
-    result-%create = if_abap_behv=>auth-allowed.
-    result-%update = if_abap_behv=>auth-allowed.
-    result-%action-initialAssign = if_abap_behv=>auth-allowed.
-    result-%action-transfer = if_abap_behv=>auth-allowed.
-    result-%action-confirm = if_abap_behv=>auth-allowed.
-    result-%action-reverse = if_abap_behv=>auth-allowed.
+    "Domain mutations are internal until submitSync validates the mobile token.
+    result-%create = if_abap_behv=>auth-unauthorized.
+    result-%update = if_abap_behv=>auth-unauthorized.
+    result-%action-initialAssign = if_abap_behv=>auth-unauthorized.
+    result-%action-transfer = if_abap_behv=>auth-unauthorized.
+    result-%action-confirm = if_abap_behv=>auth-unauthorized.
+    result-%action-reverse = if_abap_behv=>auth-unauthorized.
   ENDMETHOD.
 
   METHOD validateOperation.

@@ -26,15 +26,34 @@ This folder is also prepared as a standalone abapGit repository:
 ```text
 abap/
 ├── .abapgit.xml
-├── src/          # design/ADT source drafts; ignored by abapGit deserializer
-└── serialized/   # object metadata chuẩn để abapGit deserialize
+└── serialized/   # nguồn duy nhất để abapGit deserialize
 ```
 
 `.abapgit.xml` dùng `/serialized/` làm `STARTING_FOLDER`. Thư mục này chứa
 metadata và source theo cặp định dạng chuẩn của abapGit (`*.ddls.xml` +
 `*.ddls.asddls`, `*.bdef.xml` + `*.bdef.asbdef`, `*.clas.xml` + `*.clas.abap`).
-Các file còn lại trong `/src/` chỉ là tài liệu thiết kế và không tham gia
-deserialize.
+Không duy trì bản sao table trong `/src/`; việc này tránh hai định nghĩa DDIC
+lệch nhau theo thời gian.
+
+## External dependencies (không thuộc repo này)
+
+| Object | Chủ sở hữu | Ràng buộc |
+|---|---|---|
+| `ZTB_KB_NHANCONG` | Package đối tác | Chỉ đọc; không sửa cấu trúc và không tạo index |
+
+Repo không self-contained. Trước khi pull bằng abapGit, bảng trên phải tồn tại,
+active và được release/cho phép truy cập từ package `ZPK_XNSL_SM_BACKEND` trên
+tenant đích. Mọi truy cập của repo tới bảng này phải đi qua
+`ZI_PP_WORKERREF`; không class hoặc CDS nào khác được tham chiếu trực tiếp.
+
+## Tách service
+
+- `ZUI_PP_OPALLOC`: nghiệp vụ phân bổ sản lượng.
+- `ZUI_MOB_AUTH`: login, refresh, logout và đổi mật khẩu; entity không cho đọc.
+- `ZUI_MOB_USER_ADM`: Fiori quản trị cấp tài khoản giám sát.
+
+Mỗi service cần một OData V4 service binding riêng trên tenant. IAM app/business
+catalog của `ZUI_MOB_USER_ADM` là lớp bắt buộc bảo vệ action `createUser`.
 
 ## Current milestone
 

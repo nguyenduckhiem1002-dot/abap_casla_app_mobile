@@ -9,12 +9,13 @@ define behavior for ZC_PP_OpAlloc alias OperationAllocation
   use action transfer;
   use action confirm;
   use action reverse;
-  use association _Employees;
-  use association _Transactions;
+  use association _Employees { create; }
+  use association _Transactions { create; }
 }
 
 define behavior for ZC_PP_EmpAlloc alias EmployeeAllocation
 {
+  use update;
   use association _Operation;
 }
 

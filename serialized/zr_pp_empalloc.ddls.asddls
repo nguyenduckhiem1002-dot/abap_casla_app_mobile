@@ -1,4 +1,4 @@
-@AccessControl.authorizationCheck: #CHECK
+@AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'Phân bổ sản lượng nhân công'
 define view entity ZR_PP_EmpAlloc
   as select from ztb_pp_emp_alloc
@@ -21,9 +21,13 @@ define view entity ZR_PP_EmpAlloc
       uom                  as UnitOfMeasure,
       last_execution_date  as LastExecutionDate,
       last_sync_at         as LastSyncAt,
+      @Semantics.user.createdBy: true
       created_by           as CreatedBy,
+      @Semantics.systemDateTime.createdAt: true
       created_at           as CreatedAt,
+      @Semantics.user.lastChangedBy: true
       last_changed_by      as LastChangedBy,
+      @Semantics.systemDateTime.localInstanceLastChangedAt: true
       local_last_changed_at as LocalLastChangedAt,
       _Operation
 }

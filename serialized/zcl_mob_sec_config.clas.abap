@@ -17,10 +17,12 @@ CLASS zcl_mob_sec_config IMPLEMENTATION.
     result = get_required_value( 'TOKEN_SECRET' ).
   ENDMETHOD.
   METHOD get_required_value.
-    SELECT SINGLE FROM ztb_mob_config FIELDS config_value
+    SELECT FROM ztb_mob_config FIELDS config_value
       WHERE config_key = @config_key AND is_active = @abap_true
-      INTO @result.
-    IF sy-subrc <> 0 OR result IS INITIAL.
+      INTO TABLE @DATA(config_values)
+      UP TO 1 ROWS.
+    result = VALUE #( config_values[ 1 ]-config_value OPTIONAL ).
+    IF result IS INITIAL.
       RAISE EXCEPTION NEW zcx_mob_config( config_key = CONV string( config_key ) ).
     ENDIF.
   ENDMETHOD.

@@ -10,8 +10,7 @@ etag master LocalLastChangedAt
   create;
   update;
 
-  field ( readonly ) OperationUUID;
-  field ( numbering : managed ) OperationUUID;
+  field ( numbering : managed, readonly ) OperationUUID;
   field ( mandatory ) ProductionOrder, Operation, Plant, WorkCenter,
                       OperationQuantity, UnitOfMeasure;
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy,
@@ -52,12 +51,13 @@ etag master LocalLastChangedAt
 {
   update;
 
-  field ( readonly ) EmployeeAllocationUUID;
-  field ( numbering : managed ) EmployeeAllocationUUID;
+  field ( numbering : managed, readonly ) EmployeeAllocationUUID;
   field ( readonly ) OperationUUID, CreatedBy, CreatedAt,
                      LastChangedBy, LocalLastChangedAt;
 
   association _Operation;
+
+  validation validateBalance on save { create; update; }
 
   mapping for ztb_pp_emp_alloc
   {
@@ -84,8 +84,7 @@ persistent table ztb_pp_alloc_txn
 lock dependent by _Operation
 authorization dependent by _Operation
 {
-  field ( readonly ) TransactionUUID;
-  field ( numbering : managed ) TransactionUUID;
+  field ( numbering : managed, readonly ) TransactionUUID;
   field ( readonly ) OperationUUID, OriginalTransactionUUID,
                      SyncItemUUID, ActorUserUUID, TransactionType, FromWorkerID,
                      ToWorkerID, WorkerID, Quantity, UnitOfMeasure,

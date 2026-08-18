@@ -7,7 +7,7 @@
     <DDLANGUAGE>E</DDLANGUAGE>
     <DDTEXT>Tham số chi tiết đồng bộ di động</DDTEXT>
     <SOURCE_TYPE>A</SOURCE_TYPE>
-   </DDLS>
+   <ABAP_LANGUAGE_VERSION>5</ABAP_LANGUAGE_VERSION></DDLS>
   </asx:values>
  </asx:abap>
 </abapGit>

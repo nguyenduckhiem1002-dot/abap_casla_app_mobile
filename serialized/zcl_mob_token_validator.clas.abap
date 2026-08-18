@@ -17,25 +17,33 @@ ENDCLASS.
 CLASS zcl_mob_token_validator IMPLEMENTATION.
   METHOD validate_hash.
     DATA(now) = utclong_current( ).
-    SELECT SINGLE FROM ztb_mob_session
+    SELECT FROM ztb_mob_session
       FIELDS session_id, user_uuid, device_id, status, expires_at
       WHERE access_token_hash = @token_hash
         AND status = 'A'
         AND expires_at > @now
-      INTO @DATA(session).
-    IF sy-subrc <> 0.
+      INTO TABLE @DATA(matched_sessions)
+      UP TO 2 ROWS.
+    IF lines( matched_sessions ) <> 1.
       result-error_code = 'TOKEN_INVALID_OR_EXPIRED'.
       RETURN.
     ENDIF.
+    DATA(session) = matched_sessions[ 1 ].
     IF session-device_id <> device_id.
       result-error_code = 'DEVICE_MISMATCH'.
       RETURN.
     ENDIF.
-    SELECT SINGLE FROM ztb_mob_user
+    SELECT FROM ztb_mob_user
       FIELDS status, password_change_required
       WHERE user_uuid = @session-user_uuid
-      INTO @DATA(user).
-    IF sy-subrc <> 0 OR user-status <> 'A'.
+      INTO TABLE @DATA(matched_users)
+      UP TO 1 ROWS.
+    IF matched_users IS INITIAL.
+      result-error_code = 'USER_INACTIVE'.
+      RETURN.
+    ENDIF.
+    DATA(user) = matched_users[ 1 ].
+    IF user-status <> 'A'.
       result-error_code = 'USER_INACTIVE'.
       RETURN.
     ENDIF.

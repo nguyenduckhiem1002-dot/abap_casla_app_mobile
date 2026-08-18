@@ -1,4 +1,4 @@
-@AccessControl.authorizationCheck: #CHECK
+@AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'API giao dịch phân bổ sản lượng'
 define view entity ZC_PP_AllocTxn
   as projection on ZR_PP_AllocTxn

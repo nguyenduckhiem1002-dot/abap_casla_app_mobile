@@ -1,0 +1,4 @@
+@EndUserText.label: 'Dịch vụ xác thực ứng dụng di động'
+define service ZUI_MOB_AUTH {
+  expose ZC_MOB_User as MobileAuthentication;
+}

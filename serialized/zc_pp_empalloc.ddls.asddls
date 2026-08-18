@@ -1,4 +1,4 @@
-@AccessControl.authorizationCheck: #CHECK
+@AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'API phân bổ sản lượng nhân công'
 define view entity ZC_PP_EmpAlloc
   as projection on ZR_PP_EmpAlloc
