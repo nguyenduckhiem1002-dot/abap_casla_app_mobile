@@ -1430,3 +1430,13 @@ TOKEN_SECRET    = <secret riêng để hash access/refresh token>
 Không commit secret lên Git. DEV/QAS/PRD dùng secret khác nhau. Đổi
 `PASSWORD_PEPPER` cần migration password; đổi `TOKEN_SECRET` vô hiệu hóa mọi
 session và buộc đăng nhập lại.
+# Bổ sung: cấp tài khoản giám sát qua Fiori
+
+- Chỉ ứng dụng Fiori quản trị sử dụng service `ZUI_MOB_USER_ADM` được expose action `createUser`.
+- Service mobile không expose `createUser`; người dùng không thể tự đăng ký.
+- Người vận hành Fiori phải có authorization object `Z_MOB_USR`, `ACTVT = 01`.
+- Khi tạo tài khoản, hệ thống luôn đặt `PASSWORD_CHANGE_REQUIRED = 'X'`.
+- Lần đăng nhập đầu vẫn cấp token giới hạn và trả `Status = 'P'`; token này chỉ được dùng để gọi `changePassword`.
+- Sau khi đổi mật khẩu thành công, hệ thống đặt `PASSWORD_CHANGE_REQUIRED = space`; token mới có thể dùng cho đồng bộ sản lượng.
+- Mỗi tài khoản có salt ngẫu nhiên riêng tại `ZTB_MOB_CRED-PASSWORD_SALT`. Salt không phải bí mật và được lưu cùng password hash.
+- `PASSWORD_PEPPER` là bí mật dùng chung, lưu trong `ZTB_MOB_CONFIG`; không trả ra CDS/OData và không ghi log.

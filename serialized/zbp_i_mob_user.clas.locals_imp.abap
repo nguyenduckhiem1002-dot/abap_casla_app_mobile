@@ -28,6 +28,11 @@ ENDCLASS.
 
 CLASS lhc_mobileuser IMPLEMENTATION.
   METHOD get_global_authorizations.
+    AUTHORITY-CHECK OBJECT 'Z_MOB_USR'
+      ID 'ACTVT' FIELD '01'.
+    result-%action-createUser = COND #(
+      WHEN sy-subrc = 0 THEN if_abap_behv=>auth-allowed
+      ELSE if_abap_behv=>auth-unauthorized ).
     result-%create = if_abap_behv=>auth-unauthorized.
     result-%update = if_abap_behv=>auth-unauthorized.
     result-%delete = if_abap_behv=>auth-unauthorized.
@@ -91,7 +96,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       WITH VALUE #( ( %cid = 'USR' Username = input-Username
         NormalizedUsername = normalized FullName = input-FullName
         Email = input-Email Status = 'A' FailedLoginCount = 0
-        PasswordChangeRequired = abap_false ) )
+        PasswordChangeRequired = abap_true ) )
       ENTITY MobileUser CREATE BY \_Credential FIELDS
         ( PasswordHash PasswordSalt HashAlgorithm HashIterations
           PasswordChangedAt CredentialStatus )
@@ -121,7 +126,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(now) = utclong_current( ).
     DATA(normalized) = to_lower( condense( CONV string( input-Username ) ) ).
     SELECT SINGLE FROM ztb_mob_user
-      FIELDS user_uuid, status, failed_login_count, locked_until
+      FIELDS user_uuid, status, failed_login_count, locked_until,
+             password_change_required
       WHERE normalized_username = @normalized INTO @DATA(user).
     IF sy-subrc <> 0 OR user-status <> 'A'
        OR ( user-locked_until IS NOT INITIAL AND user-locked_until > now ).
@@ -199,7 +205,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     result = VALUE #( ( %cid = cid %param-UserUUID = user-user_uuid
       %param-SessionID = session_id %param-AccessToken = access_token
       %param-RefreshToken = refresh_token %param-ExpiresAt = expires_at
-      %param-Status = 'A' ) ).
+      %param-Status = COND #( WHEN user-password_change_required = abap_true
+                              THEN 'P' ELSE 'A' )
+      %param-PasswordChangeRequired = user-password_change_required ) ).
   ENDMETHOD.
 
   METHOD logout.
@@ -293,7 +301,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         RETURN.
     ENDTRY.
     DATA(auth) = zcl_mob_token_validator=>validate_hash(
-      token_hash = token_hash device_id = input-DeviceID ).
+      token_hash = token_hash device_id = input-DeviceID
+      allow_password_change = abap_true ).
     IF auth-is_valid = abap_false.
       report_error( EXPORTING cid = cid text = |Token không hợp lệ: { auth-error_code }|
                     CHANGING reported = reported ).

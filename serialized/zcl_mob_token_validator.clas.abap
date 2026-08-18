@@ -10,6 +10,7 @@ CLASS zcl_mob_token_validator DEFINITION
     CLASS-METHODS validate_hash
       IMPORTING token_hash TYPE ztb_mob_session-access_token_hash
                 device_id TYPE ztb_mob_session-device_id
+                allow_password_change TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(result) TYPE validation_result.
 ENDCLASS.
 
@@ -31,12 +32,16 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       RETURN.
     ENDIF.
     SELECT SINGLE FROM ztb_mob_user
-      FIELDS @abap_true
+      FIELDS status, password_change_required
       WHERE user_uuid = @session-user_uuid
-        AND status = 'A'
-      INTO @DATA(user_active).
-    IF user_active <> abap_true.
+      INTO @DATA(user).
+    IF sy-subrc <> 0 OR user-status <> 'A'.
       result-error_code = 'USER_INACTIVE'.
+      RETURN.
+    ENDIF.
+    IF user-password_change_required = abap_true
+       AND allow_password_change = abap_false.
+      result-error_code = 'PASSWORD_CHANGE_REQUIRED'.
       RETURN.
     ENDIF.
     result = VALUE #( is_valid = abap_true

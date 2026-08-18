@@ -6,4 +6,5 @@ define abstract entity ZA_MOB_LoginResult {
   RefreshToken : abap.char(128);
   ExpiresAt : abap.utclong;
   Status : abap.char(1);
+  PasswordChangeRequired : abap_boolean;
 }

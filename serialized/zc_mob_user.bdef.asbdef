@@ -3,7 +3,6 @@ strict ( 2 );
 
 define behavior for ZC_MOB_User alias MobileUser
 {
-  use action createUser;
   use action login;
   use action logout;
   use action refresh;

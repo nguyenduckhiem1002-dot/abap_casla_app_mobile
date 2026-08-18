@@ -1,0 +1,7 @@
+projection;
+strict ( 2 );
+
+define behavior for ZC_MOB_User_Adm alias MobileUser
+{
+  use action createUser;
+}

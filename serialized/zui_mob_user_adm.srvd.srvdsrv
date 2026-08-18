@@ -1,0 +1,4 @@
+@EndUserText.label: 'Dịch vụ quản trị tài khoản giám sát'
+define service ZUI_MOB_USER_ADM {
+  expose ZC_MOB_User_Adm as SupervisorAccounts;
+}
