@@ -3,19 +3,17 @@ strict ( 2 );
 
 define behavior for ZC_PP_OpAlloc alias OperationAllocation
 {
-  use create;
-  use update;
-  use action initialAssign;
-  use action transfer;
-  use action confirm;
-  use action reverse;
-  use association _Employees { create; }
-  use association _Transactions { create; }
+  "Read-only surface on purpose. The mobile app never writes through this
+  "service: transactions arrive via submitSync and are applied by the sync
+  "worker with internal EML on ZR_PP_OpAlloc after token, idempotency and
+  "worker validation. Exposing create/update/actions here would only
+  "advertise operations that the global authorization handler rejects.
+  use association _Employees;
+  use association _Transactions;
 }
 
 define behavior for ZC_PP_EmpAlloc alias EmployeeAllocation
 {
-  use update;
   use association _Operation;
 }
 
@@ -23,4 +21,3 @@ define behavior for ZC_PP_AllocTxn alias AllocationTransaction
 {
   use association _Operation;
 }
-

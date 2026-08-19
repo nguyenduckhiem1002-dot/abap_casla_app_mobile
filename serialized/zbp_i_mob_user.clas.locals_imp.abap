@@ -51,10 +51,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD hash_token.
-    DATA(hasher) = NEW zcl_mob_hasher(
-      iv_secret_key = zcl_mob_sec_config=>get_token_secret( ) ).
-    hash = CONV ztb_mob_session-access_token_hash(
-      hasher->calculate_hash( token ) ).
+    "Delegates so token hashing has exactly one implementation, shared with
+    "every other entry point that has to accept a mobile token.
+    hash = zcl_mob_token_validator=>hash_token( token ).
   ENDMETHOD.
 
   METHOD report_error.
@@ -404,15 +403,15 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
     DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     TRY.
-        DATA(token_hash) = hash_token( CONV string( input-AccessToken ) ).
+        DATA(auth) = zcl_mob_token_validator=>validate_token(
+          token = CONV string( input-AccessToken )
+          device_id = input-DeviceID
+          allow_password_change = abap_true ).
       CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
         report_error( EXPORTING cid = cid text = error->get_text( )
                       CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.
-    DATA(auth) = zcl_mob_token_validator=>validate_hash(
-      token_hash = token_hash device_id = input-DeviceID
-      allow_password_change = abap_true ).
     IF auth-is_valid = abap_false.
       report_error( EXPORTING cid = cid text = |Token không hợp lệ: { auth-error_code }|
                     CHANGING failed = failed reported = reported ).

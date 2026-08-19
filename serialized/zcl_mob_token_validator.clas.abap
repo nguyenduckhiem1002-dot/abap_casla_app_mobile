@@ -7,6 +7,22 @@ CLASS zcl_mob_token_validator DEFINITION
              session_id TYPE sysuuid_x16,
              error_code TYPE c LENGTH 40,
            END OF validation_result.
+    "Single source of truth for token hashing. Every entry point that
+    "accepts a mobile token must hash it here instead of inline, otherwise
+    "the implementations drift and a change to the hashing silently
+    "invalidates sessions in one path while the other keeps accepting them.
+    CLASS-METHODS hash_token
+      IMPORTING token TYPE string
+      RETURNING VALUE(hash) TYPE ztb_mob_session-access_token_hash
+      RAISING cx_abap_message_digest.
+    "Preferred entry point for callers holding the plain token.
+    CLASS-METHODS validate_token
+      IMPORTING token TYPE string
+                device_id TYPE ztb_mob_session-device_id
+                allow_password_change TYPE abap_bool DEFAULT abap_false
+      RETURNING VALUE(result) TYPE validation_result
+      RAISING cx_abap_message_digest.
+    "For callers that already hold the hash and must not hash twice.
     CLASS-METHODS validate_hash
       IMPORTING token_hash TYPE ztb_mob_session-access_token_hash
                 device_id TYPE ztb_mob_session-device_id
@@ -15,6 +31,20 @@ CLASS zcl_mob_token_validator DEFINITION
 ENDCLASS.
 
 CLASS zcl_mob_token_validator IMPLEMENTATION.
+  METHOD hash_token.
+    DATA(hasher) = NEW zcl_mob_hasher(
+      iv_secret_key = zcl_mob_sec_config=>get_token_secret( ) ).
+    hash = CONV ztb_mob_session-access_token_hash(
+      hasher->calculate_hash( token ) ).
+  ENDMETHOD.
+
+  METHOD validate_token.
+    result = validate_hash(
+      token_hash = hash_token( token )
+      device_id = device_id
+      allow_password_change = allow_password_change ).
+  ENDMETHOD.
+
   METHOD validate_hash.
     DATA(now) = utclong_current( ).
     SELECT FROM ztb_mob_session

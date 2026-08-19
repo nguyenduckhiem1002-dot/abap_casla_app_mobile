@@ -62,6 +62,34 @@
   `%param` qua `CORRESPONDING` để loại các thành phần `%` của READ result.
   Không còn mục nào chờ verify trên ADT.
 
+## Đã sửa trong đợt hardening 4 (luồng đồng bộ)
+
+- `zcl_mob_token_validator` nhận thêm `hash_token` và `validate_token`: băm
+  token giờ chỉ có một implementation duy nhất. Trước đây logic băm nằm trong
+  `PRIVATE SECTION` của `lhc_mobileuser`, nên mọi entry point mới (submitSync)
+  buộc phải chép lại; hai bản chép sẽ trôi khỏi nhau khi đổi cách băm, và
+  session sẽ hợp lệ ở đường này nhưng vô hiệu ở đường kia. `changePassword`
+  đã chuyển sang `validate_token`; handler giữ `hash_token` riêng chỉ để gọi
+  lại validator.
+- `ZC_PP_OpAlloc` (BDEF projection): bỏ `use create/update` và 4 `use action`.
+  Đường ghi tương lai đi qua sync worker gọi EML nội bộ trên `ZR_PP_OpAlloc`,
+  nên projection không bao giờ cần các thao tác này. Trước đây metadata OData
+  vẫn công bố chúng rồi bị `get_global_authorizations` từ chối — bề mặt thừa.
+- `IMPLEMENTATION_STATUS.md`: bổ sung unique index còn thiếu cho
+  `ZTB_PP_ALLOC_TXN` (chống replay ở tầng DB) và chốt bảng giá trị
+  `SYNC_STATUS` / `ITEM_STATUS` cùng quy tắc retry.
+
+Còn để mở trong luồng đồng bộ (chưa làm):
+
+- App chưa có đường đọc kết quả: `ZA_PP_SubmitSyncResult` không có chi tiết
+  item, và không có CDS view nào trên `ZTB_PP_SYNC_H/_I`. Cần projection chỉ
+  đọc để app poll trạng thái từng item.
+- Chốt bgPF **per-header** thay vì per-item: thứ tự nghiệp vụ
+  (initialAssign → transfer → confirm) và đơn vị khóa là công đoạn.
+- `MOBILE_CHANGED_AT` do thiết bị gửi lên: chỉ dùng để sắp thứ tự trong một
+  batch, không dùng làm mốc nghiệp vụ. `EXECUTION_DATE` nên chặn ngày tương
+  lai và ngày quá cũ.
+
 ## Bắt buộc thực hiện trên tenant
 
 Các mục sau không được giả lập trong repo vì phụ thuộc release và repository
