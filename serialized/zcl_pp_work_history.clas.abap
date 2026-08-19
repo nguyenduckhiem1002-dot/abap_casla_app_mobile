@@ -282,12 +282,12 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD worker_of_account.
-    "The account name is the worker id by convention, and Username is
-    "readonly in the behaviour definition so the link cannot drift. A name
-    "that does not fit a worker id would truncate into somebody else's rows,
-    "so it is rejected rather than shortened.
+    "The account carries the worker id in its own field, the same one
+    "verify_worker_password looks accounts up by. It is wider there than in
+    "the ledger, so an id that does not fit is refused instead of truncated:
+    "a truncated id would quietly point at somebody else's rows.
     SELECT FROM ztb_mob_user
-      FIELDS username
+      FIELDS worker_id
       WHERE user_uuid = @user_uuid
       INTO TABLE @DATA(accounts)
       UP TO 1 ROWS.
@@ -295,11 +295,14 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       RETURN.
     ENDIF.
     DATA(candidate) = to_upper(
-      condense( CONV string( accounts[ 1 ]-username ) ) ).
-    IF candidate IS INITIAL OR strlen( candidate ) > 8.
+      condense( CONV string( accounts[ 1 ]-worker_id ) ) ).
+    IF candidate IS INITIAL.
       RETURN.
     ENDIF.
     result = CONV #( candidate ).
+    IF CONV string( result ) <> candidate.
+      CLEAR result.
+    ENDIF.
   ENDMETHOD.
 
   METHOD select_self.
@@ -506,9 +509,6 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     <summary>-assigned = <summary>-assigned + assigned.
     <summary>-completed = <summary>-completed + completed.
     <summary>-txn_count = <summary>-txn_count + 1.
-    IF <summary>-uom IS INITIAL.
-      <summary>-uom = uom.
-    ENDIF.
   ENDMETHOD.
 
   METHOD build_entries.

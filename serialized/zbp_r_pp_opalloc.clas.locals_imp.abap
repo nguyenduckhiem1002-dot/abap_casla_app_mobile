@@ -125,6 +125,40 @@ CLASS lhc_operationallocation IMPLEMENTATION.
 
   METHOD initialAssign.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
+      DATA(input) = VALUE #( <key>-%param OPTIONAL ).
+      DATA(cid) = CONV string( <key>-%cid ).
+      
+      TRY.
+          DATA(auth) = zcl_mob_token_validator=>validate_token(
+            token = CONV string( input-AccessToken )
+            device_id = input-DeviceID
+            required_func = 'PP_INITIAL_ASSIGN' ).
+        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
+          report_failure( EXPORTING cid = cid text = error->get_text( )
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+      ENDTRY.
+      IF auth-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
+      TRY.
+          DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
+            worker_id = input-ToWorkerID
+            password = CONV string( input-WorkerPassword ) ).
+        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(pw_error).
+          report_failure( EXPORTING cid = cid text = pw_error->get_text( )
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+      ENDTRY.
+      IF worker_auth-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( worker_auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
       APPEND VALUE #( %tky = <key>-%tky )
         TO failed-operationallocation.
       APPEND VALUE #(
@@ -151,6 +185,40 @@ CLASS lhc_operationallocation IMPLEMENTATION.
 
   METHOD confirm.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
+      DATA(input) = VALUE #( <key>-%param OPTIONAL ).
+      DATA(cid) = CONV string( <key>-%cid ).
+      
+      TRY.
+          DATA(auth) = zcl_mob_token_validator=>validate_token(
+            token = CONV string( input-AccessToken )
+            device_id = input-DeviceID
+            required_func = 'PP_CONFIRM' ).
+        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
+          report_failure( EXPORTING cid = cid text = error->get_text( )
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+      ENDTRY.
+      IF auth-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
+      TRY.
+          DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
+            worker_id = input-WorkerID
+            password = CONV string( input-WorkerPassword ) ).
+        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(pw_error).
+          report_failure( EXPORTING cid = cid text = pw_error->get_text( )
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+      ENDTRY.
+      IF worker_auth-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( worker_auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
       APPEND VALUE #( %tky = <key>-%tky )
         TO failed-operationallocation.
       APPEND VALUE #(

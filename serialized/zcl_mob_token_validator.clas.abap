@@ -7,6 +7,12 @@ CLASS zcl_mob_token_validator DEFINITION
              session_id TYPE sysuuid_x16,
              error_code TYPE c LENGTH 40,
            END OF validation_result.
+    TYPES: BEGIN OF worker_verification_result,
+             is_valid         TYPE abap_bool,
+             worker_user_uuid TYPE sysuuid_x16,
+             worker_id        TYPE ztb_mob_user-worker_id,
+             error_code       TYPE c LENGTH 40,
+           END OF worker_verification_result.
     TYPES: BEGIN OF permission,
              func_id   TYPE ztb_mob_func-func_id,
              func_name TYPE ztb_mob_func-func_name,
@@ -48,6 +54,21 @@ CLASS zcl_mob_token_validator DEFINITION
       IMPORTING user_uuid TYPE sysuuid_x16
                 func_id TYPE ztb_mob_func-func_id
       RETURNING VALUE(result) TYPE abap_bool.
+    "The password KDF, in one place. It used to live privately in
+    "lhc_mobileuser and was copied into verify_worker_password; the copies
+    "would drift on any change to salting or iterations, and a worker would
+    "then authenticate on one path and be rejected on the other.
+    CLASS-METHODS hash_password
+      IMPORTING password   TYPE string
+                salt       TYPE string
+                iterations TYPE i
+      RETURNING VALUE(hash) TYPE ztb_mob_cred-password_hash
+      RAISING cx_abap_message_digest.
+    CLASS-METHODS verify_worker_password
+      IMPORTING worker_id TYPE ztb_mob_user-worker_id
+                password  TYPE string
+      RETURNING VALUE(result) TYPE worker_verification_result
+      RAISING cx_abap_message_digest.
 ENDCLASS.
 
 CLASS zcl_mob_token_validator IMPLEMENTATION.
@@ -139,5 +160,62 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
     result = VALUE #( is_valid = abap_true
                       user_uuid = session-user_uuid
                       session_id = session-session_id ).
+  ENDMETHOD.
+
+  METHOD hash_password.
+    DATA(hasher) = NEW zcl_mob_hasher(
+      iv_secret_key = zcl_mob_sec_config=>get_password_secret( ) ).
+    DATA(hash_value) = salt && ':' && password.
+    DO iterations TIMES.
+      hash_value = hasher->calculate_hash( hash_value ).
+    ENDDO.
+    hash = hash_value.
+  ENDMETHOD.
+
+  METHOD verify_worker_password.
+    SELECT FROM ztb_mob_user
+      FIELDS user_uuid, worker_id, status
+      WHERE worker_id = @worker_id
+      INTO TABLE @DATA(matched_users)
+      UP TO 2 ROWS.
+    IF lines( matched_users ) <> 1.
+      result-error_code = 'WORKER_NOT_FOUND'.
+      RETURN.
+    ENDIF.
+    DATA(user) = matched_users[ 1 ].
+    IF user-status <> 'A'.
+      result-error_code = 'WORKER_INACTIVE'.
+      RETURN.
+    ENDIF.
+    
+    SELECT FROM ztb_mob_cred
+      FIELDS password_hash, password_salt, hash_iterations, credential_status
+      WHERE user_uuid = @user-user_uuid
+      INTO TABLE @DATA(credentials)
+      UP TO 1 ROWS.
+    IF credentials IS INITIAL.
+      result-error_code = 'WORKER_NO_CREDENTIAL'.
+      RETURN.
+    ENDIF.
+    DATA(credential) = credentials[ 1 ].
+    IF credential-credential_status <> 'A'.
+      result-error_code = 'WORKER_CREDENTIAL_INACTIVE'.
+      RETURN.
+    ENDIF.
+    
+    DATA(hash_value) = hash_password(
+      password = password
+      salt = CONV string( credential-password_salt )
+      iterations = credential-hash_iterations ).
+    IF zcl_mob_hasher=>equals_constant_time(
+         value_1 = CONV string( hash_value )
+         value_2 = CONV string( credential-password_hash ) ) = abap_false.
+      result-error_code = 'WORKER_PASSWORD_INVALID'.
+      RETURN.
+    ENDIF.
+    
+    result = VALUE #( is_valid = abap_true
+                      worker_user_uuid = user-user_uuid
+                      worker_id = user-worker_id ).
   ENDMETHOD.
 ENDCLASS.

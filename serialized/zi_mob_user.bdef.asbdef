@@ -11,8 +11,10 @@ etag master LocalLastChangedAt
   update;
   delete;
   field ( numbering : managed, readonly ) UserUUID;
-  "Username carries the worker id that the history report resolves the
-  "caller with, so it is fixed at creation time and never updatable.
+  "Username identifies the account for login and is fixed at creation time.
+  "WorkerID is NOT readonly yet, although it is the link to master data and
+  "to the ledger: changing it re-points every past row of that account's
+  "history. Decide whether corrections are ever needed before locking it.
   field ( readonly ) Username, NormalizedUsername, FailedLoginCount, LockedUntil,
                      FirstLoginAt, LastLoginAt, CreatedBy, CreatedAt,
                      LastChangedBy, LastChangedAt, LocalLastChangedAt;
@@ -30,6 +32,9 @@ etag master LocalLastChangedAt
     NormalizedUsername = normalized_username;
     FullName = full_name;
     Email = email;
+    WorkerID = worker_id;
+    Plant = plant;
+    BoPhan = bo_phan;
     Status = status;
     FailedLoginCount = failed_login_count;
     LockedUntil = locked_until;
