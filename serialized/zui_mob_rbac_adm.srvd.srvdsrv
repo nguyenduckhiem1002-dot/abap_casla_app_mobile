@@ -1,0 +1,6 @@
+@EndUserText.label: 'Dịch vụ quản trị phân quyền'
+define service ZUI_MOB_RBAC_ADM {
+  expose ZC_MOB_Role_Adm     as Roles;
+  expose ZC_MOB_RolFunc_Adm  as RoleFunctions;
+  expose ZC_MOB_Func_Adm     as Functions;
+}

@@ -90,6 +90,49 @@ Còn để mở trong luồng đồng bộ (chưa làm):
   batch, không dùng làm mốc nghiệp vụ. `EXECUTION_DATE` nên chặn ngày tương
   lai và ngày quá cũ.
 
+## Đã sửa trong đợt hardening 5 (lớp phân quyền RBAC)
+
+- **Lỗi runtime**: `ZI_MOB_UsrRol` là composition child khai báo
+  `authorization dependent by _User`, mà RAP ủy quyền **mọi** thao tác của
+  child (create by association, update, delete) sang `%update` của entity
+  master. `lhc_mobileuser` đang đặt `%update = unauthorized`, nên gán chức
+  danh từ Fiori sẽ luôn bị từ chối. Đã đổi sang `allowed`; bề mặt ghi vẫn
+  đóng ở tầng projection vì `ZC_MOB_User_Adm` chỉ có `createUser` + `_Roles`
+  và `ZC_MOB_User` chỉ có các auth action — không view nào khai `use update`.
+- **Nối RBAC vào luồng auth**: thêm static action `getPermissions`
+  (`ZA_MOB_Token` → `ZA_MOB_Permission [0..*]`) trên service auth di động.
+  Action xác thực token qua `validate_token` rồi join
+  usr_rol × role × rol_fnc × func, chỉ lấy chức danh `Status = 'A'`, DISTINCT
+  theo `FuncID`. Trước đó 4 bảng RBAC chỉ có CRUD quản trị, app di động
+  không có đường nào đọc được quyền của mình.
+- **Chuẩn hóa access control**: 4 projection RBAC mới đều đặt
+  `#NOT_REQUIRED`, không theo quy ước đã chốt ở hardening 3. Nay root
+  projection (`ZC_MOB_Func_Adm`, `ZC_MOB_Role_Adm`) dùng `#MANDATORY` + DCL
+  full access như `ZC_MOB_User_Adm`; child projection giữ `#NOT_REQUIRED`
+  vì đi theo navigation từ root. Quy ước được viết thành bảng trong
+  `IMPLEMENTATION_STATUS.md` để lần sau không phải đoán.
+- **Dọn association hở**: `ZC_MOB_RolFunc_Adm._Func` và
+  `ZC_MOB_UsrRol_Adm._Role` trước đây trỏ thẳng vào interface view mà
+  không redirect — sẽ kéo `ZI_MOB_Func`/`ZI_MOB_Role` vào mô hình OData.
+  `_Func` nay redirect sang `ZC_MOB_Func_Adm` (cùng service RBAC); `_Role`
+  bị bỏ vì `ZUI_MOB_USER_ADM` không expose role và không chỗ nào dùng tới.
+  Value help cũng chuyển từ interface view sang admin projection.
+
+Cần verify khi activate trên ADT:
+
+- `result [0..*]` cho static action `getPermissions`: nếu release không chấp
+  nhận cardinality này thì đổi sang `[1..*]` (danh sách rỗng vẫn trả về
+  bình thường ở runtime).
+- Smoke-test: gán chức danh cho một tài khoản từ Fiori admin, rồi gọi
+  `getPermissions` bằng token của tài khoản đó để xác nhận hai đầu khớp nhau.
+
+Còn để mở:
+
+- `ZTB_MOB_FUNC` không có field audit/ETag trong khi `ZTB_MOB_ROLE` có đủ.
+  Sửa master data chức năng đồng thời sẽ ghi đè lẫn nhau mà không báo.
+- Danh sách chức năng của một chức danh hiện chỉ hiển `FuncID`, chưa có
+  `FuncName`; muốn hiển tên cần text element hoặc text association.
+
 ## Bắt buộc thực hiện trên tenant
 
 Các mục sau không được giả lập trong repo vì phụ thuộc release và repository

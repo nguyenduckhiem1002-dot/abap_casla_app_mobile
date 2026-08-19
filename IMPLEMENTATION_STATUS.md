@@ -24,6 +24,40 @@
   - `ZTB_MOB_CONFIG` lưu cấu hình môi trường; không serialize giá trị secret.
   - Auth actions đã có implementation EML: `createUser`, `login`, `logout`,
     `refresh`, `changePassword`, failed-login lock và refresh-token rotation.
+- Mobile RBAC layer:
+  - Tables `ZTB_MOB_FUNC`, `ZTB_MOB_ROLE`, `ZTB_MOB_ROL_FNC`,
+    `ZTB_MOB_USR_ROL`.
+  - Root BOs `ZI_MOB_Func` and `ZI_MOB_Role` (`ZBP_I_MOB_FUNC`,
+    `ZBP_I_MOB_ROLE`), with `ZI_MOB_RolFunc` as composition child of the role
+    and `ZI_MOB_UsrRol` as composition child of `ZI_MOB_User`.
+  - Admin projections plus service `ZUI_MOB_RBAC_ADM`; the per-user role
+    assignment is exposed on `ZUI_MOB_USER_ADM` next to the account itself.
+  - `getPermissions` static action on the mobile auth service returns the
+    effective function list for the token holder, so the app drives its menu
+    from the same RBAC data the admin maintains.
+
+## CDS access control convention
+
+Applied consistently across the MOB objects so that a new view has one obvious
+choice instead of a per-object decision:
+
+| Layer | Annotation | DCL |
+| --- | --- | --- |
+| Interface view, root (`ZI_*`) | `#NOT_REQUIRED` | none |
+| Interface view, composition child | `#NOT_REQUIRED` | none |
+| Admin projection, root (`ZC_*_Adm`) | `#MANDATORY` | full access rule |
+| Admin projection, composition child | `#NOT_REQUIRED` | none |
+
+Two deliberate exceptions, both on the mobile authentication path:
+
+- `ZI_MOB_User` is `#MANDATORY` with a deny-all DCL, because `ZC_MOB_User`
+  inherits its conditions and the auth service must expose actions only.
+- `ZC_MOB_User_Adm` overrides that inherited deny with a full access rule; the
+  real gate for the admin service is its IAM app / business catalog.
+
+Composition children never get their own DCL. They are reached by navigation
+from their root, which already carries the check, and `#MANDATORY` on a child
+would only demand a rule that grants everything.
 
 ## Deliberately fail-closed
 

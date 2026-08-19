@@ -1,0 +1,41 @@
+managed implementation in class zbp_i_mob_role unique;
+strict ( 2 );
+
+define behavior for ZI_MOB_Role alias MobileRole
+persistent table ztb_mob_role
+lock master
+authorization master ( global )
+etag master LocalLastChangedAt
+{
+  create;
+  update;
+  delete;
+  field ( readonly ) CreatedBy, CreatedAt, LastChangedBy, LastChangedAt,
+                     LocalLastChangedAt;
+  association _Functions { create; }
+  mapping for ztb_mob_role {
+    RoleID = role_id;
+    RoleName = role_name;
+    Status = status;
+    CreatedBy = created_by;
+    CreatedAt = created_at;
+    LastChangedBy = last_changed_by;
+    LastChangedAt = last_changed_at;
+    LocalLastChangedAt = local_last_changed_at;
+  }
+}
+
+define behavior for ZI_MOB_RolFunc alias MobileRoleFunc
+persistent table ztb_mob_rol_fnc
+lock dependent by _Role
+authorization dependent by _Role
+{
+  update;
+  delete;
+  field ( readonly ) RoleID;
+  association _Role;
+  mapping for ztb_mob_rol_fnc {
+    RoleID = role_id;
+    FuncID = func_id;
+  }
+}

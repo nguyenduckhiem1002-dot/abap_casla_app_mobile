@@ -1,0 +1,17 @@
+projection;
+strict ( 2 );
+
+define behavior for ZC_MOB_Role_Adm alias MobileRole
+{
+  use create;
+  use update;
+  use delete;
+  use association _Functions { create; }
+}
+
+define behavior for ZC_MOB_RolFunc_Adm alias MobileRoleFunc
+{
+  use update;
+  use delete;
+  use association _Role;
+}

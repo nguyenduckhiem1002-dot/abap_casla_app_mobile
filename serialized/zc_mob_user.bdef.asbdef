@@ -7,4 +7,5 @@ define behavior for ZC_MOB_User alias MobileUser
   use action logout;
   use action refresh;
   use action changePassword;
+  use action getPermissions;
 }

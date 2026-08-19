@@ -4,6 +4,7 @@ define root view entity ZI_MOB_User
   as select from ztb_mob_user
   composition [0..1] of ZI_MOB_Cred    as _Credential
   composition [0..*] of ZI_MOB_Session as _Sessions
+  composition [0..*] of ZI_MOB_UsrRol  as _Roles
 {
   key user_uuid                as UserUUID,
       username                 as Username,
@@ -27,5 +28,6 @@ define root view entity ZI_MOB_User
       @Semantics.systemDateTime.localInstanceLastChangedAt: true
       local_last_changed_at    as LocalLastChangedAt,
       _Credential,
-      _Sessions
+      _Sessions,
+      _Roles
 }

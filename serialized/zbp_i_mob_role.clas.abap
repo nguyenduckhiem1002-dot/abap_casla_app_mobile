@@ -1,0 +1,9 @@
+CLASS zbp_i_mob_role DEFINITION
+  PUBLIC
+  ABSTRACT
+  FINAL
+  FOR BEHAVIOR OF zi_mob_role.
+ENDCLASS.
+
+CLASS zbp_i_mob_role IMPLEMENTATION.
+ENDCLASS.

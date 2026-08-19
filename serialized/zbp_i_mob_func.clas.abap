@@ -1,0 +1,9 @@
+CLASS zbp_i_mob_func DEFINITION
+  PUBLIC
+  ABSTRACT
+  FINAL
+  FOR BEHAVIOR OF zi_mob_func.
+ENDCLASS.
+
+CLASS zbp_i_mob_func IMPLEMENTATION.
+ENDCLASS.

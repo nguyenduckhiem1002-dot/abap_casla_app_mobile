@@ -29,5 +29,7 @@ define root view entity ZC_MOB_User_Adm
   @UI.lineItem: [{ position: 70 }]
       LastLoginAt,
   @UI.lineItem: [{ position: 80 }]
-      CreatedAt
+      CreatedAt,
+      /* Composition */
+      _Roles : redirected to composition child ZC_MOB_UsrRol_Adm
 }

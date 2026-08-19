@@ -1,0 +1,17 @@
+managed implementation in class zbp_i_mob_func unique;
+strict ( 2 );
+
+define behavior for ZI_MOB_Func alias MobileFunc
+persistent table ztb_mob_func
+lock master
+authorization master ( global )
+{
+  create;
+  update;
+  delete;
+  mapping for ztb_mob_func {
+    FuncID = func_id;
+    FuncName = func_name;
+    Module = module;
+  }
+}
