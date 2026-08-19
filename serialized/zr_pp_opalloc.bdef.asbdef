@@ -24,6 +24,12 @@ etag master LocalLastChangedAt
   action confirm parameter ZA_PP_Confirm result [1] $self;
   action reverse parameter ZA_PP_Reverse result [1] $self;
 
+  "Read-only, token scoped report. Rows are filtered in ABAP because the
+  "mobile service runs under one communication user, so CDS access
+  "control cannot tell the end users apart.
+  static action getWorkHistory parameter ZA_PP_HistQuery
+    result [1] ZA_PP_HistResult;
+
   validation validateOperation on save { create; update; }
 
   mapping for ztb_pp_op_alloc

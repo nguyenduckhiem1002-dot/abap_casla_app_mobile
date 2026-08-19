@@ -63,6 +63,60 @@ Composition children never get their own DCL. They are reached by navigation
 from their root, which already carries the check, and `#MANDATORY` on a child
 would only demand a rule that grants everything.
 
+## Work history report
+
+`getWorkHistory` on `ZR_PP_OpAlloc`, exposed through `ZC_PP_OpAlloc` on
+`ZUI_PP_OPALLOC`. It is a read-only, token scoped query; the row filter lives
+in ABAP because the mobile binding runs under one communication user, so CDS
+access control cannot tell the end users apart.
+
+Scope is decided by the caller's RBAC functions, never by anything the device
+sends:
+
+| Function | Scope | Rows returned |
+| --- | --- | --- |
+| `PP_HIST_TEAM` | supervisor | every posted row on the operation/worker pairs this account booked an assignment for, including confirmations the workers posted later |
+| `PP_HIST_SELF` | worker | posted rows where the caller is the worker, the giver or the receiver |
+
+Neither function present means `MISSING_PERMISSION`. A worker is resolved from
+the account name, which is the worker id by convention; `Username` is therefore
+`readonly` in the behaviour definition. A name that does not fit a worker id is
+rejected with `WORKER_NOT_MAPPED` rather than truncated, since truncation would
+silently point at somebody else's rows.
+
+Both functions must exist as rows in `ZTB_MOB_FUNC` and be granted through a
+role before anyone can open the screen.
+
+### Where the numbers come from
+
+Only transaction data: `ZTB_PP_ALLOC_TXN` joined to `ZTB_PP_OP_ALLOC`, counting
+rows whose status is `POSTED`. Per worker figures are folded in ABAP:
+`INITIAL_ASSIGN` adds to assigned, `TRANSFER` adds to the receiver and subtracts
+from the giver, `CONFIRM` adds to completed, `REVERSE` subtracts from it, and
+remaining is assigned minus completed. An unrecognised type is counted but not
+booked, so introducing one later cannot quietly distort the figures.
+
+`ZTB_KB_NHANCONG`, through `ZI_PP_WorkerRef`, supplies worker names and nothing
+else. It never filters, so:
+
+- a worker who moves to another work center keeps every past row, and the
+  supervisor who booked the work still sees it;
+- a worker who disappears from the partner table still appears in history, with
+  a blank name rather than a lost row;
+- names are picked from the master record valid on the day of the booking, so a
+  rename reads correctly in old rows.
+
+### Time filtering
+
+`RangeCode` selects `D` today, `W` last 7 days, `M` last 30 days (the default,
+also used for an unrecognised code) or `C` custom. A custom range may reach as
+far back as wanted but may not span `max_custom_days` (92) or more, answering
+`RANGE_TOO_WIDE`; an incomplete or inverted range answers `RANGE_INVALID`.
+Reading stops at `max_scan_rows` (20000) with `IsTruncated` set, and the detail
+list is capped at `max_entry_rows` (1000) - the per worker totals are computed
+before that cap. `SummaryOnly` is phrased so that its initial value returns the
+detail list, because an unsent boolean cannot be told apart from `false`.
+
 ## Deliberately fail-closed
 
 The following actions are declared but currently return an error message:
@@ -126,6 +180,7 @@ business object allows.
 | `ZUI_MOB_AUTH` | mobile communication user | `login`, `logout`, `refresh`, `changePassword` |
 | `ZUI_MOB_USER_ADM` | Fiori, IAM app | `createUser`, assign / change / remove a user's roles |
 | `ZUI_MOB_RBAC_ADM` | Fiori, IAM app | maintain roles, functions, role-to-function grants |
+| `ZUI_PP_OPALLOC` | mobile communication user | read operation headers; `getWorkHistory` |
 
 Consequences that must stay true:
 
@@ -172,7 +227,17 @@ Consequences that must stay true:
    `API_PROD_ORDER_CONFIRMATION_2_SRV`.
 6. Bind the Fiori admin service to an IAM app/business catalog; enforce mobile
    authorization through token validation in the sync entry point.
-7. Keep the service bindings separated per audience. The communication
+7. After publishing `ZUI_PP_OPALLOC`, confirm the metadata contains no
+   `EmployeeAllocations` or `AllocationTransactions` entity set and that
+   navigating `_Employees` or `_Transactions` from an operation is refused.
+   Those two hold per worker figures and were removed from the service
+   definition; if a release still exposes them through the composition, the
+   remaining option is to drop the two child projections so the report action
+   is the only way in.
+8. Create the `PP_HIST_TEAM` and `PP_HIST_SELF` rows in `ZTB_MOB_FUNC` and
+   grant them through the supervisor and worker roles. Without the grant the
+   history screen answers `MISSING_PERMISSION` for everyone.
+9. Keep the service bindings separated per audience. The communication
    arrangement used by the mobile device must contain the `ZUI_MOB_AUTH`
    binding and nothing else. Adding `ZUI_MOB_USER_ADM` or `ZUI_MOB_RBAC_ADM`
    to the same communication scenario would hand the device user

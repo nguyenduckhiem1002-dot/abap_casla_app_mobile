@@ -1,6 +1,13 @@
 @EndUserText.label: 'Dịch vụ phân bổ sản lượng công đoạn'
 define service ZUI_PP_OPALLOC {
+  // Operation headers carry no personal data and the app needs them to
+  // navigate its own screens.
+  //
+  // EmployeeAllocations and AllocationTransactions are deliberately not
+  // exposed. They hold per worker figures, and the mobile binding runs
+  // under a single communication user, so an entity set would hand every
+  // device the whole factory regardless of role. Worker level data is
+  // reachable only through the getWorkHistory action, which resolves the
+  // caller from their token and filters accordingly.
   expose ZC_PP_OpAlloc as OperationAllocations;
-  expose ZC_PP_EmpAlloc as EmployeeAllocations;
-  expose ZC_PP_AllocTxn as AllocationTransactions;
 }

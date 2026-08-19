@@ -163,6 +163,46 @@ Cần verify khi activate trên ADT:
   khoản đó và kiểm tra `_Permissions` trong response; sau đó đổi chức danh
   sang `Status = 'I'` và gọi `refresh` để xác nhận danh sách rỗng đi.
 
+## Đã xây trong đợt 7 (báo cáo lịch sử giao/nhận việc)
+
+- Action `getWorkHistory` trên `ZR_PP_OpAlloc`, logic nằm trong
+  `ZCL_PP_WORK_HISTORY`. Là action chứ không phải entity set vì service di
+  động chạy dưới **một communication user** — DCL không phân biệt được
+  người dùng cuối, nên việc lọc dòng bắt buộc phải làm trong ABAP sau khi
+  xác thực token.
+- Phạm vi theo function RBAC: `PP_HIST_TEAM` (giám sát) thấy mọi dòng
+  POSTED trên các cặp (công đoạn, nhân công) mà chính tài khoản đó đã giao
+  — **kèm cả confirm do nhân viên post sau**, nếu không thì cột tiến độ sẽ
+  luôn rỗng. `PP_HIST_SELF` (nhân viên) chỉ thấy dòng của chính mình.
+- **Tính toàn vẹn lịch sử**: phạm vi chốt bằng `ACTOR_USER_UUID` trong
+  ledger, không join tổ hiện tại từ master data. Nhân viên chuyển tổ thì
+  quản lý cũ vẫn thấy nguyên việc đã giao. `ZTB_KB_NHANCONG` (qua
+  `ZI_PP_WorkerRef`) chỉ dùng lấy **tên**, lấy theo bản ghi còn hiệu lực tại
+  ngày phát sinh; nhân công bị xóa khỏi master data thì dòng vẫn còn, chỉ
+  trống tên.
+- `Username` đặt `readonly` trong BDEF: tên đăng nhập chính là mã nhân
+  công nên không được đổi. Tên dài hơn 8 ký tự bị từ chối
+  (`WORKER_NOT_MAPPED`) thay vì cắt bớt — cắt bớt sẽ trỏ sang dòng của
+  người khác.
+- **Đóng đường đọc thô**: `ZUI_PP_OPALLOC` trước đây expose cả
+  `EmployeeAllocations` và `AllocationTransactions` — comm user GET thẳng là
+  đọc được số liệu toàn bộ nhân công, làm mọi phân quyền trên thành vô
+  nghĩa. Đã bỏ hai entity set này; chỉ còn `OperationAllocations` (không
+  chứa dữ liệu cá nhân) và action.
+- `ZCL_PP_TXN_TYPE` chốt giá trị `TRANSACTION_TYPE` / `TRANSACTION_STATUS`
+  (trước đây là char tự do, chưa ai định nghĩa).
+
+Lưu ý quan trọng khi nghiệm thu:
+
+- **Báo cáo sẽ trả rỗng cho tới khi đường ghi PP được đấu dây.**
+  `initialAssign` / `transfer` / `confirm` / `reverse` vẫn là stub fail-closed
+  và sync worker chưa có, nên `ZTB_PP_ALLOC_TXN` chưa bao giờ được ghi.
+  Phần đọc đã sẵn sàng và đúng hợp đồng dữ liệu.
+- Khi viết ledger phải theo đúng quy ước báo cáo đang giả định:
+  `ACTOR_USER_UUID` = người thực hiện, `WORKER_ID` = nhân công dòng đó ghi
+  vào, riêng TRANSFER dùng thêm `FROM_WORKER_ID` / `TO_WORKER_ID`, và
+  `TRANSACTION_STATUS = 'POSTED'` cho dòng đã hạch toán.
+
 ## Bắt buộc thực hiện trên tenant
 
 Các mục sau không được giả lập trong repo vì phụ thuộc release và repository

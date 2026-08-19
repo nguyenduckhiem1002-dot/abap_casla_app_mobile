@@ -8,6 +8,10 @@ define behavior for ZC_PP_OpAlloc alias OperationAllocation
   "worker with internal EML on ZR_PP_OpAlloc after token, idempotency and
   "worker validation. Exposing create/update/actions here would only
   "advertise operations that the global authorization handler rejects.
+  "The one operation the device may call: a read-only, token scoped
+  "history query. It changes nothing - the projection stays write-closed.
+  use action getWorkHistory;
+
   use association _Employees;
   use association _Transactions;
 }

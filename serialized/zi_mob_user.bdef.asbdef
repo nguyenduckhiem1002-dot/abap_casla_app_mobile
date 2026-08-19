@@ -11,7 +11,9 @@ etag master LocalLastChangedAt
   update;
   delete;
   field ( numbering : managed, readonly ) UserUUID;
-  field ( readonly ) NormalizedUsername, FailedLoginCount, LockedUntil,
+  "Username carries the worker id that the history report resolves the
+  "caller with, so it is fixed at creation time and never updatable.
+  field ( readonly ) Username, NormalizedUsername, FailedLoginCount, LockedUntil,
                      FirstLoginAt, LastLoginAt, CreatedBy, CreatedAt,
                      LastChangedBy, LastChangedAt, LocalLastChangedAt;
   association _Credential { create; }

@@ -1,0 +1,19 @@
+abstract;
+strict ( 2 );
+with hierarchy;
+
+define behavior for ZA_PP_HistResult
+{
+  association _Workers;
+  association _Entries;
+}
+
+define behavior for ZA_PP_HistWorker
+{
+  association _Result;
+}
+
+define behavior for ZA_PP_HistEntry
+{
+  association _Result;
+}
