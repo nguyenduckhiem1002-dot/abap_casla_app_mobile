@@ -190,7 +190,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     IF lines( keys ) > 1.
       LOOP AT keys ASSIGNING FIELD-SYMBOL(<history_key>).
         report_failure( EXPORTING cid = CONV string( <history_key>-%cid )
-                          text = 'Má»i yÃªu cáº§u chá» ÄÆ°á»£c tra cá»©u má»t láº§n'
+                          text = 'Mỗi yêu cầu chỉ được tra cứu một lần'
                         CHANGING failed = failed reported = reported ).
       ENDLOOP.
       RETURN.
@@ -213,7 +213,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     ENDTRY.
     IF history-is_valid = abap_false.
       report_failure( EXPORTING cid = cid
-                        text = |KhÃ´ng tra cá»©u ÄÆ°á»£c: { history-error_code }|
+                        text = |Không tra cứu được: { history-error_code }|
                       CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
@@ -221,7 +221,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ScopeCode = history-scope_code
       DateFrom = history-date_from
       DateTo = history-date_to
-      WorkerCount = lines( history-workers )
+      WorkerCount = history-worker_count
       EntryCount = history-entry_count
       IsTruncated = history-is_truncated
       _Workers = VALUE #( FOR summary IN history-workers

@@ -45,8 +45,8 @@ CLASS zcl_pp_work_history DEFINITION
              uom         TYPE ztb_pp_alloc_txn-uom,
              txn_count   TYPE i,
            END OF worker_summary,
-           worker_summaries TYPE STANDARD TABLE OF worker_summary
-                            WITH EMPTY KEY.
+           worker_summaries TYPE SORTED TABLE OF worker_summary
+                            WITH UNIQUE KEY worker_id uom.
 
     TYPES: BEGIN OF history_entry,
              transaction_uuid   TYPE ztb_pp_alloc_txn-transaction_uuid,
@@ -73,6 +73,7 @@ CLASS zcl_pp_work_history DEFINITION
              date_to      TYPE d,
              is_truncated TYPE abap_bool,
              entry_count  TYPE i,
+             worker_count TYPE i,
              workers      TYPE worker_summaries,
              entries      TYPE history_entries,
            END OF history.
@@ -91,7 +92,10 @@ CLASS zcl_pp_work_history DEFINITION
   PRIVATE SECTION.
     TYPES: BEGIN OF ledger_row,
              transaction_uuid   TYPE ztb_pp_alloc_txn-transaction_uuid,
+             original_transaction_uuid
+               TYPE ztb_pp_alloc_txn-original_transaction_uuid,
              execution_date     TYPE ztb_pp_alloc_txn-execution_date,
+             report_worker_id   TYPE ztb_pp_alloc_txn-worker_id,
              worker_id          TYPE ztb_pp_alloc_txn-worker_id,
              from_worker_id     TYPE ztb_pp_alloc_txn-from_worker_id,
              to_worker_id       TYPE ztb_pp_alloc_txn-to_worker_id,
@@ -176,13 +180,11 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     "the device sent. A supervisor sees the assignments they booked;
     "everybody else may only look at their own rows.
     DATA(worker_filter) = worker_id.
-    IF zcl_mob_token_validator=>has_function(
-         user_uuid = auth-user_uuid
-         func_id = func_team ) = abap_true.
+    DATA(permissions) = zcl_mob_token_validator=>get_permissions(
+      auth-user_uuid ).
+    IF line_exists( permissions[ func_id = func_team ] ).
       result-scope_code = scope_team.
-    ELSEIF zcl_mob_token_validator=>has_function(
-             user_uuid = auth-user_uuid
-             func_id = func_self ) = abap_true.
+    ELSEIF line_exists( permissions[ func_id = func_self ] ).
       result-scope_code = scope_self.
       "A self view ignores whichever worker the caller asked for.
       worker_filter = worker_of_account( auth-user_uuid ).
@@ -223,8 +225,16 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     result-entry_count = lines( rows ).
     result-is_truncated = xsdbool( result-entry_count >= max_scan_rows ).
     result-workers = summarize( rows ).
+    DATA unique_workers TYPE SORTED TABLE OF ztb_pp_alloc_txn-worker_id
+                        WITH UNIQUE KEY table_line.
+    unique_workers = VALUE #( FOR summary IN result-workers
+                              ( summary-worker_id ) ).
+    result-worker_count = lines( unique_workers ).
     IF include_entries = abap_true.
       result-entries = build_entries( rows ).
+      IF result-entry_count > max_entry_rows.
+        result-is_truncated = abap_true.
+      ENDIF.
     ENDIF.
     resolve_names( CHANGING history = result ).
     result-is_valid = abap_true.
@@ -244,6 +254,10 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       WHEN range_custom.
         IF date_from IS INITIAL OR date_to IS INITIAL OR date_from > date_to.
           error_code = 'RANGE_INVALID'.
+          RETURN.
+        ENDIF.
+        IF date_to > today.
+          error_code = 'RANGE_IN_FUTURE'.
           RETURN.
         ENDIF.
         IF date_to - date_from >= max_custom_days.
@@ -292,7 +306,8 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     SELECT FROM ztb_pp_alloc_txn AS txn
       INNER JOIN ztb_pp_op_alloc AS op
         ON op~operation_uuid = txn~operation_uuid
-      FIELDS txn~transaction_uuid, txn~execution_date, txn~worker_id,
+      FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
+             txn~execution_date, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~plant, op~work_center
@@ -304,6 +319,9 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       ORDER BY txn~execution_date DESCENDING, txn~transaction_uuid
       INTO CORRESPONDING FIELDS OF TABLE @result
       UP TO @max_scan_rows ROWS.
+    LOOP AT result ASSIGNING FIELD-SYMBOL(<row>).
+      <row>-report_worker_id = worker.
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD select_team.
@@ -311,13 +329,19 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     "row is in scope because the supervisor booked the assignment, never
     "because of any current work center in master data. A worker who moves
     "to another team therefore keeps appearing in the old team's history.
-    SELECT DISTINCT operation_uuid, worker_id, to_worker_id
+    SELECT DISTINCT transaction_uuid, operation_uuid, worker_id,
+                    from_worker_id, to_worker_id
       FROM ztb_pp_alloc_txn
       WHERE actor_user_uuid = @user_uuid
         AND transaction_type IN ( @zcl_pp_txn_type=>initial_assign,
                                   @zcl_pp_txn_type=>transfer )
-      INTO TABLE @DATA(booked)
-      UP TO @max_scan_rows ROWS.
+        AND transaction_status = @zcl_pp_txn_type=>posted
+        AND execution_date <= @date_to
+        AND ( @worker = ' '
+           OR worker_id = @worker
+           OR from_worker_id = @worker
+           OR to_worker_id = @worker )
+      INTO TABLE @DATA(booked).
     IF booked IS INITIAL.
       RETURN.
     ENDIF.
@@ -326,22 +350,37 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
              operation_uuid TYPE ztb_pp_alloc_txn-operation_uuid,
              worker_id      TYPE ztb_pp_alloc_txn-worker_id,
            END OF scope_key.
-    DATA scope TYPE STANDARD TABLE OF scope_key WITH EMPTY KEY.
+    DATA scope TYPE SORTED TABLE OF scope_key
+               WITH UNIQUE KEY operation_uuid worker_id.
+    TYPES: BEGIN OF root_key,
+             transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid,
+             worker_id        TYPE ztb_pp_alloc_txn-worker_id,
+           END OF root_key.
+    DATA roots TYPE SORTED TABLE OF root_key
+               WITH UNIQUE KEY transaction_uuid worker_id.
     LOOP AT booked ASSIGNING FIELD-SYMBOL(<booked>).
       IF <booked>-worker_id IS NOT INITIAL.
-        APPEND VALUE #( operation_uuid = <booked>-operation_uuid
-                        worker_id = <booked>-worker_id ) TO scope.
+        INSERT VALUE #( operation_uuid = <booked>-operation_uuid
+                        worker_id = <booked>-worker_id ) INTO TABLE scope.
+        INSERT VALUE #( transaction_uuid = <booked>-transaction_uuid
+                        worker_id = <booked>-worker_id ) INTO TABLE roots.
+      ENDIF.
+      IF <booked>-from_worker_id IS NOT INITIAL.
+        INSERT VALUE #( operation_uuid = <booked>-operation_uuid
+                        worker_id = <booked>-from_worker_id ) INTO TABLE scope.
+        INSERT VALUE #( transaction_uuid = <booked>-transaction_uuid
+                        worker_id = <booked>-from_worker_id ) INTO TABLE roots.
       ENDIF.
       IF <booked>-to_worker_id IS NOT INITIAL.
-        APPEND VALUE #( operation_uuid = <booked>-operation_uuid
-                        worker_id = <booked>-to_worker_id ) TO scope.
+        INSERT VALUE #( operation_uuid = <booked>-operation_uuid
+                        worker_id = <booked>-to_worker_id ) INTO TABLE scope.
+        INSERT VALUE #( transaction_uuid = <booked>-transaction_uuid
+                        worker_id = <booked>-to_worker_id ) INTO TABLE roots.
       ENDIF.
     ENDLOOP.
     IF worker IS NOT INITIAL.
       DELETE scope WHERE worker_id <> worker.
     ENDIF.
-    SORT scope BY operation_uuid worker_id.
-    DELETE ADJACENT DUPLICATES FROM scope COMPARING ALL FIELDS.
     IF scope IS INITIAL.
       RETURN.
     ENDIF.
@@ -352,54 +391,99 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     SELECT FROM ztb_pp_alloc_txn AS txn
       INNER JOIN ztb_pp_op_alloc AS op
         ON op~operation_uuid = txn~operation_uuid
-      FIELDS txn~transaction_uuid, txn~execution_date, txn~worker_id,
+      FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
+             txn~execution_date, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~plant, op~work_center
       FOR ALL ENTRIES IN @scope
       WHERE txn~operation_uuid = @scope-operation_uuid
-        AND txn~worker_id = @scope-worker_id
+        AND ( txn~worker_id = @scope-worker_id
+           OR txn~from_worker_id = @scope-worker_id
+           OR txn~to_worker_id = @scope-worker_id )
         AND txn~execution_date BETWEEN @date_from AND @date_to
         AND txn~transaction_status = @zcl_pp_txn_type=>posted
-      INTO CORRESPONDING FIELDS OF TABLE @result
+      INTO TABLE @DATA(candidates)
       UP TO @max_scan_rows ROWS.
     "FOR ALL ENTRIES rules out ORDER BY here, so the newest-first order the
     "app expects is applied after the read.
-    SORT result BY execution_date DESCENDING transaction_uuid.
+    LOOP AT candidates ASSIGNING FIELD-SYMBOL(<candidate>).
+      LOOP AT scope ASSIGNING FIELD-SYMBOL(<scope>)
+        WHERE operation_uuid = <candidate>-operation_uuid.
+        IF <candidate>-worker_id <> <scope>-worker_id
+           AND <candidate>-from_worker_id <> <scope>-worker_id
+           AND <candidate>-to_worker_id <> <scope>-worker_id.
+          CONTINUE.
+        ENDIF.
+        IF NOT line_exists( roots[
+             transaction_uuid = <candidate>-transaction_uuid
+             worker_id = <scope>-worker_id ] )
+           AND NOT line_exists( roots[
+             transaction_uuid = <candidate>-original_transaction_uuid
+             worker_id = <scope>-worker_id ] ).
+          "Derived rows must point to the assignment/transfer root. This is
+          "what prevents another supervisor's booking on the same operation
+          "and worker from leaking into this supervisor's figures.
+          CONTINUE.
+        ENDIF.
+        APPEND CORRESPONDING #( <candidate> ) TO result
+          ASSIGNING FIELD-SYMBOL(<result_row>).
+        <result_row>-report_worker_id = <scope>-worker_id.
+        IF lines( result ) >= max_scan_rows.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF lines( result ) >= max_scan_rows.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+    SORT result BY execution_date DESCENDING transaction_uuid report_worker_id.
   ENDMETHOD.
 
   METHOD summarize.
     LOOP AT rows ASSIGNING FIELD-SYMBOL(<row>).
       CASE <row>-transaction_type.
         WHEN zcl_pp_txn_type=>initial_assign.
-          add_quantity( EXPORTING worker = <row>-worker_id
+          IF <row>-worker_id <> <row>-report_worker_id.
+            CONTINUE.
+          ENDIF.
+          add_quantity( EXPORTING worker = <row>-report_worker_id
                                   uom = <row>-uom
                                   assigned = <row>-quantity
                         CHANGING summaries = result ).
         WHEN zcl_pp_txn_type=>transfer.
-          "Double entry: the receiver gains what the giver loses.
-          add_quantity( EXPORTING worker = <row>-to_worker_id
-                                  uom = <row>-uom
-                                  assigned = <row>-quantity
-                        CHANGING summaries = result ).
-          add_quantity( EXPORTING worker = <row>-from_worker_id
-                                  uom = <row>-uom
-                                  assigned = <row>-quantity * -1
-                        CHANGING summaries = result ).
+          IF <row>-to_worker_id = <row>-report_worker_id.
+            add_quantity( EXPORTING worker = <row>-report_worker_id
+                                    uom = <row>-uom
+                                    assigned = <row>-quantity
+                          CHANGING summaries = result ).
+          ENDIF.
+          IF <row>-from_worker_id = <row>-report_worker_id.
+            add_quantity( EXPORTING worker = <row>-report_worker_id
+                                    uom = <row>-uom
+                                    assigned = <row>-quantity * -1
+                          CHANGING summaries = result ).
+          ENDIF.
         WHEN zcl_pp_txn_type=>confirm.
-          add_quantity( EXPORTING worker = <row>-worker_id
+          IF <row>-worker_id <> <row>-report_worker_id.
+            CONTINUE.
+          ENDIF.
+          add_quantity( EXPORTING worker = <row>-report_worker_id
                                   uom = <row>-uom
                                   completed = <row>-quantity
                         CHANGING summaries = result ).
         WHEN zcl_pp_txn_type=>reverse.
-          add_quantity( EXPORTING worker = <row>-worker_id
+          IF <row>-worker_id <> <row>-report_worker_id.
+            CONTINUE.
+          ENDIF.
+          add_quantity( EXPORTING worker = <row>-report_worker_id
                                   uom = <row>-uom
                                   completed = <row>-quantity * -1
                         CHANGING summaries = result ).
         WHEN OTHERS.
           "An unknown type is counted but not booked, so adding a
           "transaction type later cannot silently distort the figures.
-          add_quantity( EXPORTING worker = <row>-worker_id
+          add_quantity( EXPORTING worker = <row>-report_worker_id
                                   uom = <row>-uom
                         CHANGING summaries = result ).
       ENDCASE.
@@ -407,16 +491,16 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     LOOP AT result ASSIGNING FIELD-SYMBOL(<summary>).
       <summary>-remaining = <summary>-assigned - <summary>-completed.
     ENDLOOP.
-    SORT result BY worker_id.
   ENDMETHOD.
 
   METHOD add_quantity.
     IF worker IS INITIAL.
       RETURN.
     ENDIF.
-    ASSIGN summaries[ worker_id = worker ] TO FIELD-SYMBOL(<summary>).
+    ASSIGN summaries[ worker_id = worker uom = uom ]
+      TO FIELD-SYMBOL(<summary>).
     IF sy-subrc <> 0.
-      APPEND VALUE #( worker_id = worker uom = uom ) TO summaries
+      INSERT VALUE #( worker_id = worker uom = uom ) INTO TABLE summaries
         ASSIGNING <summary>.
     ENDIF.
     <summary>-assigned = <summary>-assigned + assigned.
@@ -432,9 +516,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       APPEND VALUE #(
         transaction_uuid = <row>-transaction_uuid
         execution_date = <row>-execution_date
-        worker_id = COND #( WHEN <row>-worker_id IS NOT INITIAL
-                            THEN <row>-worker_id
-                            ELSE <row>-to_worker_id )
+        worker_id = <row>-report_worker_id
         production_order = <row>-production_order
         operation_no = <row>-operation_no
         plant = <row>-plant
@@ -480,6 +562,13 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     LOOP AT history-workers ASSIGNING FIELD-SYMBOL(<summary>).
       <summary>-worker_name = VALUE #(
         master[ worker_id = <summary>-worker_id ]-worker_name OPTIONAL ).
+      LOOP AT master ASSIGNING FIELD-SYMBOL(<summary_master>)
+        WHERE worker_id = <summary>-worker_id
+          AND valid_from <= history-date_to
+          AND valid_to >= history-date_to.
+        <summary>-worker_name = <summary_master>-worker_name.
+        EXIT.
+      ENDLOOP.
     ENDLOOP.
     LOOP AT history-entries ASSIGNING FIELD-SYMBOL(<entry>).
       "Prefer the master record that was valid on the day of the booking, so

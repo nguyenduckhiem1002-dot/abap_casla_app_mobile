@@ -201,7 +201,28 @@ Lưu ý quan trọng khi nghiệm thu:
 - Khi viết ledger phải theo đúng quy ước báo cáo đang giả định:
   `ACTOR_USER_UUID` = người thực hiện, `WORKER_ID` = nhân công dòng đó ghi
   vào, riêng TRANSFER dùng thêm `FROM_WORKER_ID` / `TO_WORKER_ID`, và
-  `TRANSACTION_STATUS = 'POSTED'` cho dòng đã hạch toán.
+  `TRANSACTION_STATUS = 'POSTED'` cho dòng đã hạch toán. Mọi dòng phát sinh
+  (`CONFIRM`, `REVERSE`) phải đặt `ORIGINAL_TRANSACTION_UUID` bằng UUID của
+  giao dịch `INITIAL_ASSIGN` / `TRANSFER` gốc; thiếu lineage thì báo cáo giám
+  sát chủ động bỏ dòng để không lẫn việc của giám sát khác.
+
+## Đã sửa trong đợt hardening 8 (audit báo cáo lịch sử)
+
+- Xóa `_Employees` / `_Transactions` khỏi cả projection CDS và projection
+  BDEF, đồng thời xóa hai consumption projection không còn reference
+  `ZC_PP_EmpAlloc` / `ZC_PP_AllocTxn`. Interface `ZR_*` vẫn giữ cho sync worker.
+  Chỉ bỏ entity set trong service definition chưa đủ chắc chắn vì navigation
+  từ root vẫn có thể kéo child nhạy cảm vào metadata tùy release.
+- Worker self-view chuẩn hóa mọi row về chính worker đang đăng nhập; TRANSFER
+  không còn làm summary hoặc detail lộ mã người giao/người nhận còn lại.
+- Summary đổi key từ `WorkerID` thành `WorkerID + UoM`; không còn cộng lẫn các
+  đơn vị. `WorkerCount` vẫn đếm worker duy nhất.
+- Supervisor scope dùng lineage `TransactionUUID / OriginalTransactionUUID`,
+  tránh lấy nhầm việc của giám sát khác trên cùng công đoạn và nhân công.
+- Sửa message UTF-8 bị mojibake, chặn custom range kết thúc ở tương lai, và
+  set `IsTruncated` khi detail bị cắt ở 1.000 dòng.
+- Tối ưu lookup: scope và summary dùng sorted table; quyền team/self được đọc
+  một lần thay vì chạy join RBAC hai lần.
 
 ## Bắt buộc thực hiện trên tenant
 

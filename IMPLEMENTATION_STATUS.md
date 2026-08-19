@@ -75,7 +75,7 @@ sends:
 
 | Function | Scope | Rows returned |
 | --- | --- | --- |
-| `PP_HIST_TEAM` | supervisor | every posted row on the operation/worker pairs this account booked an assignment for, including confirmations the workers posted later |
+| `PP_HIST_TEAM` | supervisor | assignments/transfers booked by this account and posted descendants whose `OriginalTransactionUUID` points to that root |
 | `PP_HIST_SELF` | worker | posted rows where the caller is the worker, the giver or the receiver |
 
 Neither function present means `MISSING_PERMISSION`. A worker is resolved from
@@ -90,7 +90,14 @@ role before anyone can open the screen.
 ### Where the numbers come from
 
 Only transaction data: `ZTB_PP_ALLOC_TXN` joined to `ZTB_PP_OP_ALLOC`, counting
-rows whose status is `POSTED`. Per worker figures are folded in ABAP:
+rows whose status is `POSTED`. The supervisor scope is lineage-based, not just
+`OperationUUID + WorkerID`: two supervisors may assign the same worker on the
+same operation, so every derived `CONFIRM` / `REVERSE` row must put the owning
+assignment or transfer UUID in `OriginalTransactionUUID`. Missing lineage is
+fail-closed and the row is not shown to a supervisor.
+
+Per worker figures are folded in ABAP and keyed by `WorkerID + UoM` so values
+with incompatible units are never added together:
 `INITIAL_ASSIGN` adds to assigned, `TRANSFER` adds to the receiver and subtracts
 from the giver, `CONFIRM` adds to completed, `REVERSE` subtracts from it, and
 remaining is assigned minus completed. An unrecognised type is counted but not
@@ -111,7 +118,8 @@ else. It never filters, so:
 `RangeCode` selects `D` today, `W` last 7 days, `M` last 30 days (the default,
 also used for an unrecognised code) or `C` custom. A custom range may reach as
 far back as wanted but may not span `max_custom_days` (92) or more, answering
-`RANGE_TOO_WIDE`; an incomplete or inverted range answers `RANGE_INVALID`.
+`RANGE_TOO_WIDE`; an incomplete or inverted range answers `RANGE_INVALID`, and
+a custom end date in the future answers `RANGE_IN_FUTURE`.
 Reading stops at `max_scan_rows` (20000) with `IsTruncated` set, and the detail
 list is capped at `max_entry_rows` (1000) - the per worker totals are computed
 before that cap. `SummaryOnly` is phrased so that its initial value returns the
@@ -221,6 +229,13 @@ Consequences that must stay true:
      redelivered bgPF task) can post the same ledger row a second time.
      Application-level idempotency alone always leaves a race window; this
      index makes the duplicate physically impossible.
+   - `ZTB_PP_ALLOC_TXN`: `MANDT + ACTOR_USER_UUID + TRANSACTION_TYPE +
+     TRANSACTION_STATUS + EXECUTION_DATE` for supervisor scope roots.
+   - `ZTB_PP_ALLOC_TXN`: `MANDT + OPERATION_UUID + WORKER_ID + EXECUTION_DATE +
+     TRANSACTION_STATUS` for scoped descendants.
+   - If worker self-history is slow on production volume, add the same
+     date/status suffix separately for `FROM_WORKER_ID` and `TO_WORKER_ID`;
+     the self query checks all three worker columns so transfers cannot vanish.
 4. Confirm the released Production Order read interface used for live quantity,
    UoM, Plant, Work Center, TECO and CLSD checks.
 5. Decide and verify `I_ProductionOrdConfirmationTP` versus
@@ -228,21 +243,21 @@ Consequences that must stay true:
 6. Bind the Fiori admin service to an IAM app/business catalog; enforce mobile
    authorization through token validation in the sync entry point.
 7. After publishing `ZUI_PP_OPALLOC`, confirm the metadata contains no
-   `EmployeeAllocations` or `AllocationTransactions` entity set and that
-   navigating `_Employees` or `_Transactions` from an operation is refused.
-   Those two hold per worker figures and were removed from the service
-   definition; if a release still exposes them through the composition, the
-   remaining option is to drop the two child projections so the report action
-   is the only way in.
+   `EmployeeAllocations`, `AllocationTransactions`, `_Employees` or
+   `_Transactions`. The child consumption projections were deleted, and the
+   associations/child behaviors were removed from the root projection; the
+   report action is the only worker-level read path. The internal `ZR_*`
+   entities remain for the future sync worker.
 8. Create the `PP_HIST_TEAM` and `PP_HIST_SELF` rows in `ZTB_MOB_FUNC` and
    grant them through the supervisor and worker roles. Without the grant the
    history screen answers `MISSING_PERMISSION` for everyone.
 9. Keep the service bindings separated per audience. The communication
-   arrangement used by the mobile device must contain the `ZUI_MOB_AUTH`
-   binding and nothing else. Adding `ZUI_MOB_USER_ADM` or `ZUI_MOB_RBAC_ADM`
-   to the same communication scenario would hand the device user
-   `createUser` and role assignment - the code cannot prevent that, because
-   authorization is granted per business object, not per service.
+   arrangement used by the mobile device may contain only the device-facing
+   bindings: `ZUI_MOB_AUTH` and `ZUI_PP_OPALLOC`. Never add
+   `ZUI_MOB_USER_ADM` or `ZUI_MOB_RBAC_ADM` to that scenario: doing so would
+   hand the device user `createUser` and role assignment. Code cannot repair
+   a binding/IAM mistake because authorization is granted per business object,
+   not per service URL.
 
 ## Next implementation slice
 

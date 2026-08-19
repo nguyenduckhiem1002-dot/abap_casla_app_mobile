@@ -15,7 +15,5 @@ define root view entity ZC_PP_OpAlloc
       CreatedBy,
       CreatedAt,
       LastChangedBy,
-      LocalLastChangedAt,
-      _Employees : redirected to composition child ZC_PP_EmpAlloc,
-      _Transactions : redirected to composition child ZC_PP_AllocTxn
+      LocalLastChangedAt
 }
