@@ -12,7 +12,7 @@ define view entity ZC_MOB_UsrRol_Adm
   @UI.lineItem: [{ position: 10 }]
   key UserUUID,
   @UI.lineItem: [{ position: 20 }]
-  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZC_MOB_Role_Adm', element: 'RoleID' } }]
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Role_VH', element: 'RoleID' } }]
   key RoleID,
       /* Associations */
       _User : redirected to parent ZC_MOB_User_Adm

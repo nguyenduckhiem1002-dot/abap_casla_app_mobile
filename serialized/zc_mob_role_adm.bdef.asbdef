@@ -1,6 +1,10 @@
 projection;
 strict ( 2 );
 
+"Role and function maintenance is administrative: exposed on
+"ZUI_MOB_RBAC_ADM only, never on the mobile auth service. The app reads
+"the outcome through the getPermissions action, which returns nothing but
+"the caller's own effective functions.
 define behavior for ZC_MOB_Role_Adm alias MobileRole
 {
   use create;

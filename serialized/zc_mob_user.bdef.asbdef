@@ -1,6 +1,12 @@
 projection;
 strict ( 2 );
 
+"Device-facing API surface, self-service only: a device authenticates,
+"rotates its own session, changes its own password and reads its own
+"effective permissions. Everything administrative - creating accounts and
+"assigning roles - belongs to the Fiori services. Never add
+""use action createUser", "use update" or the _Roles association here:
+"this projection is what keeps them off the mobile API.
 define behavior for ZC_MOB_User alias MobileUser
 {
   use action login;

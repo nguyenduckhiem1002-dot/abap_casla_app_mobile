@@ -1,6 +1,9 @@
 projection;
 strict ( 2 );
 
+"Administrative surface, reachable only through the IAM app of
+"ZUI_MOB_USER_ADM. Account creation and role assignment live here and are
+"deliberately absent from ZC_MOB_User, the device-facing projection.
 define behavior for ZC_MOB_User_Adm alias MobileUser
 {
   use action createUser;

@@ -108,6 +108,38 @@ idempotency, write the inbox as `QUEUED`, return. Business processing runs in
 the background worker, so the app reads status back instead of inferring
 success from the action response.
 
+## Service exposure boundary
+
+Creating accounts and assigning permissions are administrative operations and
+are reachable from the Fiori apps only. The device-facing API carries
+self-service operations and nothing else. The projection layer is what
+enforces this: an operation that a projection does not declare cannot be
+called through the service that exposes it, no matter what the underlying
+business object allows.
+
+| Service | Binding | Exposed operations |
+| --- | --- | --- |
+| `ZUI_MOB_AUTH` | mobile communication user | `login`, `logout`, `refresh`, `changePassword`, `getPermissions` |
+| `ZUI_MOB_USER_ADM` | Fiori, IAM app | `createUser`, assign / change / remove a user's roles |
+| `ZUI_MOB_RBAC_ADM` | Fiori, IAM app | maintain roles, functions, role-to-function grants |
+
+Consequences that must stay true:
+
+- `ZC_MOB_User` declares no `use update`, no `use action createUser` and no
+  `_Roles` association. Adding any of them would put an administrative
+  operation on the device API.
+- `ZC_MOB_User` additionally reads nothing: it inherits the deny-all
+  condition of `ZI_MOB_User`, so a GET on the auth service returns an empty
+  set even for a valid communication user.
+- `changePassword` is the one write a device may perform on its own account,
+  and it acts only on the user behind the presented token.
+- `getPermissions` is read-only and equally self-scoped: it resolves the
+  token to a user and returns that user's own effective functions. It grants
+  nothing and cannot see another account's assignments.
+- A role assignment survives deactivating the role, but `getPermissions`
+  counts active roles only, so setting `Status` to inactive revokes the
+  functions immediately without touching the assignment rows.
+
 ## Required target-system checks
 
 1. Confirm all built-in types and released objects in the tenant release.
@@ -127,6 +159,12 @@ success from the action response.
    `API_PROD_ORDER_CONFIRMATION_2_SRV`.
 6. Bind the Fiori admin service to an IAM app/business catalog; enforce mobile
    authorization through token validation in the sync entry point.
+7. Keep the service bindings separated per audience. The communication
+   arrangement used by the mobile device must contain the `ZUI_MOB_AUTH`
+   binding and nothing else. Adding `ZUI_MOB_USER_ADM` or `ZUI_MOB_RBAC_ADM`
+   to the same communication scenario would hand the device user
+   `createUser` and role assignment - the code cannot prevent that, because
+   authorization is granted per business object, not per service.
 
 ## Next implementation slice
 
