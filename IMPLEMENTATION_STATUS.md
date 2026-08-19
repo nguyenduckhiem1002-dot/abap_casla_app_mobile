@@ -32,9 +32,13 @@
     and `ZI_MOB_UsrRol` as composition child of `ZI_MOB_User`.
   - Admin projections plus service `ZUI_MOB_RBAC_ADM`; the per-user role
     assignment is exposed on `ZUI_MOB_USER_ADM` next to the account itself.
-  - `getPermissions` static action on the mobile auth service returns the
-    effective function list for the token holder, so the app drives its menu
-    from the same RBAC data the admin maintains.
+  - `ZA_MOB_LoginResult` is a deep abstract entity: `login` and `refresh`
+    return the caller's effective functions in a `_Permissions` composition,
+    so the app drives its menu from the same RBAC data the admin maintains
+    without a second round trip.
+  - `ZCL_MOB_TOKEN_VALIDATOR` owns the permission query
+    (`get_permissions`, `has_function`) and accepts `required_func`, so the
+    server-side check and the list shown to the device come from one query.
 
 ## CDS access control convention
 
@@ -119,7 +123,7 @@ business object allows.
 
 | Service | Binding | Exposed operations |
 | --- | --- | --- |
-| `ZUI_MOB_AUTH` | mobile communication user | `login`, `logout`, `refresh`, `changePassword`, `getPermissions` |
+| `ZUI_MOB_AUTH` | mobile communication user | `login`, `logout`, `refresh`, `changePassword` |
 | `ZUI_MOB_USER_ADM` | Fiori, IAM app | `createUser`, assign / change / remove a user's roles |
 | `ZUI_MOB_RBAC_ADM` | Fiori, IAM app | maintain roles, functions, role-to-function grants |
 
@@ -133,12 +137,21 @@ Consequences that must stay true:
   set even for a valid communication user.
 - `changePassword` is the one write a device may perform on its own account,
   and it acts only on the user behind the presented token.
-- `getPermissions` is read-only and equally self-scoped: it resolves the
-  token to a user and returns that user's own effective functions. It grants
-  nothing and cannot see another account's assignments.
-- A role assignment survives deactivating the role, but `getPermissions`
+- The function list inside `ZA_MOB_LoginResult` is self-scoped: it is
+  resolved from the token, never from anything the caller sends, and shows
+  only that account's own functions.
+- That list is **display data, not an authorization decision**. A device can
+  replay, edit or fabricate it, so no backend path may read it back. Every
+  protected operation calls
+  `zcl_mob_token_validator=>validate_token( ... required_func = '<FUNC>' )`,
+  which re-reads the grants and returns `MISSING_PERMISSION` when the caller
+  lacks the function. `has_function` is available where a token has already
+  been validated.
+- A role assignment survives deactivating the role, but the permission query
   counts active roles only, so setting `Status` to inactive revokes the
-  functions immediately without touching the assignment rows.
+  functions immediately without touching the assignment rows - on the next
+  `refresh` for what the app displays, and on the very next call for what the
+  backend enforces.
 
 ## Required target-system checks
 

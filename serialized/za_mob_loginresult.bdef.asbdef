@@ -1,0 +1,13 @@
+abstract;
+strict ( 2 );
+with hierarchy;
+
+define behavior for ZA_MOB_LoginResult
+{
+  association _Permissions;
+}
+
+define behavior for ZA_MOB_Permission
+{
+  association _LoginResult;
+}

@@ -22,8 +22,6 @@ etag master LocalLastChangedAt
   static action logout parameter ZA_MOB_Token;
   static action refresh parameter ZA_MOB_Refresh result [1] ZA_MOB_LoginResult;
   static action changePassword parameter ZA_MOB_ChangePwd;
-  static action getPermissions parameter ZA_MOB_Token
-    result [0..*] ZA_MOB_Permission;
   mapping for ztb_mob_user {
     UserUUID = user_uuid;
     Username = username;

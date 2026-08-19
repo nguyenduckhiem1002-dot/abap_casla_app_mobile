@@ -133,6 +133,36 @@ Còn để mở:
 - Danh sách chức năng của một chức danh hiện chỉ hiển `FuncID`, chưa có
   `FuncName`; muốn hiển tên cần text element hoặc text association.
 
+## Đã sửa trong đợt hardening 6 (quyền đi kèm kết quả login)
+
+- `ZA_MOB_LoginResult` chuyển thành **deep abstract entity**: thêm
+  `_Permissions : composition [0..*] of ZA_MOB_Permission`, kèm BDEF
+  `abstract; with hierarchy;` theo đúng mẫu `ZA_PP_SubmitSync` đã chạy được.
+  Cả `login` và `refresh` trả danh sách chức năng, nên quyền gán thêm lúc
+  phiên đang mở sẽ tới thiết bị ở lần xoay token kế tiếp.
+- Bỏ static action `getPermissions` vừa thêm ở hardening 5: danh sách đã đi
+  kèm kết quả login/refresh nên endpoint riêng thành thừa, và bề mặt API
+  di động không còn action nào mang tên RBAC.
+- **Validate phía backend** (điểm bắt buộc): `zcl_mob_token_validator` nhận
+  `get_permissions`, `has_function` và tham số `required_func` trên
+  `validate_token` / `validate_hash`. Mọi thao tác cần quyền chỉ việc truyền
+  `required_func`, validator tự đọc lại grant từ DB và trả
+  `MISSING_PERMISSION` nếu thiếu. Danh sách trả cho thiết bị **không bao giờ**
+  được đọc ngược lại làm căn cứ phân quyền — thiết bị có thể sửa hoặc bịa.
+  Cả hai đầu (hiển thị và kiểm tra) dùng chung một truy vấn
+  `get_permissions` nên không trôi khỏi nhau.
+- Value help chuyển sang hai view đọc thuần `ZI_MOB_ROLE_VH` /
+  `ZI_MOB_FUNC_VH` (không BDEF) thay vì trỏ vào projection có behavior ghi.
+
+Cần verify khi activate trên ADT:
+
+- Cú pháp deep abstract entity làm **result** của action (trước đây repo mới
+  dùng deep abstract làm *parameter* cho `submitSync`). Nếu ADT báo lỗi ở
+  `_Permissions`, đối chiếu lại signature do quick fix sinh ra.
+- Smoke-test: gán chức danh cho một tài khoản từ Fiori admin, login bằng tài
+  khoản đó và kiểm tra `_Permissions` trong response; sau đó đổi chức danh
+  sang `Status = 'I'` và gọi `refresh` để xác nhận danh sách rỗng đi.
+
 ## Bắt buộc thực hiện trên tenant
 
 Các mục sau không được giả lập trong repo vì phụ thuộc release và repository

@@ -14,8 +14,6 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING keys FOR ACTION MobileUser~refresh RESULT result.
     METHODS changepassword FOR MODIFY
       IMPORTING keys FOR ACTION MobileUser~changePassword.
-    METHODS getpermissions FOR MODIFY
-      IMPORTING keys FOR ACTION MobileUser~getPermissions RESULT result.
     METHODS hash_password
       IMPORTING password TYPE string salt TYPE string iterations TYPE i
       RETURNING VALUE(hash) TYPE ztb_mob_cred-password_hash
@@ -37,7 +35,6 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     result-%action-refresh = if_abap_behv=>auth-allowed.
     result-%action-logout = if_abap_behv=>auth-allowed.
     result-%action-changePassword = if_abap_behv=>auth-allowed.
-    result-%action-getPermissions = if_abap_behv=>auth-allowed.
     result-%create = if_abap_behv=>auth-unauthorized.
     result-%delete = if_abap_behv=>auth-unauthorized.
     "MobileUserRole is a composition child declared "authorization dependent
@@ -279,12 +276,24 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       reported = CORRESPONDING #( reported_login_update ).
       RETURN.
     ENDIF.
-    result = VALUE #( ( %cid = cid %param-UserUUID = user-user_uuid
-      %param-SessionID = session_id %param-AccessToken = access_token
-      %param-RefreshToken = refresh_token %param-ExpiresAt = expires_at
-      %param-Status = COND #( WHEN user-password_change_required = abap_true
-                              THEN 'P' ELSE 'A' )
-      %param-PasswordChangeRequired = user-password_change_required ) ).
+    "Handed to the device so it can render its menu without a second round
+    "trip. Display only: every protected operation re-checks the function
+    "server side through zcl_mob_token_validator, which never reads this.
+    DATA(permissions) = zcl_mob_token_validator=>get_permissions(
+      user-user_uuid ).
+    result = VALUE #( ( %cid = cid %param = VALUE #(
+      UserUUID = user-user_uuid
+      SessionID = session_id
+      AccessToken = access_token
+      RefreshToken = refresh_token
+      ExpiresAt = expires_at
+      Status = COND #( WHEN user-password_change_required = abap_true
+                       THEN 'P' ELSE 'A' )
+      PasswordChangeRequired = user-password_change_required
+      _Permissions = VALUE #( FOR permission IN permissions
+        ( FuncID = permission-func_id
+          FuncName = permission-func_name
+          Module = permission-module ) ) ) ) ).
   ENDMETHOD.
 
   METHOD logout.
@@ -391,10 +400,21 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       reported = CORRESPONDING #( reported_update ).
       RETURN.
     ENDIF.
-    result = VALUE #( ( %cid = cid %param-UserUUID = session-user_uuid
-      %param-SessionID = session-session_id %param-AccessToken = access_token
-      %param-RefreshToken = refresh_token %param-ExpiresAt = expires_at
-      %param-Status = 'A' ) ).
+    "Refreshing also refreshes the permission list, so an assignment made
+    "while the session was open reaches the device at the next rotation.
+    DATA(permissions) = zcl_mob_token_validator=>get_permissions(
+      session-user_uuid ).
+    result = VALUE #( ( %cid = cid %param = VALUE #(
+      UserUUID = session-user_uuid
+      SessionID = session-session_id
+      AccessToken = access_token
+      RefreshToken = refresh_token
+      ExpiresAt = expires_at
+      Status = 'A'
+      _Permissions = VALUE #( FOR permission IN permissions
+        ( FuncID = permission-func_id
+          FuncName = permission-func_name
+          Module = permission-module ) ) ) ) ).
   ENDMETHOD.
 
   METHOD changepassword.
@@ -503,53 +523,4 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
-  METHOD getpermissions.
-    IF keys IS INITIAL.
-      RETURN.
-    ENDIF.
-    IF lines( keys ) > 1.
-      LOOP AT keys ASSIGNING FIELD-SYMBOL(<permission_key>).
-        report_error(
-          EXPORTING cid = CONV string( <permission_key>-%cid )
-                    text = 'Mỗi yêu cầu chỉ được đọc quyền một tài khoản'
-          CHANGING failed = failed reported = reported ).
-      ENDLOOP.
-      RETURN.
-    ENDIF.
-    DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
-    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
-    TRY.
-        DATA(auth) = zcl_mob_token_validator=>validate_token(
-          token = CONV string( input-AccessToken )
-          device_id = input-DeviceID ).
-      CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
-        report_error( EXPORTING cid = cid text = error->get_text( )
-                      CHANGING failed = failed reported = reported ).
-        RETURN.
-    ENDTRY.
-    IF auth-is_valid = abap_false.
-      report_error( EXPORTING cid = cid text = |Token không hợp lệ: { auth-error_code }|
-                    CHANGING failed = failed reported = reported ).
-      RETURN.
-    ENDIF.
-    "Effective permissions = the functions of every active role assigned to
-    "the user. DISTINCT because two roles may grant the same function.
-    SELECT FROM ztb_mob_usr_rol AS assignment
-      INNER JOIN ztb_mob_role AS role_hdr
-        ON role_hdr~role_id = assignment~role_id
-      INNER JOIN ztb_mob_rol_fnc AS role_func
-        ON role_func~role_id = assignment~role_id
-      INNER JOIN ztb_mob_func AS func
-        ON func~func_id = role_func~func_id
-      FIELDS DISTINCT func~func_id, func~func_name, func~module
-      WHERE assignment~user_uuid = @auth-user_uuid
-        AND role_hdr~status = 'A'
-      ORDER BY func~func_id
-      INTO TABLE @DATA(permissions).
-    result = VALUE #( FOR permission IN permissions
-      ( %cid = cid
-        %param-FuncID = permission-func_id
-        %param-FuncName = permission-func_name
-        %param-Module = permission-module ) ).
-  ENDMETHOD.
 ENDCLASS.

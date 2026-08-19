@@ -2,16 +2,17 @@ projection;
 strict ( 2 );
 
 "Device-facing API surface, self-service only: a device authenticates,
-"rotates its own session, changes its own password and reads its own
-"effective permissions. Everything administrative - creating accounts and
-"assigning roles - belongs to the Fiori services. Never add
-""use action createUser", "use update" or the _Roles association here:
-"this projection is what keeps them off the mobile API.
+"rotates its own session and changes its own password. login and refresh
+"return the caller's effective functions inside ZA_MOB_LoginResult for
+"rendering the menu; that list is never trusted as input again.
+"Everything administrative - creating accounts and assigning roles -
+"belongs to the Fiori services. Never add "use action createUser",
+""use update" or the _Roles association here: this projection is what
+"keeps them off the mobile API.
 define behavior for ZC_MOB_User alias MobileUser
 {
   use action login;
   use action logout;
   use action refresh;
   use action changePassword;
-  use action getPermissions;
 }
