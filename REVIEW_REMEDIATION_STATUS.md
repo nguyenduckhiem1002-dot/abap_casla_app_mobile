@@ -280,6 +280,6 @@ metadata do ADT/tenant sinh:
 
 - XML abapGit: parse hợp lệ.
 - `git diff --check`: không có whitespace error.
-- abaplint 2.120.25: còn một false positive/known dependency tại
-  `ZI_PP_WORKERREF`, do bảng đối tác không thuộc repo. Việc activate thật phải
-  được xác nhận trên tenant theo mục 4 ở trên.
+- abaplint 2.120.25, ABAP Cloud: `0 issue(s) found, 164 file(s) analyzed`.
+- `ZI_PP_WORKERREF` vẫn phụ thuộc bảng đối tác `ZTB_KB_NHANCONG`; việc activate
+  thật và package interface/use access phải được xác nhận trên tenant.
