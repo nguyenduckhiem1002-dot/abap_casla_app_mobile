@@ -1,12 +1,17 @@
 CLASS zcl_mob_sec_config DEFINITION
   PUBLIC FINAL CREATE PRIVATE.
   PUBLIC SECTION.
-    CLASS-METHODS get_password_secret RETURNING VALUE(result) TYPE string.
-    CLASS-METHODS get_token_secret RETURNING VALUE(result) TYPE string.
+    CLASS-METHODS get_password_secret
+      RETURNING VALUE(result) TYPE string
+      RAISING zcx_mob_config.
+    CLASS-METHODS get_token_secret
+      RETURNING VALUE(result) TYPE string
+      RAISING zcx_mob_config.
   PRIVATE SECTION.
     CLASS-METHODS get_required_value
       IMPORTING config_key TYPE ztb_mob_config-config_key
-      RETURNING VALUE(result) TYPE string.
+      RETURNING VALUE(result) TYPE string
+      RAISING zcx_mob_config.
 ENDCLASS.
 
 CLASS zcl_mob_sec_config IMPLEMENTATION.

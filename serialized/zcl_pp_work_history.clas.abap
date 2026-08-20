@@ -87,7 +87,7 @@ CLASS zcl_pp_work_history DEFINITION
                 worker_id       TYPE ztb_pp_alloc_txn-worker_id OPTIONAL
                 include_entries TYPE abap_bool DEFAULT abap_true
       RETURNING VALUE(result)   TYPE history
-      RAISING   cx_abap_message_digest.
+      RAISING   cx_abap_message_digest zcx_mob_config.
 
   PRIVATE SECTION.
     TYPES: BEGIN OF ledger_row,
@@ -116,7 +116,8 @@ CLASS zcl_pp_work_history DEFINITION
              valid_from  TYPE zi_pp_workerref-validfrom,
              valid_to    TYPE zi_pp_workerref-validto,
            END OF master_row,
-           master_rows TYPE STANDARD TABLE OF master_row WITH EMPTY KEY.
+           master_rows TYPE SORTED TABLE OF master_row
+                       WITH NON-UNIQUE KEY worker_id valid_from.
 
     CLASS-METHODS resolve_range
       IMPORTING range_code     TYPE range_selection

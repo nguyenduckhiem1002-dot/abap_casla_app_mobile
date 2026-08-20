@@ -1,6 +1,8 @@
 CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
   PRIVATE SECTION.
     CONSTANTS c_iterations TYPE i VALUE 10000.
+    CONSTANTS c_min_password_length TYPE i VALUE 12.
+    CONSTANTS c_max_active_sessions TYPE i VALUE 5.
     TYPES reported_response TYPE RESPONSE FOR REPORTED zi_mob_user.
     TYPES failed_response TYPE RESPONSE FOR FAILED zi_mob_user.
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
@@ -17,14 +19,20 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS hash_password
       IMPORTING password TYPE string salt TYPE string iterations TYPE i
       RETURNING VALUE(hash) TYPE ztb_mob_cred-password_hash
-      RAISING cx_abap_message_digest.
+      RAISING cx_abap_message_digest zcx_mob_config.
     METHODS hash_token
       IMPORTING token TYPE string
       RETURNING VALUE(hash) TYPE ztb_mob_session-access_token_hash
-      RAISING cx_abap_message_digest.
+      RAISING cx_abap_message_digest zcx_mob_config.
     METHODS report_error
       IMPORTING cid TYPE string text TYPE string
       CHANGING failed TYPE failed_response reported TYPE reported_response.
+    METHODS password_is_acceptable
+      IMPORTING password TYPE string username TYPE string OPTIONAL
+      RETURNING VALUE(result) TYPE abap_bool.
+    METHODS consume_dummy_password_hash
+      IMPORTING password TYPE string
+      RAISING cx_abap_message_digest zcx_mob_config.
 ENDCLASS.
 
 CLASS lhc_mobileuser IMPLEMENTATION.
@@ -70,6 +78,26 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       TO reported-mobileuser.
   ENDMETHOD.
 
+  METHOD password_is_acceptable.
+    DATA(password_lower) = to_lower( password ).
+    DATA(password_upper) = to_upper( password ).
+    DATA(username_lower) = to_lower( condense( username ) ).
+    result = xsdbool(
+      strlen( password ) >= c_min_password_length
+      AND password <> password_lower
+      AND password <> password_upper
+      AND password CA '0123456789'
+      AND ( username_lower IS INITIAL
+         OR password_lower NS username_lower ) ).
+  ENDMETHOD.
+
+  METHOD consume_dummy_password_hash.
+    DATA(ignored_hash) = hash_password(
+      password = password
+      salt = '00000000-0000-0000-0000-000000000000'
+      iterations = c_iterations ) ##NEEDED.
+  ENDMETHOD.
+
   METHOD createuser.
     IF keys IS INITIAL.
       RETURN.
@@ -86,8 +114,17 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
     DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     DATA(normalized) = to_lower( condense( CONV string( input-Username ) ) ).
-    IF normalized IS INITIAL OR input-Password IS INITIAL.
-      report_error( EXPORTING cid = cid text = 'Tên đăng nhập và mật khẩu là bắt buộc'
+    IF normalized IS INITIAL OR input-Password IS INITIAL OR input-Plant IS INITIAL.
+      report_error( EXPORTING cid = cid
+                              text = 'Tên đăng nhập, mật khẩu và nhà máy là bắt buộc'
+                    CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    IF password_is_acceptable(
+         password = CONV string( input-Password )
+         username = normalized ) = abap_false.
+      report_error( EXPORTING cid = cid
+                              text = 'Mật khẩu phải có ít nhất 12 ký tự, gồm chữ hoa, chữ thường và số'
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
@@ -100,24 +137,58 @@ CLASS lhc_mobileuser IMPLEMENTATION.
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
+    DATA(worker_id) = to_upper( condense( CONV string( input-WorkerID ) ) ).
+    IF worker_id IS NOT INITIAL.
+      DATA(worker_ref_id) = CONV zi_pp_workerref-workerid( worker_id ).
+      IF CONV string( worker_ref_id ) <> worker_id.
+        report_error( EXPORTING cid = cid text = 'Mã nhân công không đúng định dạng'
+                      CHANGING failed = failed reported = reported ).
+        RETURN.
+      ENDIF.
+      DATA(today) = cl_abap_context_info=>get_system_date( ).
+      SELECT FROM zi_pp_workerref
+        FIELDS WorkerUUID
+        WHERE WorkerID = @worker_ref_id
+          AND Plant = @input-Plant
+          AND ValidFrom <= @today
+          AND ValidTo >= @today
+        INTO TABLE @DATA(active_workers)
+        UP TO 1 ROWS.
+      IF active_workers IS INITIAL.
+        report_error( EXPORTING cid = cid
+                                text = 'Nhân công không tồn tại hoặc không còn hiệu lực tại nhà máy'
+                      CHANGING failed = failed reported = reported ).
+        RETURN.
+      ENDIF.
+      SELECT FROM ztb_mob_user
+        FIELDS user_uuid
+        WHERE worker_id = @worker_id
+        INTO TABLE @DATA(worker_accounts)
+        UP TO 1 ROWS.
+      IF worker_accounts IS NOT INITIAL.
+        report_error( EXPORTING cid = cid text = 'Nhân công đã được liên kết với tài khoản khác'
+                      CHANGING failed = failed reported = reported ).
+        RETURN.
+      ENDIF.
+    ENDIF.
     TRY.
         DATA(salt) = cl_system_uuid=>create_uuid_c36_static( ).
         DATA(password_hash) = hash_password(
           password = CONV string( input-Password )
           salt = CONV string( salt ) iterations = c_iterations ).
-      CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config INTO DATA(error).
-        report_error( EXPORTING cid = cid text = error->get_text( )
+      CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config.
+        report_error( EXPORTING cid = cid text = 'Không thể xử lý mật khẩu'
                       CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.
     DATA(now) = utclong_current( ).
     MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
       ENTITY MobileUser CREATE FIELDS
-        ( Username NormalizedUsername FullName Email WorkerID Plant BoPhan Status FailedLoginCount
-          PasswordChangeRequired )
+        ( Username NormalizedUsername FullName Email WorkerID Plant BoPhan
+          Status FailedLoginCount PasswordChangeRequired )
       WITH VALUE #( ( %cid = 'USR' Username = input-Username
         NormalizedUsername = normalized FullName = input-FullName
-        Email = input-Email WorkerID = input-WorkerID Plant = input-Plant BoPhan = input-BoPhan
+        Email = input-Email WorkerID = worker_id Plant = input-Plant BoPhan = input-BoPhan
         Status = 'A' FailedLoginCount = 0
         PasswordChangeRequired = abap_true ) )
       ENTITY MobileUser CREATE BY \_Credential FIELDS
@@ -147,9 +218,6 @@ CLASS lhc_mobileuser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD login.
-    IF keys IS INITIAL.
-      RETURN.
-    ENDIF.
     IF lines( keys ) > 1.
       LOOP AT keys ASSIGNING FIELD-SYMBOL(<login_key>).
         report_error(
@@ -163,47 +231,46 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     DATA(now) = utclong_current( ).
     DATA(normalized) = to_lower( condense( CONV string( input-Username ) ) ).
-    SELECT FROM ztb_mob_user
-      FIELDS user_uuid, status, failed_login_count, locked_until,
-             password_change_required
-      WHERE normalized_username = @normalized
-      INTO TABLE @DATA(matched_users)
+    IF normalized IS INITIAL OR input-Password IS INITIAL OR input-DeviceID IS INITIAL.
+      result = VALUE #( ( %cid = cid %param-Status = 'F' ) ).
+      RETURN.
+    ENDIF.
+    "Only a usable user/credential pair is returned. Invalid username,
+    "inactive or locked account, and missing/inactive credentials therefore
+    "share the same timing path and public response.
+    SELECT FROM ztb_mob_user AS user
+      INNER JOIN ztb_mob_cred AS credential
+        ON credential~user_uuid = user~user_uuid
+      FIELDS user~user_uuid, user~failed_login_count,
+             user~password_change_required,
+             credential~password_hash, credential~password_salt,
+             credential~hash_iterations
+      WHERE user~normalized_username = @normalized
+        AND user~status = 'A'
+        AND ( user~locked_until IS INITIAL OR user~locked_until <= @now )
+        AND credential~credential_status = 'A'
+      INTO TABLE @DATA(login_candidates)
       UP TO 2 ROWS.
-    IF lines( matched_users ) <> 1.
-      report_error( EXPORTING cid = cid text = 'Tên đăng nhập hoặc mật khẩu không hợp lệ'
-                    CHANGING failed = failed reported = reported ).
+    IF lines( login_candidates ) <> 1.
+      TRY.
+          consume_dummy_password_hash( CONV string( input-Password ) ).
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_error( EXPORTING cid = cid text = 'Không thể xử lý yêu cầu đăng nhập'
+                        CHANGING failed = failed reported = reported ).
+          RETURN.
+      ENDTRY.
+      result = VALUE #( ( %cid = cid %param-Status = 'F' ) ).
       RETURN.
     ENDIF.
-    DATA(user) = matched_users[ 1 ].
-    IF user-status <> 'A'
-       OR ( user-locked_until IS NOT INITIAL AND user-locked_until > now ).
-      report_error( EXPORTING cid = cid text = 'Tên đăng nhập hoặc mật khẩu không hợp lệ'
-                    CHANGING failed = failed reported = reported ).
-      RETURN.
-    ENDIF.
-    SELECT FROM ztb_mob_cred
-      FIELDS password_hash, password_salt, hash_iterations, credential_status
-      WHERE user_uuid = @user-user_uuid
-      INTO TABLE @DATA(login_credentials)
-      UP TO 1 ROWS.
-    IF login_credentials IS INITIAL.
-      report_error( EXPORTING cid = cid text = 'Tên đăng nhập hoặc mật khẩu không hợp lệ'
-                    CHANGING failed = failed reported = reported ).
-      RETURN.
-    ENDIF.
-    DATA(credential) = login_credentials[ 1 ].
-    IF credential-credential_status <> 'A'.
-      report_error( EXPORTING cid = cid text = 'Tên đăng nhập hoặc mật khẩu không hợp lệ'
-                    CHANGING failed = failed reported = reported ).
-      RETURN.
-    ENDIF.
+    DATA(user) = login_candidates[ 1 ].
+    DATA(credential) = login_candidates[ 1 ].
     TRY.
         DATA(input_hash) = hash_password(
           password = CONV string( input-Password )
           salt = CONV string( credential-password_salt )
           iterations = credential-hash_iterations ).
-      CATCH cx_abap_message_digest zcx_mob_config INTO DATA(hash_error).
-        report_error( EXPORTING cid = cid text = hash_error->get_text( )
+      CATCH cx_abap_message_digest zcx_mob_config.
+        report_error( EXPORTING cid = cid text = 'Không thể xử lý yêu cầu đăng nhập'
                       CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.
@@ -231,6 +298,40 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       result = VALUE #( ( %cid = cid %param-Status = 'F' ) ).
       RETURN.
     ENDIF.
+    "Keep one active session per device and cap the account total. Without
+    "this, repeated logins grow the session table indefinitely and leave a
+    "large set of valid bearer tokens behind.
+    SELECT FROM ztb_mob_session
+      FIELDS session_id, device_id
+      WHERE user_uuid = @user-user_uuid
+        AND status = 'A'
+      ORDER BY login_at DESCENDING
+      INTO TABLE @DATA(login_sessions).
+    DATA sessions_to_revoke TYPE SORTED TABLE OF sysuuid_x16
+                            WITH UNIQUE KEY table_line.
+    LOOP AT login_sessions ASSIGNING FIELD-SYMBOL(<login_session>).
+      IF <login_session>-device_id = input-DeviceID
+         OR sy-tabix >= c_max_active_sessions.
+        INSERT <login_session>-session_id INTO TABLE sessions_to_revoke.
+      ENDIF.
+    ENDLOOP.
+    IF sessions_to_revoke IS NOT INITIAL.
+      MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
+        ENTITY MobileSession UPDATE FIELDS
+          ( Status LogoutAt RevokedReason )
+        WITH VALUE #( FOR revoked_session IN sessions_to_revoke
+          ( SessionID = revoked_session
+            Status = 'R'
+            LogoutAt = now
+            RevokedReason = 'NEW_LOGIN' ) )
+        FAILED DATA(failed_session_revoke)
+        REPORTED DATA(reported_session_revoke).
+      IF failed_session_revoke IS NOT INITIAL.
+        failed = CORRESPONDING #( failed_session_revoke ).
+        reported = CORRESPONDING #( reported_session_revoke ).
+        RETURN.
+      ENDIF.
+    ENDIF.
     TRY.
         DATA(access_token) = cl_system_uuid=>create_uuid_c36_static( )
                           && cl_system_uuid=>create_uuid_c36_static( ).
@@ -238,8 +339,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
                            && cl_system_uuid=>create_uuid_c36_static( ).
         DATA(access_hash) = hash_token( CONV string( access_token ) ).
         DATA(refresh_hash) = hash_token( CONV string( refresh_token ) ).
-      CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config INTO DATA(token_error).
-        report_error( EXPORTING cid = cid text = token_error->get_text( )
+      CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config.
+        report_error( EXPORTING cid = cid text = 'Không thể tạo phiên đăng nhập'
                       CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.
@@ -313,8 +414,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     TRY.
         DATA(token_hash) = hash_token( CONV string( input-AccessToken ) ).
-      CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
-        report_error( EXPORTING cid = cid text = error->get_text( )
+      CATCH cx_abap_message_digest zcx_mob_config.
+        report_error( EXPORTING cid = cid text = 'Không thể xử lý yêu cầu đăng xuất'
                       CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.
@@ -356,15 +457,21 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(now) = utclong_current( ).
     TRY.
         DATA(old_hash) = hash_token( CONV string( input-RefreshToken ) ).
-      CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
-        report_error( EXPORTING cid = cid text = error->get_text( )
+      CATCH cx_abap_message_digest zcx_mob_config.
+        report_error( EXPORTING cid = cid text = 'Không thể xử lý refresh token'
                       CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.
-    SELECT FROM ztb_mob_session
-      FIELDS session_id, user_uuid, token_version
-      WHERE refresh_token_hash = @old_hash AND device_id = @input-DeviceID
-        AND status = 'A' AND refresh_expires_at > @now
+    SELECT FROM ztb_mob_session AS session
+      INNER JOIN ztb_mob_user AS user
+        ON user~user_uuid = session~user_uuid
+      FIELDS session~session_id, session~user_uuid, session~token_version,
+             user~status AS user_status,
+             user~password_change_required
+      WHERE session~refresh_token_hash = @old_hash
+        AND session~device_id = @input-DeviceID
+        AND session~status = 'A'
+        AND session~refresh_expires_at > @now
       INTO TABLE @DATA(refresh_sessions)
       UP TO 2 ROWS.
     IF lines( refresh_sessions ) <> 1.
@@ -373,6 +480,11 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       RETURN.
     ENDIF.
     DATA(session) = refresh_sessions[ 1 ].
+    IF session-user_status <> 'A'.
+      report_error( EXPORTING cid = cid text = 'Refresh token không hợp lệ hoặc hết hạn'
+                    CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
     TRY.
         DATA(access_token) = cl_system_uuid=>create_uuid_c36_static( )
                           && cl_system_uuid=>create_uuid_c36_static( ).
@@ -380,20 +492,19 @@ CLASS lhc_mobileuser IMPLEMENTATION.
                            && cl_system_uuid=>create_uuid_c36_static( ).
         DATA(access_hash) = hash_token( CONV string( access_token ) ).
         DATA(refresh_hash) = hash_token( CONV string( refresh_token ) ).
-      CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config INTO DATA(token_error).
-        report_error( EXPORTING cid = cid text = token_error->get_text( )
+      CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config.
+        report_error( EXPORTING cid = cid text = 'Không thể làm mới phiên đăng nhập'
                       CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.
     DATA(expires_at) = utclong_add( val = now minutes = 30 ).
     MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE ENTITY MobileSession
       UPDATE FIELDS ( AccessTokenHash RefreshTokenHash TokenVersion
-        LastActivityAt ExpiresAt RefreshExpiresAt )
+        LastActivityAt ExpiresAt )
       WITH VALUE #( ( SessionID = session-session_id
         AccessTokenHash = access_hash RefreshTokenHash = refresh_hash
         TokenVersion = session-token_version + 1 LastActivityAt = now
-        ExpiresAt = expires_at
-        RefreshExpiresAt = utclong_add( val = now days = 30 ) ) )
+        ExpiresAt = expires_at ) )
       FAILED DATA(failed_update) REPORTED DATA(reported_update).
     IF failed_update IS NOT INITIAL.
       failed = CORRESPONDING #( failed_update ).
@@ -410,7 +521,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       AccessToken = access_token
       RefreshToken = refresh_token
       ExpiresAt = expires_at
-      Status = 'A'
+      Status = COND #( WHEN session-password_change_required = abap_true
+                       THEN 'P' ELSE 'A' )
+      PasswordChangeRequired = session-password_change_required
       _Permissions = VALUE #( FOR permission IN permissions
         ( FuncID = permission-func_id
           FuncName = permission-func_name
@@ -437,8 +550,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
           token = CONV string( input-AccessToken )
           device_id = input-DeviceID
           allow_password_change = abap_true ).
-      CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
-        report_error( EXPORTING cid = cid text = error->get_text( )
+      CATCH cx_abap_message_digest zcx_mob_config.
+        report_error( EXPORTING cid = cid text = 'Không thể xác thực phiên đăng nhập'
                       CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.
@@ -447,9 +560,12 @@ CLASS lhc_mobileuser IMPLEMENTATION.
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
-    SELECT FROM ztb_mob_cred
-      FIELDS password_hash, password_salt, hash_iterations
-      WHERE user_uuid = @auth-user_uuid
+    SELECT FROM ztb_mob_cred AS credential
+      INNER JOIN ztb_mob_user AS user
+        ON user~user_uuid = credential~user_uuid
+      FIELDS credential~password_hash, credential~password_salt,
+             credential~hash_iterations, user~normalized_username
+      WHERE credential~user_uuid = @auth-user_uuid
       INTO TABLE @DATA(password_credentials)
       UP TO 1 ROWS.
     IF password_credentials IS INITIAL.
@@ -458,6 +574,15 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       RETURN.
     ENDIF.
     DATA(credential) = password_credentials[ 1 ].
+    IF input-NewPassword = input-CurrentPassword
+       OR password_is_acceptable(
+            password = CONV string( input-NewPassword )
+            username = CONV string( credential-normalized_username ) ) = abap_false.
+      report_error( EXPORTING cid = cid
+                              text = 'Mật khẩu mới phải khác mật khẩu cũ; tối thiểu 12 ký tự, có hoa, thường và số'
+                    CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
     TRY.
         DATA(current_hash) = hash_password(
           password = CONV string( input-CurrentPassword )
@@ -474,8 +599,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         DATA(new_hash) = hash_password(
           password = CONV string( input-NewPassword )
           salt = CONV string( new_salt ) iterations = c_iterations ).
-      CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config INTO DATA(sec_error).
-        report_error( EXPORTING cid = cid text = sec_error->get_text( )
+      CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config.
+        report_error( EXPORTING cid = cid text = 'Không thể cập nhật mật khẩu'
                       CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.
@@ -497,13 +622,13 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    "Revoke every other active session; the session that authorized this
-    "password change stays valid so the device is not logged out mid-flow.
+    "Every token was issued under the old credential. Revoking the current
+    "session as well forces a clean login and is especially important after
+    "the first-use temporary password is replaced.
     SELECT FROM ztb_mob_session
       FIELDS session_id
       WHERE user_uuid = @auth-user_uuid
         AND status = 'A'
-        AND session_id <> @auth-session_id
       INTO TABLE @DATA(active_sessions).
     IF active_sessions IS NOT INITIAL.
       MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE

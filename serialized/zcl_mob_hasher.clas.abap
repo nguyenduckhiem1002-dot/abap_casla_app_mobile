@@ -1,7 +1,9 @@
 CLASS zcl_mob_hasher DEFINITION
   PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
-    METHODS constructor IMPORTING iv_secret_key TYPE string.
+    METHODS constructor
+      IMPORTING iv_secret_key TYPE string
+      RAISING zcx_mob_config.
     METHODS calculate_hash
       IMPORTING iv_value TYPE string
       RETURNING VALUE(rv_hash) TYPE string

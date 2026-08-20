@@ -1,0 +1,6 @@
+@EndUserText.label: 'Chặn đọc mặc định phân bổ công đoạn'
+@MappingRole: true
+define role ZR_PP_OPALLOC {
+  grant select on ZR_PP_OpAlloc
+    where OperationStatus = '' and OperationStatus <> '';
+}

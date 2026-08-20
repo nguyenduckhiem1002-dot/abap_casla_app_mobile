@@ -25,6 +25,9 @@ CLASS zcl_pp_worker_validator DEFINITION
         execution_date TYPE zi_pp_workerref-ValidFrom
       RETURNING
         VALUE(result)  TYPE abap_bool.
+  PRIVATE SECTION.
+    TYPES worker_refs TYPE SORTED TABLE OF zi_pp_workerref
+      WITH NON-UNIQUE KEY WorkerID Plant WorkCenter ValidFrom.
 ENDCLASS.
 
 CLASS zcl_pp_worker_validator IMPLEMENTATION.
@@ -47,11 +50,12 @@ CLASS zcl_pp_worker_validator IMPLEMENTATION.
     SORT plant_range BY low.
     DELETE ADJACENT DUPLICATES FROM plant_range COMPARING low.
 
+    DATA valid_workers TYPE worker_refs.
     SELECT FROM zi_pp_workerref
       FIELDS WorkerID, Plant, WorkCenter, ValidFrom, ValidTo
       WHERE WorkerID IN @worker_range
         AND Plant IN @plant_range
-      INTO TABLE @DATA(valid_workers).
+      INTO CORRESPONDING FIELDS OF TABLE @valid_workers.
 
     LOOP AT checks ASSIGNING <check>.
       CLEAR <check>-is_active.

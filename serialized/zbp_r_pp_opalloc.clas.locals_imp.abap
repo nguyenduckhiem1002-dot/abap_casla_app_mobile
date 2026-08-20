@@ -133,8 +133,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             token = CONV string( input-AccessToken )
             device_id = input-DeviceID
             required_func = 'PP_INITIAL_ASSIGN' ).
-        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
-          report_failure( EXPORTING cid = cid text = error->get_text( )
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
@@ -148,8 +148,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-ToWorkerID
             password = CONV string( input-WorkerPassword ) ).
-        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(pw_error).
-          report_failure( EXPORTING cid = cid text = pw_error->get_text( )
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_failure( EXPORTING cid = cid text = 'Không thể xác thực nhân công'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
@@ -193,8 +193,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             token = CONV string( input-AccessToken )
             device_id = input-DeviceID
             required_func = 'PP_CONFIRM' ).
-        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
-          report_failure( EXPORTING cid = cid text = error->get_text( )
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
@@ -208,8 +208,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-WorkerID
             password = CONV string( input-WorkerPassword ) ).
-        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(pw_error).
-          report_failure( EXPORTING cid = cid text = pw_error->get_text( )
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_failure( EXPORTING cid = cid text = 'Không thể xác thực nhân công'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
@@ -274,8 +274,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           date_to = input-DateTo
           worker_id = input-WorkerID
           include_entries = xsdbool( input-SummaryOnly = abap_false ) ).
-      CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
-        report_failure( EXPORTING cid = cid text = error->get_text( )
+      CATCH cx_abap_message_digest zcx_mob_config.
+        report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu tra cứu'
                         CHANGING failed = failed reported = reported ).
         RETURN.
     ENDTRY.

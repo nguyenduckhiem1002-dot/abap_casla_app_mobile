@@ -9,6 +9,8 @@ CLASS lhc_mobilerole IMPLEMENTATION.
     "Protected by IAM app/business catalog of the admin service.
     result-%create = if_abap_behv=>auth-allowed.
     result-%update = if_abap_behv=>auth-allowed.
-    result-%delete = if_abap_behv=>auth-allowed.
+    "Disable the role through Status instead of deleting it. A hard delete
+    "can orphan historical authorization assignments and audit references.
+    result-%delete = if_abap_behv=>auth-unauthorized.
   ENDMETHOD.
 ENDCLASS.

@@ -248,6 +248,25 @@ metadata do ADT/tenant sinh:
    (SADL/OData GET), không áp trên EML `IN LOCAL MODE` của BO runtime; nếu
    action bị chặn thì phải chuyển sang mô hình pfcg_auth cho `ZI_MOB_USER`.
 
+## Đã sửa trong đợt hardening 9 (security/performance scan)
+
+- Refresh token chuyển sang lifetime tuyệt đối; refresh kiểm tra user active và
+  không còn gia hạn `RefreshExpiresAt`.
+- Login chống enumeration bằng response thống nhất + dummy hash, giới hạn 5
+  session active, một session trên mỗi device và dùng một join user/credential.
+- Đổi mật khẩu nay revoke cả session hiện tại. Ghi chú ở hardening 2 về việc
+  giữ session hiện tại đã được thay thế bởi chính sách an toàn hơn này.
+- Áp password policy, giới hạn KDF iteration, exception config dạng checked,
+  message public không chứa exception text nội bộ.
+- Check một permission bằng query tồn tại trực tiếp; các lookup batch/history
+  chuyển sang sorted table theo key truy cập.
+- WorkerID immutable; create account validate WorkerID theo nhà máy/ngày hiệu
+  lực và chặn liên kết trùng ở application layer.
+- Không cho xóa cứng Role/Function. Header công đoạn được chặn GET bằng DCL
+  deny-all; static action token-scoped vẫn là API đọc duy nhất.
+- Báo cáo chi tiết và các việc còn lại trên tenant nằm tại
+  `SECURITY_PERFORMANCE_REVIEW.md`.
+
 ## Chưa triển khai nghiệp vụ
 
 - `initialAssign`, `transfer`, `confirm`, `reverse` vẫn chủ động fail-closed.

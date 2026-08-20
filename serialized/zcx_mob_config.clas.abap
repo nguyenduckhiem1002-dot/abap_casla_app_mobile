@@ -1,5 +1,5 @@
 CLASS zcx_mob_config DEFINITION
-  PUBLIC INHERITING FROM cx_no_check FINAL CREATE PUBLIC.
+  PUBLIC INHERITING FROM cx_static_check FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     METHODS constructor IMPORTING config_key TYPE string.
     DATA config_key TYPE string READ-ONLY.
