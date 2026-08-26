@@ -1,15 +1,14 @@
 projection;
 strict ( 2 );
 
-"Role and function maintenance is administrative: exposed on
-"ZUI_MOB_RBAC_ADM only, never on the mobile auth service. A device sees
-"the outcome only as its own function list inside the login and refresh
-"results, and can neither read nor change an assignment.
+"Role, function and work-scope maintenance share one administrative object page.
+"They are exposed only through ZUI_MOB_RBAC_ADM, never through the mobile API.
 define behavior for ZC_MOB_Role_Adm alias MobileRole
 {
   use create;
   use update;
   use association _Functions { create; }
+  use association _WorkAssignments { create; }
 }
 
 define behavior for ZC_MOB_RolFunc_Adm alias MobileRoleFunc
@@ -17,4 +16,11 @@ define behavior for ZC_MOB_RolFunc_Adm alias MobileRoleFunc
   use update;
   use delete;
   use association _Role;
+}
+
+define behavior for ZC_MOB_RolWork_Adm alias MobileRoleWork
+{
+  use delete;
+  use association _Role;
+  use association _Work;
 }

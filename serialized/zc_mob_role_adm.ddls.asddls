@@ -5,6 +5,14 @@
   typeNamePlural: 'Chức danh',
   title: { value: 'RoleName' }
 }
+@UI.facet: [
+  { id: 'General', type: #IDENTIFICATION_REFERENCE,
+    label: 'Thông tin chức danh', position: 10 },
+  { id: 'Functions', type: #LINEITEM_REFERENCE,
+    label: 'Quyền chức năng', position: 20, targetElement: '_Functions' },
+  { id: 'WorkAssignments', type: #LINEITEM_REFERENCE,
+    label: 'Vị trí làm việc', position: 30, targetElement: '_WorkAssignments' }
+]
 define root view entity ZC_MOB_Role_Adm
   provider contract transactional_query
   as projection on ZI_MOB_Role
@@ -25,6 +33,6 @@ define root view entity ZC_MOB_Role_Adm
       LastChangedBy,
       LastChangedAt,
       LocalLastChangedAt,
-      /* Composition */
-      _Functions : redirected to composition child ZC_MOB_RolFunc_Adm
+      _Functions : redirected to composition child ZC_MOB_RolFunc_Adm,
+      _WorkAssignments : redirected to composition child ZC_MOB_RolWork_Adm
 }

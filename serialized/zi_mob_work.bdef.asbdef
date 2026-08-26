@@ -1,0 +1,23 @@
+managed implementation in class zbp_i_mob_work unique;
+strict ( 2 );
+
+define behavior for ZI_MOB_Work alias MobileWork
+persistent table ztb_mob_work
+lock master
+authorization master ( global )
+{
+  create;
+  update;
+  delete;
+  field ( readonly : update ) WorkID;
+  validation validateWork on save { create; update; field WorkID, WorkName, Plant, WorkCenter, IsActive; }
+  mapping for ztb_mob_work {
+    WorkID = work_id;
+    WorkName = work_name;
+    Plant = plant;
+    WorkCenter = workcenter;
+    BoPhan = bo_phan;
+    Location = location;
+    IsActive = is_active;
+  }
+}

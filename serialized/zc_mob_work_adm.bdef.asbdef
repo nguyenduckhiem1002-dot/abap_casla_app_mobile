@@ -1,0 +1,8 @@
+projection;
+strict ( 2 );
+
+define behavior for ZC_MOB_Work_Adm alias MobileWork
+{
+  use create;
+  use update;
+}

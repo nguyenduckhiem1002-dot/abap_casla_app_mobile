@@ -5,6 +5,12 @@
   typeNamePlural: 'Tài khoản giám sát',
   title: { value: 'Username' }
 }
+@UI.facet: [
+  { id: 'General', type: #IDENTIFICATION_REFERENCE,
+    label: 'Thông tin tài khoản', position: 10 },
+  { id: 'Roles', type: #LINEITEM_REFERENCE,
+    label: 'Chức danh', position: 20, targetElement: '_Roles' }
+]
 define root view entity ZC_MOB_User_Adm
   provider contract transactional_query
   as projection on ZI_MOB_User
@@ -19,12 +25,16 @@ define root view entity ZC_MOB_User_Adm
   @UI.identification: [{ position: 10 }]
       Username,
   @UI.lineItem: [{ position: 30 }]
+  @UI.identification: [{ position: 20 }]
       FullName,
   @UI.lineItem: [{ position: 40 }]
+  @UI.identification: [{ position: 30 }]
       Email,
   @UI.lineItem: [{ position: 45 }]
+  @UI.identification: [{ position: 40 }]
       WorkerID,
   @UI.lineItem: [{ position: 50 }]
+  @UI.identification: [{ position: 50 }]
       Status,
   @UI.lineItem: [{ position: 60 }]
       PasswordChangeRequired,
@@ -32,6 +42,5 @@ define root view entity ZC_MOB_User_Adm
       LastLoginAt,
   @UI.lineItem: [{ position: 80 }]
       CreatedAt,
-      /* Composition */
       _Roles : redirected to composition child ZC_MOB_UsrRol_Adm
 }

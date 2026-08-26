@@ -9,4 +9,5 @@ define root abstract entity ZA_MOB_LoginResult
   Status : abap.char(1);
   PasswordChangeRequired : abap_boolean;
   _Permissions : composition [0..*] of ZA_MOB_Permission;
+  _WorkContexts : composition [0..*] of ZA_MOB_WorkContext;
 }

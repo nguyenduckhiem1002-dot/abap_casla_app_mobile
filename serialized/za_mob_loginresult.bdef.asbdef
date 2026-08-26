@@ -5,9 +5,15 @@ with hierarchy;
 define behavior for ZA_MOB_LoginResult
 {
   association _Permissions;
+  association _WorkContexts;
 }
 
 define behavior for ZA_MOB_Permission
+{
+  association _LoginResult;
+}
+
+define behavior for ZA_MOB_WorkContext
 {
   association _LoginResult;
 }

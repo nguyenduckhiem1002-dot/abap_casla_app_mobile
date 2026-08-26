@@ -5,4 +5,7 @@ define abstract entity ZA_MOB_CreateUser {
   FullName : abap.char(120);
   Email : abap.char(255);
   WorkerID : abap.char(8);
+  @EndUserText.label: 'Chức danh ban đầu'
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Role_VH', element: 'RoleID' } }]
+  RoleID : abap.char(20);
 }

@@ -1,6 +1,10 @@
 @EndUserText.label: 'Dịch vụ quản trị phân quyền'
 define service ZUI_MOB_RBAC_ADM {
-  expose ZC_MOB_Role_Adm     as Roles;
-  expose ZC_MOB_RolFunc_Adm  as RoleFunctions;
-  expose ZC_MOB_Func_Adm     as Functions;
+  expose ZC_MOB_Role_Adm      as Roles;
+  expose ZC_MOB_RolFunc_Adm   as RoleFunctions;
+  expose ZC_MOB_RolWork_Adm   as RoleWorkContexts;
+  expose ZC_MOB_Func_Adm      as Functions;
+  expose ZC_MOB_Work_Adm      as WorkContexts;
+  expose ZI_MOB_Func_VH       as FunctionValueHelp;
+  expose ZI_MOB_Work_VH       as WorkContextValueHelp;
 }

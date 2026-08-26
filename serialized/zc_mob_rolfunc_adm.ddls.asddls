@@ -9,12 +9,14 @@ define view entity ZC_MOB_RolFunc_Adm
   provider contract transactional_query
   as projection on ZI_MOB_RolFunc
 {
-  @UI.lineItem: [{ position: 10 }]
   key RoleID,
-  @UI.lineItem: [{ position: 20 }]
+  @UI.lineItem: [{ position: 10 }]
   @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Func_VH', element: 'FuncID' } }]
   key FuncID,
-      /* Associations */
+  @UI.lineItem: [{ position: 20 }]
+      FuncName,
+  @UI.lineItem: [{ position: 30 }]
+      Module,
       _Role : redirected to parent ZC_MOB_Role_Adm,
       _Func : redirected to ZC_MOB_Func_Adm
 }

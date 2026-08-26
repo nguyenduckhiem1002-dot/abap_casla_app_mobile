@@ -3,6 +3,7 @@
 define root view entity ZI_MOB_Role
   as select from ztb_mob_role
   composition [0..*] of ZI_MOB_RolFunc as _Functions
+  composition [0..*] of ZI_MOB_RolWork as _WorkAssignments
 {
   key role_id               as RoleID,
       role_name             as RoleName,
@@ -17,5 +18,6 @@ define root view entity ZI_MOB_Role
       last_changed_at       as LastChangedAt,
       @Semantics.systemDateTime.localInstanceLastChangedAt: true
       local_last_changed_at as LocalLastChangedAt,
-      _Functions
+      _Functions,
+      _WorkAssignments
 }
