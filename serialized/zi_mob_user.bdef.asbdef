@@ -13,9 +13,10 @@ etag master LocalLastChangedAt
   field ( numbering : managed, readonly ) UserUUID;
   "Username identifies the login account; WorkerID links authorization and
   "ledger history to the worker master. Both stay immutable after creation.
-  field ( readonly ) Username, NormalizedUsername, FailedLoginCount, LockedUntil,
-                     FirstLoginAt, LastLoginAt, CreatedBy, CreatedAt,
-                     LastChangedBy, LastChangedAt, LocalLastChangedAt;
+  field ( readonly ) Username, NormalizedUsername, FailedLoginCount,
+                     LastFailedLoginAt, LockedUntil, FirstLoginAt, LastLoginAt,
+                     CreatedBy, CreatedAt, LastChangedBy, LastChangedAt,
+                     LocalLastChangedAt;
   field ( readonly : update ) WorkerID;
   association _Credential { create; }
   association _Sessions { create; }
@@ -34,6 +35,7 @@ etag master LocalLastChangedAt
     WorkerID = worker_id;
     Status = status;
     FailedLoginCount = failed_login_count;
+    LastFailedLoginAt = last_fail_at;
     LockedUntil = locked_until;
     PasswordChangeRequired = password_change_required;
     FirstLoginAt = first_login_at;
@@ -113,4 +115,3 @@ etag master LocalLastChangedAt
     LocalLastChangedAt = local_last_changed_at;
   }
 }
-

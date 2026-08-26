@@ -396,7 +396,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       INNER JOIN ztb_pp_op_alloc AS op
         ON op~operation_uuid = txn~operation_uuid
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
-             txn~execution_date, txn~worker_id,
+             txn~operation_uuid, txn~execution_date, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~plant, op~work_center

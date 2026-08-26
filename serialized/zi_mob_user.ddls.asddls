@@ -14,6 +14,7 @@ define root view entity ZI_MOB_User
       worker_id                as WorkerID,
       status                   as Status,
       failed_login_count       as FailedLoginCount,
+      last_fail_at             as LastFailedLoginAt,
       locked_until             as LockedUntil,
       password_change_required as PasswordChangeRequired,
       first_login_at           as FirstLoginAt,

@@ -100,6 +100,14 @@
           <LENG>000010</LENG>
         </DD03P>
         <DD03P>
+          <FIELDNAME>LAST_FAIL_AT</FIELDNAME>
+          <ADMINFIELD>0</ADMINFIELD>
+          <INTTYPE>C</INTTYPE>
+          <INTLEN>000054</INTLEN>
+          <DATATYPE>UTCLONG</DATATYPE>
+          <LENG>000027</LENG>
+        </DD03P>
+        <DD03P>
           <FIELDNAME>LOCKED_UNTIL</FIELDNAME>
           <ADMINFIELD>0</ADMINFIELD>
           <INTTYPE>C</INTTYPE>

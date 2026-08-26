@@ -194,10 +194,17 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           TO reported-operationallocation.
         CONTINUE.
       ENDIF.
-      SELECT SINGLE transaction_uuid FROM ztb_pp_alloc_txn
+      SELECT FROM ztb_pp_alloc_txn
+        FIELDS transaction_uuid
         WHERE sync_item_uuid = @input-SyncItemUUID
-        INTO @DATA(existing_txn).
-      IF existing_txn IS NOT INITIAL.
+        INTO TABLE @DATA(existing_txns)
+        UP TO 2 ROWS.
+      IF lines( existing_txns ) > 1.
+        report_failure( EXPORTING cid = cid text = 'Sync item bị trùng trong sổ giao dịch'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      IF existing_txns IS NOT INITIAL.
         APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         CONTINUE.
       ENDIF.
@@ -214,11 +221,18 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           TO reported-operationallocation.
         CONTINUE.
       ENDIF.
-      SELECT SINGLE FROM ztb_pp_emp_alloc
+      SELECT FROM ztb_pp_emp_alloc
         FIELDS emp_alloc_uuid, initial_assigned_qty, remaining_qty
         WHERE operation_uuid = @operation-OperationUUID
           AND worker_id = @input-ToWorkerID
-        INTO @DATA(balance).
+        INTO TABLE @DATA(worker_balances)
+        UP TO 2 ROWS.
+      IF lines( worker_balances ) > 1.
+        report_failure( EXPORTING cid = cid text = 'Số dư nhân công bị trùng'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      DATA(balance) = VALUE #( worker_balances[ 1 ] OPTIONAL ).
       IF balance IS INITIAL.
         MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
           ENTITY OperationAllocation CREATE BY \_Employees FIELDS
@@ -241,11 +255,18 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENDIF.
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
-          ( SyncItemUUID ActorUserUUID TransactionType WorkerID ToWorkerID
-            Quantity UnitOfMeasure ExecutionDate TransactionStatus )
+          ( SyncItemUUID ActorUserUUID VerifiedWorkerUserUUID WorkerVerifiedAt
+            InitiatorSessionID DeviceID VerificationMethod TransactionType
+            WorkerID ToWorkerID Quantity UnitOfMeasure ExecutionDate
+            TransactionStatus )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |TXN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
             ActorUserUUID = auth-user_uuid
+            VerifiedWorkerUserUUID = worker_auth-worker_user_uuid
+            WorkerVerifiedAt = utclong_current( )
+            InitiatorSessionID = auth-session_id
+            DeviceID = input-DeviceID
+            VerificationMethod = 'PASSWORD'
             TransactionType = zcl_pp_txn_type=>initial_assign
             WorkerID = input-ToWorkerID ToWorkerID = input-ToWorkerID
             Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
@@ -258,13 +279,28 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD transfer.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
+      DATA(cid) = CONV string( <key>-%cid ).
+      TRY.
+          DATA(auth) = zcl_mob_token_validator=>validate_token(
+            token = CONV string( input-AccessToken )
+            device_id = input-DeviceID ).
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu điều chuyển'
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+      ENDTRY.
+      IF auth-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation ALL FIELDS
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
       IF operations IS INITIAL OR input-Quantity <= 0
          OR input-FromWorkerID IS INITIAL OR input-ToWorkerID IS INITIAL
          OR input-FromWorkerID = input-ToWorkerID
-         OR input-ActorUserUUID IS INITIAL OR input-SyncItemUUID IS INITIAL
+         OR input-SyncItemUUID IS INITIAL
          OR input-ExecutionDate IS INITIAL.
         APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
         APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
@@ -275,7 +311,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENDIF.
       DATA(operation) = operations[ 1 ].
       TRY.
-          DATA(worker_auth) = zcl_mob_password_service=>verify_worker(
+          DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-ToWorkerID
             password = CONV string( input-WorkerPassword ) ).
         CATCH cx_abap_message_digest zcx_mob_config INTO DATA(auth_error).
@@ -298,9 +334,17 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           TO reported-operationallocation.
         CONTINUE.
       ENDIF.
-      SELECT SINGLE transaction_uuid FROM ztb_pp_alloc_txn
-        WHERE sync_item_uuid = @input-SyncItemUUID INTO @DATA(existing_txn).
-      IF existing_txn IS NOT INITIAL.
+      SELECT FROM ztb_pp_alloc_txn
+        FIELDS transaction_uuid
+        WHERE sync_item_uuid = @input-SyncItemUUID
+        INTO TABLE @DATA(existing_txns)
+        UP TO 2 ROWS.
+      IF lines( existing_txns ) > 1.
+        report_failure( EXPORTING cid = cid text = 'Sync item bị trùng trong sổ giao dịch'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      IF existing_txns IS NOT INITIAL.
         APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         CONTINUE.
       ENDIF.
@@ -349,11 +393,18 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENDIF.
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
-          ( SyncItemUUID ActorUserUUID TransactionType FromWorkerID ToWorkerID
-            Quantity UnitOfMeasure ExecutionDate TransactionStatus )
+          ( SyncItemUUID ActorUserUUID VerifiedWorkerUserUUID WorkerVerifiedAt
+            InitiatorSessionID DeviceID VerificationMethod TransactionType
+            FromWorkerID ToWorkerID Quantity UnitOfMeasure ExecutionDate
+            TransactionStatus )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |TRN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
-            ActorUserUUID = input-ActorUserUUID
+            ActorUserUUID = auth-user_uuid
+            VerifiedWorkerUserUUID = worker_auth-worker_user_uuid
+            WorkerVerifiedAt = utclong_current( )
+            InitiatorSessionID = auth-session_id
+            DeviceID = input-DeviceID
+            VerificationMethod = 'PASSWORD'
             TransactionType = zcl_pp_txn_type=>transfer
             FromWorkerID = input-FromWorkerID ToWorkerID = input-ToWorkerID
             Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
@@ -366,11 +417,26 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD recall.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
+      DATA(cid) = CONV string( <key>-%cid ).
+      TRY.
+          DATA(auth) = zcl_mob_token_validator=>validate_token(
+            token = CONV string( input-AccessToken )
+            device_id = input-DeviceID ).
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu thu hồi'
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+      ENDTRY.
+      IF auth-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation ALL FIELDS
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
       IF operations IS INITIAL OR input-Quantity <= 0
-         OR input-WorkerID IS INITIAL OR input-ActorUserUUID IS INITIAL
+         OR input-WorkerID IS INITIAL
          OR input-SyncItemUUID IS INITIAL
          OR input-OriginalTransactionUUID IS INITIAL
          OR input-ExecutionDate IS INITIAL.
@@ -383,7 +449,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENDIF.
       DATA(operation) = operations[ 1 ].
       TRY.
-          DATA(worker_auth) = zcl_mob_password_service=>verify_worker(
+          DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-WorkerID
             password = CONV string( input-WorkerPassword ) ).
         CATCH cx_abap_message_digest zcx_mob_config INTO DATA(auth_error).
@@ -401,22 +467,41 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           TO reported-operationallocation.
         CONTINUE.
       ENDIF.
-      SELECT SINGLE transaction_uuid FROM ztb_pp_alloc_txn
-        WHERE sync_item_uuid = @input-SyncItemUUID INTO @DATA(existing_txn).
-      IF existing_txn IS NOT INITIAL.
+      SELECT FROM ztb_pp_alloc_txn
+        FIELDS transaction_uuid
+        WHERE sync_item_uuid = @input-SyncItemUUID
+        INTO TABLE @DATA(existing_txns)
+        UP TO 2 ROWS.
+      IF lines( existing_txns ) > 1.
+        report_failure( EXPORTING cid = cid text = 'Sync item bị trùng trong sổ giao dịch'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      IF existing_txns IS NOT INITIAL.
         APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         CONTINUE.
       ENDIF.
-      SELECT SINGLE FROM ztb_pp_alloc_txn
+      SELECT FROM ztb_pp_alloc_txn
         FIELDS transaction_type
         WHERE transaction_uuid = @input-OriginalTransactionUUID
           AND operation_uuid = @operation-OperationUUID
           AND transaction_status = @zcl_pp_txn_type=>posted
-        INTO @DATA(root_type).
-      SELECT SINGLE FROM ztb_pp_emp_alloc
+        INTO TABLE @DATA(root_transactions)
+        UP TO 1 ROWS.
+      DATA root_type TYPE ztb_pp_alloc_txn-transaction_type.
+      root_type = VALUE #( root_transactions[ 1 ]-transaction_type OPTIONAL ).
+      SELECT FROM ztb_pp_emp_alloc
         FIELDS emp_alloc_uuid, recalled_qty, remaining_qty, uom
         WHERE operation_uuid = @operation-OperationUUID
-          AND worker_id = @input-WorkerID INTO @DATA(balance).
+          AND worker_id = @input-WorkerID
+        INTO TABLE @DATA(worker_balances)
+        UP TO 2 ROWS.
+      IF lines( worker_balances ) > 1.
+        report_failure( EXPORTING cid = cid text = 'Số dư nhân công bị trùng'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      DATA(balance) = VALUE #( worker_balances[ 1 ] OPTIONAL ).
       IF ( root_type <> zcl_pp_txn_type=>initial_assign
            AND root_type <> zcl_pp_txn_type=>transfer )
          OR balance IS INITIAL OR balance-uom <> input-UnitOfMeasure
@@ -437,13 +522,19 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           LastExecutionDate = input-ExecutionDate ) )
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
           ( OriginalTransactionUUID SyncItemUUID ActorUserUUID
-            TransactionType WorkerID FromWorkerID Quantity UnitOfMeasure
-            ExecutionDate TransactionStatus )
+            VerifiedWorkerUserUUID WorkerVerifiedAt InitiatorSessionID
+            DeviceID VerificationMethod TransactionType WorkerID FromWorkerID
+            Quantity UnitOfMeasure ExecutionDate TransactionStatus )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |RCL{ sy-tabix }|
             OriginalTransactionUUID = input-OriginalTransactionUUID
             SyncItemUUID = input-SyncItemUUID
-            ActorUserUUID = input-ActorUserUUID
+            ActorUserUUID = auth-user_uuid
+            VerifiedWorkerUserUUID = worker_auth-worker_user_uuid
+            WorkerVerifiedAt = utclong_current( )
+            InitiatorSessionID = auth-session_id
+            DeviceID = input-DeviceID
+            VerificationMethod = 'PASSWORD'
             TransactionType = zcl_pp_txn_type=>recall
             WorkerID = input-WorkerID FromWorkerID = input-WorkerID
             Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
