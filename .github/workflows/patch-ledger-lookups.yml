@@ -1,0 +1,89 @@
+name: Patch ledger lookups
+
+on:
+  push:
+    branches:
+      - chatgpt/complete-mobile-sync-operation-master
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Patch ambiguous lookups
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('serialized/zbp_r_pp_opalloc.clas.locals_imp.abap')
+          text = path.read_text(encoding='utf-8')
+
+          old_original = '''        SELECT SINGLE FROM ztb_pp_alloc_txn
+          FIELDS transaction_type
+          WHERE transaction_uuid = @input-OriginalTransactionUUID
+            AND operation_uuid = @operation-OperationUUID
+            AND transaction_status = @zcl_pp_txn_type=>posted
+          INTO @original_type.
+        IF sy-subrc <> 0.
+          report_failure( EXPORTING cid = cid text = 'ORIGINAL_TRANSACTION_NOT_FOUND'
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+        ENDIF.'''
+          new_original = '''        SELECT FROM ztb_pp_alloc_txn
+          FIELDS transaction_type
+          WHERE transaction_uuid = @input-OriginalTransactionUUID
+            AND operation_uuid = @operation-OperationUUID
+            AND transaction_status = @zcl_pp_txn_type=>posted
+          INTO TABLE @DATA(original_transactions)
+          UP TO 2 ROWS.
+        IF lines( original_transactions ) <> 1.
+          report_failure( EXPORTING cid = cid
+                            text = COND string(
+                              WHEN original_transactions IS INITIAL
+                              THEN 'ORIGINAL_TRANSACTION_NOT_FOUND'
+                              ELSE 'ORIGINAL_TRANSACTION_DUPLICATE' )
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+        ENDIF.
+        original_type = original_transactions[ 1 ]-transaction_type.'''
+
+          old_count = text.count(old_original)
+          if old_count != 1:
+              raise SystemExit(f'Expected one original lookup; found {old_count}')
+          text = text.replace(old_original, new_original, 1)
+
+          old_receipt = '''      SELECT SINGLE FROM ztb_pp_alloc_txn FIELDS transaction_uuid
+        WHERE sync_item_uuid = @input-SyncItemUUID INTO @DATA(txn_uuid).
+      result = VALUE #( BASE result ( %cid = cid %param = VALUE #('''
+          new_receipt = '''      SELECT FROM ztb_pp_alloc_txn FIELDS transaction_uuid
+        WHERE sync_item_uuid = @input-SyncItemUUID
+        INTO TABLE @DATA(receipt_rows) UP TO 2 ROWS.
+      IF lines( receipt_rows ) <> 1.
+        report_failure( EXPORTING cid = cid
+                          text = COND string(
+                            WHEN receipt_rows IS INITIAL THEN 'SYNC_RECEIPT_NOT_FOUND'
+                            ELSE 'SYNC_RECEIPT_DUPLICATE' )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      DATA(txn_uuid) = receipt_rows[ 1 ]-transaction_uuid.
+      result = VALUE #( BASE result ( %cid = cid %param = VALUE #('''
+
+          old_count = text.count(old_receipt)
+          if old_count != 5:
+              raise SystemExit(f'Expected five receipt lookups; found {old_count}')
+          text = text.replace(old_receipt, new_receipt)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add serialized/zbp_r_pp_opalloc.clas.locals_imp.abap
+          git commit -m "Harden ambiguous ledger receipt lookups"
+          git push origin HEAD:chatgpt/complete-mobile-sync-operation-master
