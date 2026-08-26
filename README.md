@@ -104,7 +104,6 @@ flowchart TD
 | SAP Production Confirmation adapter | ⏳ Chưa có adapter đã verify trên tenant |
 | `confirm` | 🔒 Fail-closed |
 | `reverse` | 🔒 Fail-closed |
-| Rule đổi người khi ca còn ≥ 60 phút | ⏳ Chưa có authoritative shift source |
 
 > **Quan trọng:** “internal domain logic đã implement” không có nghĩa mobile được gọi trực tiếp. Mutation surface vẫn phải đi qua sync/security boundary khi pipeline đó hoàn thiện.
 
@@ -536,21 +535,7 @@ Reverse cũng phải tuân cùng nguyên tắc.
 
 ---
 
-## 10. Rule ca còn ít nhất 60 phút
-
-Flow nghiệp vụ có rule: chỉ được đổi/ngắt người nhận việc khi thời gian còn lại của ca đạt ngưỡng yêu cầu, hiện được hiểu là **≥ 60 phút**.
-
-Rule này **chưa implement** vì repository chưa có authoritative source cho:
-
-- shift ID;
-- shift start/end time;
-- lịch làm việc theo Plant/Work Center/ngày.
-
-Không hard-code giờ ca vào behavior implementation. Cần xác định nguồn ca chuẩn trước khi bật rule này.
-
----
-
-## 11. Work History
+## 10. Work History
 
 `getWorkHistory` được expose qua `ZUI_PP_OPALLOC` dưới dạng read-only, token-scoped action.
 
@@ -576,7 +561,7 @@ Nguồn số liệu là `POSTED` transaction ledger trong `ZTB_PP_ALLOC_TXN` k�
 
 ---
 
-## 12. External Worker Master
+## 11. External Worker Master
 
 Repository phụ thuộc external master:
 
@@ -598,7 +583,7 @@ Không tự ý thay structure/index của external master từ repository này.
 
 ---
 
-## 13. Service boundaries
+## 12. Service boundaries
 
 | Service | Audience | Surface |
 | --- | --- | --- |
@@ -618,7 +603,7 @@ Hai admin bindings không được đưa vào mobile communication scenario.
 
 ---
 
-## 14. RAP/Fiori composition model
+## 13. RAP/Fiori composition model
 
 ```text
 ZI_MOB_User
@@ -647,7 +632,7 @@ Các child projection dùng `redirected to parent` **không khai báo** `provide
 
 ---
 
-## 15. CDS access-control convention
+## 14. CDS access-control convention
 
 | Layer | Authorization check | Ghi chú |
 | --- | --- | --- |
@@ -662,7 +647,7 @@ Deliberate auth exception:
 
 ---
 
-## 16. Security checklist
+## 15. Security checklist
 
 - Không lưu plaintext access/refresh token.
 - Không nhận authenticated actor UUID từ request.
@@ -677,7 +662,7 @@ Deliberate auth exception:
 
 ---
 
-## 17. Activation / deployment order
+## 16. Activation / deployment order
 
 Sau abapGit pull, nên activate theo dependency thay vì activate ngẫu nhiên:
 
@@ -702,7 +687,7 @@ Sau abapGit pull, nên activate theo dependency thay vì activate ngẫu nhiên:
 
 ---
 
-## 18. Validation hiện tại
+## 17. Validation hiện tại
 
 Latest post-merge audit:
 
@@ -731,7 +716,7 @@ Audit bổ sung đã kiểm tra:
 
 ---
 
-## 19. Test nghiệp vụ tối thiểu trước go-live
+## 18. Test nghiệp vụ tối thiểu trước go-live
 
 1. Tạo Function master.
 2. Tạo Role `A`.
@@ -751,17 +736,16 @@ Audit bổ sung đã kiểm tra:
 
 ---
 
-## 20. Next implementation slice
+## 19. Next implementation slice
 
 Theo đúng flow, thứ tự nên tiếp tục là:
 
-1. Xác định authoritative shift/end-time source để implement rule ≥60 phút.
-2. Hoàn thiện `submitSync` accept-only API.
-3. Hoàn thiện background worker + retry/dead-letter.
-4. Chốt canonical Function IDs cho các external mutation permissions, không tự đoán tên.
-5. Chọn released SAP Production Confirmation API phù hợp target tenant.
-6. Implement confirmation/reversal adapter.
-7. Thêm ABAP Unit/integration tests cho:
+1. Hoàn thiện `submitSync` accept-only API.
+2. Hoàn thiện background worker + retry/dead-letter.
+3. Chốt canonical Function IDs cho các external mutation permissions, không tự đoán tên.
+4. Chọn released SAP Production Confirmation API phù hợp target tenant.
+5. Implement confirmation/reversal adapter.
+6. Thêm ABAP Unit/integration tests cho:
    - UserRole/RoleFunction/RoleWork validation;
    - permission/work-scope resolution;
    - balance transition;
