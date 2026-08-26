@@ -1,0 +1,280 @@
+name: Temporary work-context documentation update
+
+on:
+  push:
+    branches:
+      - chatgpt/role-work-context-fiori-admin
+    paths:
+      - .github/workflows/work-context-docs-temp.yml
+
+permissions:
+  contents: write
+
+jobs:
+  docs-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/role-work-context-fiori-admin
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Update documentation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('README.md')
+          text = p.read_text()
+
+          old = """ZTB_MOB_USER
+    |
+    +-- ZTB_MOB_USR_ROL
+            |
+            +-- ZTB_MOB_ROLE
+                    |
+                    +-- ZTB_MOB_ROL_FNC
+                            |
+                            +-- ZTB_MOB_FUNC
+"""
+          new = """ZTB_MOB_USER
+    |
+    +-- ZTB_MOB_USR_ROL
+            |
+            +-- ZTB_MOB_ROLE
+                    |
+                    +-- ZTB_MOB_ROL_FNC --> ZTB_MOB_FUNC
+                    |
+                    +-- ZTB_MOB_ROL_WRK --> ZTB_MOB_WORK
+"""
+          if old not in text:
+              raise SystemExit('README RBAC diagram anchor missing')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              "Login/refresh trả `_Permissions` để mobile biết màn hình nào cần hiển thị.",
+              "Login/refresh trả cả `_Permissions` và `_WorkContexts`: permission quyết định chức năng, còn work context quyết định Plant/Work Center mà tài khoản được thao tác.",
+              1)
+
+          section4 = """## 4. Work context và scope theo Role
+
+Work context là authorization scope nghiệp vụ, không phải dữ liệu client tự khai. Hai bảng theo flow đã được đưa vào model:
+
+| Table | Vai trò |
+| --- | --- |
+| `ZTB_MOB_WORK` | Danh mục `WorkID`, tên vị trí, Plant, Work Center, bộ phận, location và trạng thái active |
+| `ZTB_MOB_ROL_WRK` | Mapping N:M giữa Role và Work Context |
+
+Luồng hiệu lực:
+
+```text
+User
+  -> UserRole
+      -> active Role
+          -> RoleWork
+              -> active Work Context
+```
+
+`login` và `refresh` đọc lại chuỗi trên server và trả `_WorkContexts`; cùng một `WorkID` được cấp qua nhiều role chỉ xuất hiện một lần. Client dùng danh sách này để chọn ngữ cảnh làm việc, nhưng danh sách trả về **không phải authorization proof**.
+
+Trước khi `initialAssign`, `transfer` hoặc `recall` thay đổi balance/ledger, backend lấy actor từ token rồi kiểm tra `Plant + WorkCenter` của operation có nằm trong một Work Context active của một Role active được gán cho user hay không. Không thuộc scope thì trả `WORK_CONTEXT_NOT_ALLOWED`.
+
+### Quản trị trên Fiori Elements
+
+Không tách Work thành một app độc lập. Thiết kế giữ đúng hai app quản trị:
+
+- **User Administration** (`ZUI_MOB_USER_ADM`): tạo tài khoản và gán Role ban đầu trong cùng action dialog; Object Page có facet Roles để gán thêm/bỏ role.
+- **RBAC & Work Administration** (`ZUI_MOB_RBAC_ADM`): Role Object Page có facet Functions và Work Contexts; Work master nằm cùng service và là trang phụ/value help, không cần thêm Launchpad tile riêng.
+
+Chi tiết entity set, page map và bước tạo service binding/app trên tenant: [`docs/FIORI_ELEMENTS_ADMIN.md`](docs/FIORI_ELEMENTS_ADMIN.md).
+
+### Ca làm việc
+
+Work master hiện xác định Plant/Work Center/bộ phận/location. **Shift master / thời điểm kết thúc ca vẫn chưa có authoritative source trong repository.** Vì vậy rule trong WF:
+
+> Chỉ cho phép đổi người thực hiện khi thời gian còn lại của ca >= 60 phút
+
+vẫn chưa được implement. Không hard-code giờ ca cho đến khi có source/contract chính thức.
+
+---
+"""
+          pattern = r"## 4\. Work context\n.*?\n---\n"
+          text, count = re.subn(pattern, section4, text, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit('README section 4 anchor missing')
+
+          text = text.replace(
+              "1. Session/token hợp lệ.\n2. User có quyền tương ứng với operation contract khi được expose qua mobile sync path.\n3. Operation tồn tại và có quantity hợp lệ.",
+              "1. Session/token hợp lệ.\n2. User có quyền tương ứng với operation contract khi được expose qua mobile sync path.\n3. Plant + Work Center của operation thuộc Work Context hiệu lực của actor.\n4. Operation tồn tại và có quantity hợp lệ.",
+              1)
+          # Renumber the remainder of this one list only.
+          text = text.replace(
+              "4. UoM khớp operation.\n5. Worker active đúng Plant / Work Center / Execution Date.\n6. Worker password đúng.\n7. `SyncItemUUID` chưa được xử lý.\n8. Tổng lượng initial assignment không vượt operation quantity.\n9. Balance `(OperationUUID, WorkerID)` không bị duplicate.",
+              "5. UoM khớp operation.\n6. Worker active đúng Plant / Work Center / Execution Date.\n7. Worker password đúng.\n8. `SyncItemUUID` chưa được xử lý.\n9. Tổng lượng initial assignment không vượt operation quantity.\n10. Balance `(OperationUUID, WorkerID)` không bị duplicate.",
+              1)
+
+          text = text.replace(
+              "| `ZUI_MOB_RBAC_ADM` | Fiori Admin | role/function/role-function maintenance |",
+              "| `ZUI_MOB_RBAC_ADM` | Fiori Admin | role + function + work-context maintenance trong cùng admin surface |",
+              1)
+
+          text = text.replace(
+              "| `ZTB_MOB_USR_ROL` | User → Role |\n| `ZTB_MOB_CONFIG` | Environment/security configuration |",
+              "| `ZTB_MOB_USR_ROL` | User → Role |\n| `ZTB_MOB_WORK` | Work Context master: Plant / Work Center / bộ phận / location |\n| `ZTB_MOB_ROL_WRK` | Role → Work Context (N:M) |\n| `ZTB_MOB_CONFIG` | Environment/security configuration |",
+              1)
+
+          text = text.replace(
+              "| RBAC admin | ✅ Implemented |\n| Token + device validation | ✅ Implemented |",
+              "| RBAC admin | ✅ Implemented |\n| Work Context master + Role → Work mapping | ✅ Implemented |\n| Fiori Elements metadata: User→Roles, Role→Functions/Work | ✅ Implemented |\n| Login/refresh effective Work Contexts | ✅ Implemented |\n| PP mutation Plant/WorkCenter scope check | ✅ Implemented internally |\n| Token + device validation | ✅ Implemented |",
+              1)
+
+          text = text.replace(
+              "Branch flow-alignment gần nhất đã được chạy bằng:\n\n```text\n@abaplint/cli 2.120.35\nABAP language version: Cloud\n0 issue(s) found\n168 file(s) analyzed\n```",
+              "Branch work-context hiện tại đã được chạy bằng:\n\n```text\n@abaplint/cli 2.120.35\nABAP language version: Cloud\n0 issue(s) found\n191 file(s) analyzed\n```",
+              1)
+
+          text = text.replace(
+              "1. Xác định source chính thức cho **shift + shift end time**.",
+              "1. Tạo/activate OData V4 service bindings và publish đúng **2 Fiori Elements admin apps** trên tenant theo `docs/FIORI_ELEMENTS_ADMIN.md`.\n2. Xác định source chính thức cho **shift + shift end time**.",
+              1)
+          for n in range(9,1,-1):
+              # Shift old items 2..10 down by one, but only in remaining-work section.
+              pass
+          p.write_text(text)
+
+          status = Path('IMPLEMENTATION_STATUS.md')
+          s = status.read_text()
+          marker = """- Mobile RBAC layer:
+  - Tables `ZTB_MOB_FUNC`, `ZTB_MOB_ROLE`, `ZTB_MOB_ROL_FNC`,
+    `ZTB_MOB_USR_ROL`.
+"""
+          replacement = """- Mobile RBAC + work-scope layer:
+  - Tables `ZTB_MOB_FUNC`, `ZTB_MOB_ROLE`, `ZTB_MOB_ROL_FNC`,
+    `ZTB_MOB_USR_ROL`, `ZTB_MOB_WORK`, `ZTB_MOB_ROL_WRK`.
+  - Role admin Object Page maintains Functions and Work Contexts as composition
+    children; Work master remains in the same RBAC admin service.
+  - User admin create action requires an initial active Role and creates the
+    user, credential and first role assignment in one RAP LUW; additional roles
+    stay on the same User Object Page.
+  - Login/refresh return effective `_WorkContexts` from active Role -> Work
+    grants, and internal PP mutations reject operations outside the actor's
+    Plant + Work Center scope.
+"""
+          if marker not in s:
+              raise SystemExit('Implementation status RBAC anchor missing')
+          s = s.replace(marker, replacement, 1)
+
+          old_fail = """The following actions are declared but currently return an error message:
+
+- `initialAssign`
+- `transfer`
+- `confirm`
+- `reverse`
+
+This prevents incomplete logic from changing production quantities. They will be
+enabled incrementally after the base objects activate on the target tenant.
+"""
+          new_fail = """`confirm` and `reverse` still return an error by design until the real SAP
+Production Confirmation/reversal adapter is selected and verified on the target
+tenant. `initialAssign`, `transfer` and `recall` now contain internal domain
+logic, worker verification, idempotency and work-scope checks, but remain closed
+from the mobile projection so a device cannot bypass the future sync pipeline.
+"""
+          if old_fail not in s:
+              raise SystemExit('Implementation status fail-closed anchor missing')
+          s = s.replace(old_fail, new_fail, 1)
+          s = s.replace(
+              "| `ZUI_MOB_RBAC_ADM` | Fiori, IAM app | maintain roles, functions, role-to-function grants |",
+              "| `ZUI_MOB_RBAC_ADM` | Fiori, IAM app | maintain roles, functions, Work Context master and role-to-work grants |",
+              1)
+          status.write_text(s)
+
+          doc = Path('docs/FIORI_ELEMENTS_ADMIN.md')
+          doc.write_text("""# CASLA Mobile – Fiori Elements Admin Apps
+
+Backend admin UX is intentionally consolidated into **two** Fiori Elements applications. Do not create separate apps for User Roles, Role Functions or Role Work Contexts; those are composition sections of their parent Object Page.
+
+## 1. User Administration
+
+**Service definition:** `ZUI_MOB_USER_ADM`  
+**Recommended OData V4 binding name:** `ZUI_MOB_USER_ADM_O4`  
+**Main entity set:** `SupervisorAccounts`
+
+Use a List Report + Object Page application.
+
+The List Report exposes the `createUser` action. Its action parameter entity `ZA_MOB_CreateUser` includes `RoleID`, so the create dialog collects the initial active role together with Username, password, name, email and WorkerID. Backend validation rejects a missing/inactive role and deep-creates User + Credential + UserRole in one RAP LUW.
+
+The User Object Page has two logical sections only:
+
+- **Thông tin tài khoản** – identification fields.
+- **Chức danh** – `_Roles` table. Add/remove additional role assignments here; `RoleID` uses the active-role value help.
+
+Do not expose credential/session entities or direct account create/update to the mobile service.
+
+## 2. RBAC & Work Administration
+
+**Service definition:** `ZUI_MOB_RBAC_ADM`  
+**Recommended OData V4 binding name:** `ZUI_MOB_RBAC_ADM_O4`  
+**Main entity set:** `Roles`
+
+Use one List Report + Object Page application with Role as the main navigation object. The Role Object Page contains:
+
+- **Thông tin chức danh** – Role ID/name/status.
+- **Quyền chức năng** – `_Functions` composition table with Function value help.
+- **Vị trí làm việc** – `_WorkAssignments` composition table with Work Context value help and read-only Work Name/Plant/Work Center/Bộ phận/Location columns.
+
+The same service also exposes `WorkContexts` as the Work master. Configure it as a secondary route/page inside this application (for example from an app-level navigation entry), **not as a separate Launchpad app/tile**. This keeps Work master maintenance available without creating a third admin application.
+
+`WorkContexts` supports create/update; delete is deliberately denied. Set `IsActive = 'I'` when a Work ID is retired so existing grants/audit references are not orphaned.
+
+## 3. Value helps
+
+The services expose the value-help entities needed by Fiori Elements:
+
+| Admin service | Value help | Used by |
+| --- | --- | --- |
+| `ZUI_MOB_USER_ADM` | `RoleValueHelp` (`ZI_MOB_Role_VH`) | Initial Role + User Role assignment |
+| `ZUI_MOB_RBAC_ADM` | `FunctionValueHelp` (`ZI_MOB_Func_VH`) | Role Function assignment |
+| `ZUI_MOB_RBAC_ADM` | `WorkContextValueHelp` (`ZI_MOB_Work_VH`) | Role Work assignment |
+
+Role and Work value helps return active entries only. This is UX filtering; RAP/backend validation still verifies the referenced master data and runtime authorization never trusts a client-selected ID by itself.
+
+## 4. Runtime relationship
+
+```text
+User -> UserRole -> active Role
+                    |-> RoleFunction -> Function
+                    |-> RoleWork ----> active Work
+                                      (Plant + WorkCenter)
+```
+
+Login/refresh return `_Permissions` and `_WorkContexts`. `initialAssign`, `transfer` and `recall` re-read effective Work grants and reject an operation whose `Plant + WorkCenter` is outside the authenticated actor's scope.
+
+## 5. Target-tenant setup
+
+After abapGit import and activation:
+
+1. Create/activate OData V4 service binding for `ZUI_MOB_USER_ADM`.
+2. Create/activate OData V4 service binding for `ZUI_MOB_RBAC_ADM`.
+3. Generate the two Fiori Elements apps above from those bindings in SAP Fiori tools/BAS (or the tenant-supported generator).
+4. In the RBAC app manifest, keep `Roles` as the main List Report and add `WorkContexts` as a secondary route/page rather than a separate application.
+5. Publish both apps to the required Launchpad/Spaces/Pages and protect them with the intended IAM business catalogs/roles.
+6. Test create User + initial Role, add/remove User Roles, maintain Role Functions, maintain Work master, and add/remove Role Work grants.
+
+The repository intentionally does not hard-code a tenant OData endpoint or Launchpad target mapping: service-binding URLs, semantic objects and catalogs are tenant-specific. The ABAP source provides the transactional service, value helps and UI annotations required by the two Fiori Elements applications.
+""")
+          PY
+      - name: Validate ABAP source unchanged
+        run: npx --yes @abaplint/cli@2.120.35
+      - name: Commit documentation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md IMPLEMENTATION_STATUS.md docs/FIORI_ELEMENTS_ADMIN.md
+          git diff --cached --quiet && exit 0
+          git commit -m "Document consolidated Fiori admin flow"
+          git push origin HEAD:chatgpt/role-work-context-fiori-admin
