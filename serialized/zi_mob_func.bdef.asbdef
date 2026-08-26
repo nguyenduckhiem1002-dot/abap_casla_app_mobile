@@ -9,6 +9,8 @@ authorization master ( global )
   create;
   update;
   delete;
+  field ( readonly : update ) FuncID;
+  validation validateFunction on save { create; update; field FuncID, FuncName; }
   mapping for ztb_mob_func {
     FuncID = func_id;
     FuncName = func_name;
