@@ -1,0 +1,30 @@
+@Metadata.layer: #CORE
+
+@UI.headerInfo: {
+  typeName: 'Vị trí làm việc',
+  typeNamePlural: 'Vị trí làm việc',
+  title: { value: 'WorkName' }
+}
+annotate entity ZC_MOB_RolWork_Adm with
+{
+  @UI.hidden: true
+  RoleID;
+
+  @UI.lineItem: [{ position: 10 }]
+  WorkID;
+
+  @UI.lineItem: [{ position: 20 }]
+  WorkName;
+
+  @UI.lineItem: [{ position: 30 }]
+  Plant;
+
+  @UI.lineItem: [{ position: 40 }]
+  WorkCenter;
+
+  @UI.lineItem: [{ position: 50 }]
+  BoPhan;
+
+  @UI.lineItem: [{ position: 60 }]
+  Location;
+}

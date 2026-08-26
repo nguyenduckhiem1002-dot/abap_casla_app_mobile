@@ -1,0 +1,54 @@
+@Metadata.layer: #CORE
+
+@UI.headerInfo: {
+  typeName: 'Tài khoản giám sát',
+  typeNamePlural: 'Tài khoản giám sát',
+  title: { value: 'Username' }
+}
+@UI.facet: [
+  { id: 'General', purpose: #STANDARD, type: #IDENTIFICATION_REFERENCE,
+    label: 'Thông tin tài khoản', position: 10 },
+  { id: 'Roles', purpose: #STANDARD, type: #LINEITEM_REFERENCE,
+    label: 'Chức danh', position: 20, targetElement: '_Roles' }
+]
+annotate entity ZC_MOB_User_Adm with
+{
+  @UI.hidden: true
+  UserUUID;
+
+  @UI.selectionField: [{ position: 10 }]
+  @UI.lineItem: [
+    { position: 10 },
+    { position: 90, type: #FOR_ACTION, dataAction: 'createUser', label: 'Tạo tài khoản' }
+  ]
+  @UI.identification: [{ position: 10 }]
+  Username;
+
+  @UI.selectionField: [{ position: 20 }]
+  @UI.lineItem: [{ position: 20 }]
+  @UI.identification: [{ position: 20 }]
+  FullName;
+
+  @UI.lineItem: [{ position: 30 }]
+  @UI.identification: [{ position: 30 }]
+  Email;
+
+  @UI.selectionField: [{ position: 30 }]
+  @UI.lineItem: [{ position: 40 }]
+  @UI.identification: [{ position: 40 }]
+  WorkerID;
+
+  @UI.selectionField: [{ position: 40 }]
+  @UI.lineItem: [{ position: 50 }]
+  @UI.identification: [{ position: 50 }]
+  Status;
+
+  @UI.lineItem: [{ position: 60 }]
+  PasswordChangeRequired;
+
+  @UI.lineItem: [{ position: 70 }]
+  LastLoginAt;
+
+  @UI.lineItem: [{ position: 80 }]
+  CreatedAt;
+}

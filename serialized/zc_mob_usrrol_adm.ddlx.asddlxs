@@ -1,0 +1,21 @@
+@Metadata.layer: #CORE
+
+@UI.headerInfo: {
+  typeName: 'Chức danh',
+  typeNamePlural: 'Chức danh',
+  title: { value: 'RoleName' }
+}
+annotate entity ZC_MOB_UsrRol_Adm with
+{
+  @UI.hidden: true
+  UserUUID;
+
+  @UI.lineItem: [{ position: 10 }]
+  RoleID;
+
+  @UI.lineItem: [{ position: 20 }]
+  RoleName;
+
+  @UI.lineItem: [{ position: 30 }]
+  RoleStatus;
+}

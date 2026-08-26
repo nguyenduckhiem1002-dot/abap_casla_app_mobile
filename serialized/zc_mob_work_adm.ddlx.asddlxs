@@ -1,0 +1,46 @@
+@Metadata.layer: #CORE
+
+@UI.headerInfo: {
+  typeName: 'Vị trí làm việc',
+  typeNamePlural: 'Vị trí làm việc',
+  title: { value: 'WorkName' }
+}
+@UI.facet: [{
+  id: 'General', purpose: #STANDARD, type: #IDENTIFICATION_REFERENCE,
+  label: 'Thông tin vị trí làm việc', position: 10
+}]
+annotate entity ZC_MOB_Work_Adm with
+{
+  @UI.selectionField: [{ position: 10 }]
+  @UI.lineItem: [{ position: 10 }]
+  @UI.identification: [{ position: 10 }]
+  WorkID;
+
+  @UI.selectionField: [{ position: 20 }]
+  @UI.lineItem: [{ position: 20 }]
+  @UI.identification: [{ position: 20 }]
+  WorkName;
+
+  @UI.selectionField: [{ position: 30 }]
+  @UI.lineItem: [{ position: 30 }]
+  @UI.identification: [{ position: 30 }]
+  Plant;
+
+  @UI.selectionField: [{ position: 40 }]
+  @UI.lineItem: [{ position: 40 }]
+  @UI.identification: [{ position: 40 }]
+  WorkCenter;
+
+  @UI.lineItem: [{ position: 50 }]
+  @UI.identification: [{ position: 50 }]
+  BoPhan;
+
+  @UI.lineItem: [{ position: 60 }]
+  @UI.identification: [{ position: 60 }]
+  Location;
+
+  @UI.selectionField: [{ position: 50 }]
+  @UI.lineItem: [{ position: 70 }]
+  @UI.identification: [{ position: 70 }]
+  IsActive;
+}
