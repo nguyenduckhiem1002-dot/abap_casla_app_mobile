@@ -258,13 +258,28 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD transfer.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
+      DATA(cid) = CONV string( <key>-%cid ).
+      TRY.
+          DATA(auth) = zcl_mob_token_validator=>validate_token(
+            token = CONV string( input-AccessToken )
+            device_id = input-DeviceID ).
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu điều chuyển'
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+      ENDTRY.
+      IF auth-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation ALL FIELDS
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
       IF operations IS INITIAL OR input-Quantity <= 0
          OR input-FromWorkerID IS INITIAL OR input-ToWorkerID IS INITIAL
          OR input-FromWorkerID = input-ToWorkerID
-         OR input-ActorUserUUID IS INITIAL OR input-SyncItemUUID IS INITIAL
+         OR input-SyncItemUUID IS INITIAL
          OR input-ExecutionDate IS INITIAL.
         APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
         APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
@@ -275,7 +290,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENDIF.
       DATA(operation) = operations[ 1 ].
       TRY.
-          DATA(worker_auth) = zcl_mob_password_service=>verify_worker(
+          DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-ToWorkerID
             password = CONV string( input-WorkerPassword ) ).
         CATCH cx_abap_message_digest zcx_mob_config INTO DATA(auth_error).
@@ -353,7 +368,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             Quantity UnitOfMeasure ExecutionDate TransactionStatus )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |TRN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
-            ActorUserUUID = input-ActorUserUUID
+            ActorUserUUID = auth-user_uuid
             TransactionType = zcl_pp_txn_type=>transfer
             FromWorkerID = input-FromWorkerID ToWorkerID = input-ToWorkerID
             Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
@@ -366,11 +381,26 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD recall.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
+      DATA(cid) = CONV string( <key>-%cid ).
+      TRY.
+          DATA(auth) = zcl_mob_token_validator=>validate_token(
+            token = CONV string( input-AccessToken )
+            device_id = input-DeviceID ).
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu thu hồi'
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+      ENDTRY.
+      IF auth-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation ALL FIELDS
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
       IF operations IS INITIAL OR input-Quantity <= 0
-         OR input-WorkerID IS INITIAL OR input-ActorUserUUID IS INITIAL
+         OR input-WorkerID IS INITIAL
          OR input-SyncItemUUID IS INITIAL
          OR input-OriginalTransactionUUID IS INITIAL
          OR input-ExecutionDate IS INITIAL.
@@ -383,7 +413,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENDIF.
       DATA(operation) = operations[ 1 ].
       TRY.
-          DATA(worker_auth) = zcl_mob_password_service=>verify_worker(
+          DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-WorkerID
             password = CONV string( input-WorkerPassword ) ).
         CATCH cx_abap_message_digest zcx_mob_config INTO DATA(auth_error).
@@ -443,7 +473,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           ( %cid = |RCL{ sy-tabix }|
             OriginalTransactionUUID = input-OriginalTransactionUUID
             SyncItemUUID = input-SyncItemUUID
-            ActorUserUUID = input-ActorUserUUID
+            ActorUserUUID = auth-user_uuid
             TransactionType = zcl_pp_txn_type=>recall
             WorkerID = input-WorkerID FromWorkerID = input-WorkerID
             Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
