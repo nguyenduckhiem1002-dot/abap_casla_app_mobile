@@ -1,0 +1,5 @@
+@EndUserText.label: 'Đọc quản trị sản lượng - bảo vệ bằng IAM'
+@MappingRole: true
+define role ZC_PP_OPALLOC_ADM {
+  grant select on ZC_PP_OpAlloc_Adm;
+}
