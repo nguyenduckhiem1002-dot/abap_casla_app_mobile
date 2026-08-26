@@ -1,0 +1,41 @@
+@Metadata.layer: #CORE
+@UI: {
+  headerInfo: {
+    typeName: 'Công đoạn sản xuất',
+    typeNamePlural: 'Điều chỉnh sản lượng',
+    title: { value: 'ProductionOrder' },
+    description: { value: 'Operation' }
+  }
+}
+annotate entity ZC_PP_OpAlloc_Adm with
+{
+  @UI.lineItem: [
+    { position: 10, label: 'Lệnh sản xuất' },
+    { type: #FOR_ACTION, dataAction: 'correctConfirm', label: 'Điều chỉnh xác nhận', position: 5 }
+  ]
+  @UI.identification: [ { position: 10, label: 'Lệnh sản xuất' } ]
+  ProductionOrder;
+
+  @UI.lineItem: [ { position: 20, label: 'Công đoạn' } ]
+  @UI.identification: [ { position: 20, label: 'Công đoạn' } ]
+  Operation;
+
+  @UI.lineItem: [ { position: 30, label: 'Mã công đoạn' } ]
+  @UI.identification: [ { position: 30, label: 'Mã công đoạn' } ]
+  MaCongDoan;
+
+  @UI.lineItem: [ { position: 40, label: 'Nhà máy' } ]
+  Plant;
+
+  @UI.lineItem: [ { position: 50, label: 'Tổ/Work Center' } ]
+  WorkCenter;
+
+  @UI.lineItem: [ { position: 60, label: 'Sản lượng công đoạn' } ]
+  OperationQuantity;
+
+  @UI.lineItem: [ { position: 70, label: 'ĐVT' } ]
+  UnitOfMeasure;
+
+  @UI.lineItem: [ { position: 80, label: 'Trạng thái' } ]
+  OperationStatus;
+}
