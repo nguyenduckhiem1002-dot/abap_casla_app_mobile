@@ -12,7 +12,6 @@ define behavior for ZC_MOB_User_Adm alias MobileUser
 
 define behavior for ZC_MOB_UsrRol_Adm alias MobileUserRole
 {
-  use update;
   use delete;
   use association _User;
 }
