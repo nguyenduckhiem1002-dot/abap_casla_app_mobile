@@ -1,4 +1,4 @@
-name: Temporary RBAC syntax inspection
+name: Temporary RBAC syntax fix validation
 
 on:
   push:
@@ -8,20 +8,129 @@ on:
       - .github/workflows/rbac-syntax-fix-temp.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inspect:
+  patch-and-validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: chatgpt/role-work-context-fiori-admin
-      - name: Find MODULE references
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply scoped RAP activation fixes
+        shell: bash
         run: |
-          echo '=== MODULE references ==='
-          grep -RniE '\b(MODULE|Module|module)\b' serialized || true
-      - name: Find redirected-to-parent projections
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new, expected=1):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f'{path}: expected {expected} occurrences of {old!r}, found {count}')
+              p.write_text(text.replace(old, new))
+
+          # MODULE is reserved in ADT table DDL. Rename the persistence field and
+          # the public CDS/action contract consistently to APP_MODULE/AppModule.
+          replace_exact(
+              'serialized/ztb_mob_func.tabl.xml',
+              '<FIELDNAME>MODULE</FIELDNAME>',
+              '<FIELDNAME>APP_MODULE</FIELDNAME>')
+          replace_exact(
+              'serialized/zi_mob_func.ddls.asddls',
+              '      module    as Module',
+              '      app_module as AppModule')
+          replace_exact(
+              'serialized/zi_mob_func.bdef.asbdef',
+              '    Module = module;',
+              '    AppModule = app_module;')
+          replace_exact(
+              'serialized/zi_mob_func_vh.ddls.asddls',
+              '      module    as Module',
+              '      app_module as AppModule')
+          replace_exact(
+              'serialized/zc_mob_func_adm.ddls.asddls',
+              '      Module\n',
+              '      AppModule\n')
+          replace_exact(
+              'serialized/zc_mob_func_adm.ddlx.asddlxs',
+              '  Module;',
+              '  AppModule;')
+          replace_exact(
+              'serialized/zi_mob_rolfunc.ddls.asddls',
+              '      _Func.Module   as Module,',
+              '      _Func.AppModule as AppModule,')
+          replace_exact(
+              'serialized/zc_mob_rolfunc_adm.ddls.asddls',
+              '      Module,',
+              '      AppModule,')
+          replace_exact(
+              'serialized/zc_mob_rolfunc_adm.ddlx.asddlxs',
+              '  Module;',
+              '  AppModule;')
+          replace_exact(
+              'serialized/zi_mob_role.bdef.asbdef',
+              '  field ( readonly ) RoleID, FuncName, Module;',
+              '  field ( readonly ) RoleID, FuncName, AppModule;')
+          replace_exact(
+              'serialized/za_mob_permission.ddls.asddls',
+              '  Module : abap.char(50);',
+              '  AppModule : abap.char(50);')
+          replace_exact(
+              'serialized/zcl_mob_token_validator.clas.abap',
+              '             module    TYPE ztb_mob_func-module,',
+              '             app_module TYPE ztb_mob_func-app_module,')
+          replace_exact(
+              'serialized/zcl_mob_token_validator.clas.abap',
+              '      FIELDS DISTINCT func~func_id, func~func_name, func~module',
+              '      FIELDS DISTINCT func~func_id, func~func_name, func~app_module')
+          replace_exact(
+              'serialized/zbp_i_mob_user.clas.locals_imp.abap',
+              '          Module = permission-module ) )',
+              '          AppModule = permission-app_module ) )',
+              expected=2)
+
+          # Composition child projections with REDIRECTED TO PARENT must not
+          # declare provider contract transactional_query in RAP designtime.
+          for path in (
+              'serialized/zc_mob_rolfunc_adm.ddls.asddls',
+              'serialized/zc_mob_rolwork_adm.ddls.asddls',
+              'serialized/zc_mob_usrrol_adm.ddls.asddls',
+          ):
+              replace_exact(path, '  provider contract transactional_query\n', '')
+          PY
+
+      - name: Verify targeted patterns are gone
+        shell: bash
         run: |
-          echo '=== redirected to parent ==='
-          grep -Rni -B8 -A4 'redirected to parent' serialized/*.ddls.asddls || true
+          if grep -RniE '\b(MODULE|Module|module)\b' serialized; then
+            echo 'Reserved MODULE reference remains' >&2
+            exit 1
+          fi
+          for f in serialized/zc_mob_rolfunc_adm.ddls.asddls serialized/zc_mob_rolwork_adm.ddls.asddls serialized/zc_mob_usrrol_adm.ddls.asddls; do
+            if grep -q 'provider contract transactional_query' "$f"; then
+              echo "Provider contract still present in child projection: $f" >&2
+              exit 1
+            fi
+            grep -q 'redirected to parent' "$f"
+          done
+
+      - name: Validate ABAP Cloud source
+        run: npx --yes @abaplint/cli@2.120.35
+
+      - name: Commit validated fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add serialized/
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix RBAC reserved field and child projection contracts"
+          git push origin HEAD:chatgpt/role-work-context-fiori-admin
