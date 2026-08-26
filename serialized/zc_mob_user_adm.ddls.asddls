@@ -22,12 +22,8 @@ define root view entity ZC_MOB_User_Adm
       FullName,
   @UI.lineItem: [{ position: 40 }]
       Email,
-  @UI.lineItem: [{ position: 42 }]
+  @UI.lineItem: [{ position: 45 }]
       WorkerID,
-  @UI.lineItem: [{ position: 44 }]
-      Plant,
-  @UI.lineItem: [{ position: 46 }]
-      BoPhan,
   @UI.lineItem: [{ position: 50 }]
       Status,
   @UI.lineItem: [{ position: 60 }]

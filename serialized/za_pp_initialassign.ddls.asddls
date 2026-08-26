@@ -9,4 +9,5 @@ define abstract entity ZA_PP_InitialAssign
   AccessToken : abap.char(128);
   DeviceID : abap.char(120);
   WorkerPassword : abap.char(255);
+  SyncItemUUID : sysuuid_x16;
 }

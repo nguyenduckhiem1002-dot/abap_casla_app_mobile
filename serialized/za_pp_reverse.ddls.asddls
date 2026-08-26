@@ -3,4 +3,6 @@ define abstract entity ZA_PP_Reverse
 {
   TransactionUUID : sysuuid_x16;
   Reason : abap.char(120);
+  ActorUserUUID : sysuuid_x16;
+  SyncItemUUID : sysuuid_x16;
 }

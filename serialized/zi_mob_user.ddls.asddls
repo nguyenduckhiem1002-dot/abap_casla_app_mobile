@@ -12,8 +12,6 @@ define root view entity ZI_MOB_User
       full_name                as FullName,
       email                    as Email,
       worker_id                as WorkerID,
-      plant                    as Plant,
-      bo_phan                  as BoPhan,
       status                   as Status,
       failed_login_count       as FailedLoginCount,
       locked_until             as LockedUntil,

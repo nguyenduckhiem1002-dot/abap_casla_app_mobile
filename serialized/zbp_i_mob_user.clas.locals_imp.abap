@@ -114,9 +114,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
     DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     DATA(normalized) = to_lower( condense( CONV string( input-Username ) ) ).
-    IF normalized IS INITIAL OR input-Password IS INITIAL OR input-Plant IS INITIAL.
+    IF normalized IS INITIAL OR input-Password IS INITIAL.
       report_error( EXPORTING cid = cid
-                              text = 'Tên đăng nhập, mật khẩu và nhà máy là bắt buộc'
+                              text = 'Tên đăng nhập và mật khẩu là bắt buộc'
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
@@ -149,14 +149,13 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       SELECT FROM zi_pp_workerref
         FIELDS WorkerUUID
         WHERE WorkerID = @worker_ref_id
-          AND Plant = @input-Plant
           AND ValidFrom <= @today
           AND ValidTo >= @today
         INTO TABLE @DATA(active_workers)
         UP TO 1 ROWS.
       IF active_workers IS INITIAL.
         report_error( EXPORTING cid = cid
-                                text = 'Nhân công không tồn tại hoặc không còn hiệu lực tại nhà máy'
+                                text = 'Nhân công không tồn tại hoặc không còn hiệu lực'
                       CHANGING failed = failed reported = reported ).
         RETURN.
       ENDIF.
@@ -184,11 +183,11 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(now) = utclong_current( ).
     MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
       ENTITY MobileUser CREATE FIELDS
-        ( Username NormalizedUsername FullName Email WorkerID Plant BoPhan
+        ( Username NormalizedUsername FullName Email WorkerID
           Status FailedLoginCount PasswordChangeRequired )
       WITH VALUE #( ( %cid = 'USR' Username = input-Username
         NormalizedUsername = normalized FullName = input-FullName
-        Email = input-Email WorkerID = worker_id Plant = input-Plant BoPhan = input-BoPhan
+        Email = input-Email WorkerID = worker_id
         Status = 'A' FailedLoginCount = 0
         PasswordChangeRequired = abap_true ) )
       ENTITY MobileUser CREATE BY \_Credential FIELDS

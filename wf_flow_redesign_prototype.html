@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Prototype luồng CASLA Mobile được thiết kế lại từ WF.vsdx và đối chiếu source ABAP RAP.">
+  <title>CASLA Mobile Flow Prototype</title>
+  <style>
+    :root{--bg:#f3f6f5;--paper:#fff;--ink:#17231f;--muted:#63716c;--line:#d5dfda;--brand:#125c45;--brand2:#0b4030;--soft:#e6f0ec;--warn:#9a621c;--warn-bg:#fff5df;--bad:#a33f36;--bad-bg:#fff0ed;--ok:#2b745b;--info:#315f86;--radius:10px;--shadow:0 13px 38px rgba(20,65,51,.08)}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.52 "Segoe UI",system-ui,sans-serif}button{font:inherit;cursor:pointer}button:focus-visible{outline:3px solid rgba(18,92,69,.25);outline-offset:2px}.mono{font-family:"Cascadia Code",Consolas,monospace;font-variant-numeric:tabular-nums}.page{max-width:1500px;margin:auto;padding:18px}.hero{display:grid;grid-template-columns:1.5fr .8fr;gap:24px;padding:25px 28px;border-radius:var(--radius);background:#143d31;color:#f5fbf8}.hero h1{margin:0 0 7px;font-size:clamp(27px,4vw,47px);line-height:1.02;letter-spacing:-.035em}.hero p{max-width:760px;margin:0;color:#c8d9d3}.question{align-self:center;padding-left:20px;border-left:1px solid #42685b;color:#c8d9d3}.question strong{display:block;margin-bottom:5px;color:#fff}.truth{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px}.truth span{padding:6px 9px;border-radius:5px;background:var(--paper);box-shadow:var(--shadow);font-size:11px}.truth b{margin-right:4px}.implemented b{color:var(--ok)}.designed b{color:var(--warn)}.gap b{color:var(--bad)}
+    .layout{display:grid;grid-template-columns:minmax(0,1.5fr) 360px;gap:18px}.main,.side{min-width:0}.section{margin-bottom:15px;padding:19px;background:var(--paper);border-radius:var(--radius);box-shadow:var(--shadow)}h2{margin:0 0 13px;font-size:19px}h3{margin:0 0 8px;font-size:15px}.scenario-tabs{display:flex;gap:4px;overflow:auto;padding-bottom:4px}.scenario-tab{flex:0 0 auto;padding:8px 10px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-weight:650}.scenario-tab.active{border-color:var(--brand);color:var(--brand2)}.scenario-copy{margin:10px 0 13px;color:var(--muted)}.walk-actions,.free-actions{display:flex;gap:7px;flex-wrap:wrap}.action{padding:8px 11px;border:0;border-radius:7px;background:var(--soft);color:var(--brand2);font-weight:650}.action.primary{background:var(--brand);color:#fff}.action.danger{background:var(--bad-bg);color:var(--bad)}.action:disabled{opacity:.42;cursor:not-allowed}.walk-step.done{background:#d6ebe2}.walk-step.current{box-shadow:inset 0 0 0 2px var(--brand)}
+    .map{overflow:auto;padding-bottom:5px}.lane{display:grid;grid-template-columns:130px repeat(6,minmax(125px,1fr));gap:7px;min-width:960px;margin-bottom:8px}.lane-name{display:flex;align-items:center;padding:10px;color:var(--muted);font-weight:700}.node{position:relative;min-height:74px;padding:11px;border:1px solid var(--line);border-radius:7px;background:#fafcfb}.node small{display:block;margin-top:5px;color:var(--muted)}.node.actual{border-left:4px solid var(--ok)}.node.planned{border-left:4px solid var(--warn);background:#fffbf1}.node.missing{border-left:4px solid var(--bad);background:#fff7f5}.node.active{box-shadow:0 0 0 3px rgba(18,92,69,.19);background:#eef7f3}.node.complete{background:#dceee7}.node:not(:last-child):after{content:"›";position:absolute;right:-7px;top:24px;z-index:2;color:#87938f;font-size:18px}.node.empty{visibility:hidden}.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:11px}.legend i{display:inline-block;width:4px;height:13px;margin-right:5px;vertical-align:-2px}.legend .l-ok{background:var(--ok)}.legend .l-plan{background:var(--warn)}.legend .l-gap{background:var(--bad)}
+    .state-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.state-item{padding:10px;background:#f5f8f7;border-radius:7px}.state-item small{display:block;color:var(--muted)}.state-item strong{display:block;margin-top:2px}.message{margin-top:10px;padding:10px;border-left:3px solid var(--info);background:#eef5fb;color:#294e6c}.message.error{border-color:var(--bad);background:var(--bad-bg);color:#792f29}.message.success{border-color:var(--ok);background:#eaf6f0;color:#205a45}.data-impact{width:100%;border-collapse:collapse;font-size:11px}.data-impact th,.data-impact td{padding:8px 7px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.data-impact th{color:var(--muted)}.status{font-weight:700}.status.actual{color:var(--ok)}.status.planned{color:var(--warn)}.status.missing{color:var(--bad)}.audit{max-height:245px;overflow:auto;margin:0;padding:0;list-style:none}.audit li{padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}.audit time{margin-right:7px;color:var(--muted)}.balance{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.balance div{padding:9px;background:#f5f8f7;border-radius:7px}.balance small{display:block;color:var(--muted)}.balance strong{font-size:16px}.corrections{margin:0;padding-left:18px;color:var(--muted)}.corrections li{margin-bottom:7px}.corrections code{color:var(--ink)}
+    @media(max-width:1050px){.layout{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr;gap:14px}.side .section{margin:0}.hero{grid-template-columns:1fr}.question{padding:14px 0 0;border-left:0;border-top:1px solid #42685b}}
+    @media(max-width:700px){.page{padding:9px}.hero{padding:20px}.side{display:block}.side .section{margin-bottom:12px}.state-grid{grid-template-columns:1fr}.balance{grid-template-columns:1fr}.section{padding:14px}}
+  </style>
+</head>
+<body>
+<main class="page">
+  <header class="hero">
+    <div><h1>CASLA Mobile production flow</h1><p>Luồng được sắp lại từ đăng nhập đến giao việc, xác nhận, lịch sử và báo cáo. Mỗi bước chỉ rõ phần nào đã có trong ABAP và phần nào còn là thiết kế.</p></div>
+    <div class="question"><strong>Câu hỏi prototype</strong>Flow nghiệp vụ trong WF.vsdx có đủ trạng thái, điểm kiểm soát và nguồn dữ liệu để triển khai an toàn không?</div>
+  </header>
+  <div class="truth"><span class="implemented"><b>Đã có</b> Auth, RBAC, token validation, work history</span><span class="designed"><b>Thiết kế</b> Work context, worker password, sync processing</span><span class="gap"><b>Chưa có</b> PP write actions, bg worker, SAP confirmation adapter</span></div>
+
+  <div class="layout">
+    <div class="main">
+      <section class="section">
+        <h2>Walkthrough nghiệp vụ</h2>
+        <div class="scenario-tabs" id="scenario-tabs"></div>
+        <p class="scenario-copy" id="scenario-copy"></p>
+        <div class="walk-actions" id="walk-actions"></div>
+      </section>
+
+      <section class="section">
+        <h2>Bản đồ flow đã chuẩn hóa</h2>
+        <div class="map" id="flow-map">
+          <div class="lane"><div class="lane-name">Identity</div><div class="node actual" data-step="login">Đăng nhập<small>ZUI_MOB_AUTH.login</small></div><div class="node actual" data-step="auth">User, credential, lockout<small>USER + CRED</small></div><div class="node actual" data-step="permissions">Quyền hiệu lực<small>USR_ROL → ROLE → FUNC</small></div><div class="node planned" data-step="context">Chọn phiên làm việc<small>Plant, work center, ca, ngày</small></div><div class="node actual" data-step="overview">Tổng quan<small>Menu từ _Permissions</small></div><div class="node empty"></div></div>
+          <div class="lane"><div class="lane-name">Giao việc</div><div class="node actual" data-step="openAssign">Mở tạo phân công<small>Operation headers</small></div><div class="node planned" data-step="checkOrder">Kiểm tra LSX/công đoạn<small>Released PP interface</small></div><div class="node planned" data-step="pickWorker">Chọn worker + số lượng<small>ZI_PP_WorkerRef</small></div><div class="node planned" data-step="verifyWorker">Worker nhập mật khẩu<small>Supervisor device</small></div><div class="node missing" data-step="queueAssign">Ghi Sync H/I<small>submitSync chưa có</small></div><div class="node missing" data-step="postAssign">Cập nhật balance + ledger<small>initialAssign fail-closed</small></div></div>
+          <div class="lane"><div class="lane-name">Xác nhận</div><div class="node actual" data-step="openConfirm">Chọn worker<small>Balance trong ngày</small></div><div class="node planned" data-step="enterConfirm">Nhập SL xác nhận<small>Không vượt remaining</small></div><div class="node planned" data-step="verifyConfirm">Worker nhập mật khẩu<small>Trên máy giám sát</small></div><div class="node missing" data-step="queueConfirm">Ghi Sync H/I<small>CONFIRM item</small></div><div class="node missing" data-step="sapConfirm">Xác nhận SAP<small>Adapter chưa chọn</small></div><div class="node missing" data-step="postConfirm">Balance + ledger<small>confirm fail-closed</small></div></div>
+          <div class="lane"><div class="lane-name">Tra cứu</div><div class="node actual" data-step="history">Lịch sử trong ngày<small>getWorkHistory D</small></div><div class="node actual" data-step="report">Ngày, tuần, tháng<small>D / W / M</small></div><div class="node actual" data-step="customDate">Khoảng ngày tùy chọn<small>C, tối đa 92 ngày</small></div><div class="node actual" data-step="scope">Scope theo quyền<small>TEAM hoặc SELF</small></div><div class="node actual" data-step="ledgerSource">Nguồn ledger POSTED<small>ALLOC_TXN + OP_ALLOC</small></div><div class="node actual" data-step="masterName">Tên worker theo hiệu lực<small>Master chỉ enrich</small></div></div>
+        </div>
+        <div class="legend"><span><i class="l-ok"></i>đã có trong source</span><span><i class="l-plan"></i>đã thiết kế, chưa nối đủ</span><span><i class="l-gap"></i>chưa có implementation</span></div>
+      </section>
+
+      <section class="section">
+        <h2>Thử tự do</h2>
+        <div class="free-actions" id="free-actions"></div>
+      </section>
+    </div>
+
+    <aside class="side">
+      <section class="section">
+        <h2>Trạng thái hiện tại</h2>
+        <div class="state-grid" id="state-grid"></div>
+        <div class="message" id="message">Chọn một walkthrough hoặc bấm thao tác tự do.</div>
+      </section>
+      <section class="section">
+        <h2>Số dư mô phỏng</h2>
+        <div class="balance"><div><small>Đã giao</small><strong id="b-assigned">0 PC</strong></div><div><small>Hoàn thành</small><strong id="b-completed">0 PC</strong></div><div><small>Còn lại</small><strong id="b-remaining">0 PC</strong></div></div>
+      </section>
+      <section class="section">
+        <h2>Object bị tác động</h2>
+        <table class="data-impact"><thead><tr><th>Object</th><th>Vai trò</th><th>Trạng thái</th></tr></thead><tbody id="impact-body"></tbody></table>
+      </section>
+      <section class="section">
+        <h2>Nhật ký trạng thái</h2><ul class="audit" id="audit"></ul>
+      </section>
+      <section class="section">
+        <h2>Tham chiếu đã sửa từ Visio</h2>
+        <ul class="corrections"><li>Username không bằng UserUUID. Backend tìm account rồi lấy <code>UserUUID</code>.</li><li>Credential được tìm bằng <code>UserUUID</code>, không phải Username.</li><li>Source hiện không có <code>ZTB_MOB_ROL_WRK</code> hoặc <code>ZTB_MOB_WORK</code>.</li><li><code>EMP_ALLOC</code> tham chiếu <code>OperationUUID</code>, không chứa ProductionOrder/OperationNo làm FK.</li><li>Ledger hiện chưa có <code>VerifiedWorkerUserUUID</code>.</li><li>Worker password và Sync worker vẫn là thiết kế, không phải chức năng đã chạy.</li></ul>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script>
+  const FlowModel=(()=>{
+    const initial=()=>({stage:'START',userStatus:'UNKNOWN',failedLoginCount:0,locked:false,permissions:[],context:null,screen:'LOGIN',orderStatus:'UNKNOWN',workerVerified:false,syncStatus:'NONE',assigned:0,completed:0,remaining:0,historyScope:'NONE',lastAction:'RESET',message:'Sẵn sàng bắt đầu.'});
+    const reduce=(state,action)=>{const s=structuredClone(state);s.lastAction=action.type;
+      switch(action.type){
+        case'RESET':return initial();
+        case'LOGIN_OK':if(s.locked){s.message='Tài khoản đang bị khóa, không thể đăng nhập.';break}s.userStatus='ACTIVE';s.failedLoginCount=0;s.stage='AUTHENTICATED';s.message='Đăng nhập thành công, session và token được tạo.';break;
+        case'LOGIN_FAIL':s.failedLoginCount++;s.userStatus='REJECTED';s.locked=s.failedLoginCount>=3;s.stage=s.locked?'LOCKED':'LOGIN_REJECTED';s.message=s.locked?'Sai mật khẩu lần 3, tài khoản bị khóa tạm thời.':'Sai thông tin đăng nhập, tăng FailedLoginCount.';break;
+        case'LOAD_PERMISSIONS':if(s.stage!=='AUTHENTICATED'){s.message='Phải đăng nhập thành công trước khi tải quyền.';break}s.permissions=['PP_HIST_TEAM','PP_ASSIGN','PP_CONFIRM'];s.stage='AUTHORIZED';s.message='Đã trả danh sách function hiệu lực trong LoginResult.';break;
+        case'SELECT_CONTEXT':if(!s.permissions.length){s.message='Chưa có quyền hiệu lực để vào phiên làm việc.';break}s.context={date:'2026-08-26',shift:'CA_NGAY',plant:'1000',workCenter:'MAY01',department:'Tổ may 1'};s.stage='CONTEXT_READY';s.screen='OVERVIEW';s.message='Đã chọn context làm việc. Phần lưu/mapping context vẫn cần thiết kế backend.';break;
+        case'OPEN_OVERVIEW':s.screen='OVERVIEW';s.stage='OVERVIEW';s.message='Hiển thị tổng quan theo context và các function được cấp.';break;
+        case'OPEN_ASSIGN':s.screen='ASSIGN';s.stage='ASSIGN_DRAFT';s.workerVerified=false;s.message='Mở form tạo phân công.';break;
+        case'CHECK_ORDER':s.orderStatus='REL';s.stage='ORDER_VALID';s.message='LSX REL, operation YBP1 hợp lệ và chưa bị xóa.';break;
+        case'PICK_WORKER':if(s.orderStatus!=='REL'){s.message='Phải kiểm tra LSX và operation trước.';break}s.stage='WORKER_SELECTED';s.message='Đã chọn CN000001 và nhập 1.000 PC.';break;
+        case'VERIFY_WORKER':if(!['WORKER_SELECTED','CONFIRM_DRAFT'].includes(s.stage)){s.message='Chưa có worker cần xác minh.';break}s.workerVerified=true;s.stage=s.screen==='CONFIRM'?'CONFIRM_VERIFIED':'ASSIGN_VERIFIED';s.message='Worker xác nhận tại popup trên thiết bị giám sát. Đây là thiết kế chưa có trong ABAP.';break;
+        case'QUEUE_ASSIGN':if(!s.workerVerified){s.message='Worker chưa xác minh.';break}s.syncStatus='QUEUED';s.stage='ASSIGN_QUEUED';s.message='Tạo Sync Header và INITIAL_ASSIGN item. submitSync hiện chưa implement.';break;
+        case'POST_ASSIGN':if(s.syncStatus!=='QUEUED'){s.message='Không có item giao việc đang chờ.';break}s.syncStatus='SUCCESS';s.assigned+=1000;s.remaining+=1000;s.stage='ASSIGNED';s.message='Mô phỏng worker nền cập nhật EMP_ALLOC và ghi INITIAL_ASSIGN POSTED.';break;
+        case'OPEN_CONFIRM':if(s.remaining<=0){s.message='Chưa có số lượng còn lại để xác nhận.';break}s.screen='CONFIRM';s.stage='CONFIRM_DRAFT';s.workerVerified=false;s.message='Chọn CN000001, số xác nhận mặc định không vượt số còn lại.';break;
+        case'QUEUE_CONFIRM':if(!s.workerVerified){s.message='Worker chưa xác minh confirm.';break}s.syncStatus='QUEUED';s.stage='CONFIRM_QUEUED';s.message='Tạo CONFIRM item trong Sync Inbox.';break;
+        case'POST_CONFIRM':if(s.syncStatus!=='QUEUED'||s.screen!=='CONFIRM'){s.message='Không có confirm item đang chờ.';break}s.syncStatus='SUCCESS';s.completed+=400;s.remaining-=400;s.stage='CONFIRMED';s.message='Mô phỏng SAP confirmation thành công, balance và ledger được cập nhật.';break;
+        case'RECALL':if(s.remaining<100){s.message='Không đủ số lượng còn lại để thu hồi 100 PC.';break}s.assigned-=100;s.remaining-=100;s.stage='RECALLED';s.message='Thu hồi 100 PC: ghi RECALL ledger và giảm remaining. Backend chưa có constant này.';break;
+        case'OPEN_HISTORY':if(!s.permissions.includes('PP_HIST_TEAM')){s.message='Thiếu PP_HIST_TEAM.';break}s.screen='HISTORY';s.historyScope='TEAM';s.stage='HISTORY';s.message='Lấy lịch sử TEAM từ transaction POSTED, mặc định 30 ngày.';break;
+      }return s};return{initial,reduce};
+  })();
+
+  const scenarios={
+    happy:{label:'Luồng chuẩn',copy:'Đăng nhập, chọn phiên, giao 1.000 PC, confirm 400 PC rồi xem lịch sử.',steps:[['LOGIN_OK','Đăng nhập đúng'],['LOAD_PERMISSIONS','Tải quyền'],['SELECT_CONTEXT','Chọn phiên'],['OPEN_ASSIGN','Mở giao việc'],['CHECK_ORDER','Kiểm tra LSX'],['PICK_WORKER','Chọn worker'],['VERIFY_WORKER','Worker xác nhận'],['QUEUE_ASSIGN','Gửi Sync'],['POST_ASSIGN','Xử lý giao việc'],['OPEN_CONFIRM','Mở xác nhận'],['VERIFY_WORKER','Worker xác nhận'],['QUEUE_CONFIRM','Gửi confirm'],['POST_CONFIRM','Post confirm'],['OPEN_HISTORY','Xem lịch sử']]},
+    lockout:{label:'Sai mật khẩu',copy:'Thử sai mật khẩu ba lần để quan sát lockout và chặn đăng nhập.',steps:[['LOGIN_FAIL','Sai lần 1'],['LOGIN_FAIL','Sai lần 2'],['LOGIN_FAIL','Sai lần 3'],['LOGIN_OK','Thử đăng nhập lại']]},
+    guard:{label:'Chặn sai thứ tự',copy:'Thử giao việc khi chưa kiểm tra LSX và chưa xác minh worker.',steps:[['LOGIN_OK','Đăng nhập'],['LOAD_PERMISSIONS','Tải quyền'],['SELECT_CONTEXT','Chọn phiên'],['OPEN_ASSIGN','Mở giao việc'],['PICK_WORKER','Bỏ qua check LSX'],['QUEUE_ASSIGN','Bỏ qua xác minh']]},
+    recall:{label:'Thu hồi',copy:'Tạo phân công rồi thu hồi 100 PC từ phần còn lại của worker.',steps:[['LOGIN_OK','Đăng nhập'],['LOAD_PERMISSIONS','Tải quyền'],['SELECT_CONTEXT','Chọn phiên'],['OPEN_ASSIGN','Mở giao việc'],['CHECK_ORDER','Kiểm tra LSX'],['PICK_WORKER','Chọn worker'],['VERIFY_WORKER','Worker xác nhận'],['QUEUE_ASSIGN','Gửi Sync'],['POST_ASSIGN','Post giao việc'],['RECALL','Thu hồi 100 PC']]}
+  };
+  const labels={LOGIN_OK:'Đăng nhập đúng',LOGIN_FAIL:'Đăng nhập sai',LOAD_PERMISSIONS:'Tải quyền',SELECT_CONTEXT:'Chọn phiên làm việc',OPEN_OVERVIEW:'Mở tổng quan',OPEN_ASSIGN:'Tạo phân công',CHECK_ORDER:'Kiểm tra LSX',PICK_WORKER:'Chọn worker',VERIFY_WORKER:'Xác minh worker',QUEUE_ASSIGN:'Queue giao việc',POST_ASSIGN:'Post giao việc',OPEN_CONFIRM:'Mở xác nhận',QUEUE_CONFIRM:'Queue confirm',POST_CONFIRM:'Post confirm',RECALL:'Thu hồi 100 PC',OPEN_HISTORY:'Xem lịch sử',RESET:'Reset'};
+  const nodeMap={LOGIN_OK:'login',LOGIN_FAIL:'auth',LOAD_PERMISSIONS:'permissions',SELECT_CONTEXT:'context',OPEN_OVERVIEW:'overview',OPEN_ASSIGN:'openAssign',CHECK_ORDER:'checkOrder',PICK_WORKER:'pickWorker',VERIFY_WORKER:'verifyWorker',QUEUE_ASSIGN:'queueAssign',POST_ASSIGN:'postAssign',OPEN_CONFIRM:'openConfirm',QUEUE_CONFIRM:'queueConfirm',POST_CONFIRM:'postConfirm',RECALL:'postAssign',OPEN_HISTORY:'history'};
+  const impacts={
+    LOGIN_OK:[['ZTB_MOB_USER','Account + lockout','actual'],['ZTB_MOB_CRED','Password hash','actual'],['ZTB_MOB_SESSION','Token hashes','actual']],
+    LOAD_PERMISSIONS:[['ZTB_MOB_USR_ROL','User roles','actual'],['ZTB_MOB_ROLE','Active role','actual'],['ZTB_MOB_ROL_FNC','Role grants','actual'],['ZTB_MOB_FUNC','Functions','actual']],
+    SELECT_CONTEXT:[['Work context persistence','Plant, WC, ca, ngày','missing']],
+    CHECK_ORDER:[['Released PP interface','Order và operation status','planned']],
+    VERIFY_WORKER:[['ZTB_MOB_CRED','Worker credential lookup','planned'],['Verified worker audit','Chưa có field trong ledger','missing']],
+    QUEUE_ASSIGN:[['ZTB_PP_SYNC_H','Batch header','planned'],['ZTB_PP_SYNC_I','INITIAL_ASSIGN item','planned']],
+    POST_ASSIGN:[['ZTB_PP_EMP_ALLOC','Worker balance','planned'],['ZTB_PP_ALLOC_TXN','INITIAL_ASSIGN POSTED','planned']],
+    QUEUE_CONFIRM:[['ZTB_PP_SYNC_H','Batch header','planned'],['ZTB_PP_SYNC_I','CONFIRM item','planned']],
+    POST_CONFIRM:[['SAP confirmation API','Post sản lượng','missing'],['ZTB_PP_EMP_ALLOC','Completed / Remaining','planned'],['ZTB_PP_ALLOC_TXN','CONFIRM POSTED','planned']],
+    RECALL:[['ZTB_PP_EMP_ALLOC','Giảm remaining','planned'],['ZTB_PP_ALLOC_TXN','RECALL POSTED','missing']],
+    OPEN_HISTORY:[['ZTB_PP_ALLOC_TXN','Nguồn transaction POSTED','actual'],['ZTB_PP_OP_ALLOC','Thông tin operation','actual'],['ZTB_KB_NHANCONG','Enrich tên theo hiệu lực','actual']]
+  };
+
+  let state=FlowModel.initial(),scenarioKey='happy',scenarioIndex=0,audit=[];
+  const $=id=>document.getElementById(id),fmt=n=>Number(n).toLocaleString('vi-VN'),stamp=()=>new Date().toLocaleTimeString('vi-VN',{hour12:false});
+  function dispatch(type){state=FlowModel.reduce(state,{type});audit.unshift({time:stamp(),type,message:state.message});const sc=scenarios[scenarioKey];if(sc.steps[scenarioIndex]?.[0]===type)scenarioIndex++;render()}
+  function chooseScenario(key){scenarioKey=key;scenarioIndex=0;state=FlowModel.initial();audit=[];render()}
+  function render(){
+    $('scenario-tabs').innerHTML=Object.entries(scenarios).map(([k,v])=>`<button class="scenario-tab ${k===scenarioKey?'active':''}" data-scenario="${k}">${v.label}</button>`).join('');document.querySelectorAll('[data-scenario]').forEach(b=>b.onclick=()=>chooseScenario(b.dataset.scenario));
+    const sc=scenarios[scenarioKey];$('scenario-copy').textContent=sc.copy;$('walk-actions').innerHTML=sc.steps.map((s,i)=>`<button class="action walk-step ${i<scenarioIndex?'done':i===scenarioIndex?'current primary':''}" data-walk="${i}" ${i>scenarioIndex?'disabled':''}>${i+1}. ${s[1]}</button>`).join('');document.querySelectorAll('[data-walk]').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.walk);if(i===scenarioIndex)dispatch(sc.steps[i][0])});
+    $('free-actions').innerHTML=Object.entries(labels).map(([k,v])=>`<button class="action ${k==='RESET'?'danger':''}" data-action="${k}">${v}</button>`).join('');document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>dispatch(b.dataset.action));
+    const fields=[['Stage',state.stage],['Màn hình',state.screen],['User',state.userStatus],['Login sai',state.failedLoginCount],['Locked',state.locked?'Có':'Không'],['Quyền',state.permissions.join(', ')||'Chưa tải'],['Context',state.context?`${state.context.plant}/${state.context.workCenter}/${state.context.shift}`:'Chưa chọn'],['Order status',state.orderStatus],['Worker verified',state.workerVerified?'Có':'Không'],['Sync',state.syncStatus],['History scope',state.historyScope],['Action cuối',state.lastAction]];$('state-grid').innerHTML=fields.map(x=>`<div class="state-item"><small>${x[0]}</small><strong class="mono">${x[1]}</strong></div>`).join('');
+    $('message').textContent=state.message;$('message').className='message '+(state.message.includes('không')||state.message.includes('Thiếu')||state.message.includes('Sai')?'error':state.message.includes('thành công')||state.stage==='CONFIRMED'?'success':'');
+    $('b-assigned').textContent=`${fmt(state.assigned)} PC`;$('b-completed').textContent=`${fmt(state.completed)} PC`;$('b-remaining').textContent=`${fmt(state.remaining)} PC`;
+    document.querySelectorAll('.node').forEach(n=>{n.classList.remove('active','complete');if(n.dataset.step===nodeMap[state.lastAction])n.classList.add('active')});
+    const rows=impacts[state.lastAction]||[];$('impact-body').innerHTML=rows.length?rows.map(r=>`<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td class="status ${r[2]}">${r[2]==='actual'?'Đã có':r[2]==='planned'?'Thiết kế':'Chưa có'}</td></tr>`).join(''):'<tr><td colspan="3">Chưa có object bị tác động.</td></tr>';
+    $('audit').innerHTML=audit.length?audit.map(a=>`<li><time>${a.time}</time><b>${labels[a.type]||a.type}</b><br>${a.message}</li>`).join(''):'<li>Chưa có thao tác.</li>';
+  }
+  render();
+</script>
+</body>
+</html>

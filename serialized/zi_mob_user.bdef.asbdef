@@ -32,8 +32,6 @@ etag master LocalLastChangedAt
     FullName = full_name;
     Email = email;
     WorkerID = worker_id;
-    Plant = plant;
-    BoPhan = bo_phan;
     Status = status;
     FailedLoginCount = failed_login_count;
     LockedUntil = locked_until;

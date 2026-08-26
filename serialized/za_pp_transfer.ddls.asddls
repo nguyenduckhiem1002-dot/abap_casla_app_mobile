@@ -7,4 +7,7 @@ define abstract entity ZA_PP_Transfer
   Quantity : abap.quan(15,3);
   UnitOfMeasure : abap.unit(3);
   ExecutionDate : abap.dats;
+  WorkerPassword : abap.char(255);
+  ActorUserUUID : sysuuid_x16;
+  SyncItemUUID : sysuuid_x16;
 }

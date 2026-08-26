@@ -1,6 +1,6 @@
 # Rà soát bảo mật và hiệu năng ABAP RAP
 
-Ngày rà soát: 20/08/2026  
+Ngày rà soát: 20/08/2026
 Phạm vi: toàn bộ `serialized/` của backend xác thực di động, RBAC và phân bổ
 sản lượng.
 
@@ -110,4 +110,3 @@ sản lượng.
 - Role inactive mất quyền ngay ở request kế tiếp dù token còn hạn.
 - GET các entity nhạy cảm không trả dữ liệu; static action hợp lệ vẫn chạy.
 - Chạy test đồng thời cho create username trùng, failed login và refresh replay.
-

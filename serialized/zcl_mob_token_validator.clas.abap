@@ -203,7 +203,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       result-error_code = 'WORKER_AUTH_FAILED'.
       RETURN.
     ENDIF.
-    
+
     SELECT FROM ztb_mob_cred
       FIELDS password_hash, password_salt, hash_iterations, credential_status
       WHERE user_uuid = @user-user_uuid
@@ -218,7 +218,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       result-error_code = 'WORKER_AUTH_FAILED'.
       RETURN.
     ENDIF.
-    
+
     DATA(hash_value) = hash_password(
       password = password
       salt = CONV string( credential-password_salt )
@@ -229,7 +229,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       result-error_code = 'WORKER_AUTH_FAILED'.
       RETURN.
     ENDIF.
-    
+
     result = VALUE #( is_valid = abap_true
                       worker_user_uuid = user-user_uuid
                       worker_id = user-worker_id ).

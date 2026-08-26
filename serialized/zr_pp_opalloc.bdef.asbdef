@@ -21,6 +21,7 @@ etag master LocalLastChangedAt
 
   action initialAssign parameter ZA_PP_InitialAssign result [1] $self;
   action transfer parameter ZA_PP_Transfer result [1] $self;
+  action recall parameter ZA_PP_Recall result [1] $self;
   action confirm parameter ZA_PP_Confirm result [1] $self;
   action reverse parameter ZA_PP_Reverse result [1] $self;
 
@@ -73,6 +74,7 @@ etag master LocalLastChangedAt
     InitialAssignedQuantity = initial_assigned_qty;
     TransferredInQuantity  = transferred_in_qty;
     TransferredOutQuantity = transferred_out_qty;
+    RecalledQuantity       = recalled_qty;
     CompletedQuantity      = completed_qty;
     RemainingQuantity      = remaining_qty;
     UnitOfMeasure          = uom;
@@ -92,11 +94,13 @@ authorization dependent by _Operation
 {
   field ( numbering : managed, readonly ) TransactionUUID;
   field ( readonly ) OperationUUID, OriginalTransactionUUID,
-                     SyncItemUUID, ActorUserUUID, TransactionType, FromWorkerID,
+                     SyncItemUUID, ActorUserUUID, TransactionType,
+                     OriginalTransactionType, FromWorkerID,
                      ToWorkerID, WorkerID, Quantity, UnitOfMeasure,
                      ExecutionDate, TransactionStatus,
                      SAPConfirmationGroup, SAPConfirmationCount,
-                     SAPErrorCode, SAPErrorText, CreatedBy, CreatedAt,
+                     SAPErrorCode, SAPErrorText, ReversalReason,
+                     CreatedBy, CreatedAt,
                      LocalLastChangedAt;
 
   association _Operation;
@@ -109,6 +113,7 @@ authorization dependent by _Operation
     SyncItemUUID           = sync_item_uuid;
     ActorUserUUID          = actor_user_uuid;
     TransactionType        = transaction_type;
+    OriginalTransactionType = original_transaction_type;
     FromWorkerID           = from_worker_id;
     ToWorkerID             = to_worker_id;
     WorkerID               = worker_id;
@@ -120,6 +125,7 @@ authorization dependent by _Operation
     SAPConfirmationCount   = sap_confirmation_count;
     SAPErrorCode           = sap_error_code;
     SAPErrorText           = sap_error_text;
+    ReversalReason         = reversal_reason;
     CreatedBy              = created_by;
     CreatedAt              = created_at;
     LocalLastChangedAt     = local_last_changed_at;
