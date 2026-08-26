@@ -775,17 +775,25 @@ CLASS lhc_operationallocation IMPLEMENTATION.
 
       DATA original_type TYPE ztb_pp_alloc_txn-transaction_type.
       IF input-OriginalTransactionUUID IS NOT INITIAL.
-        SELECT SINGLE FROM ztb_pp_alloc_txn
-          FIELDS transaction_type
-          WHERE transaction_uuid = @input-OriginalTransactionUUID
-            AND operation_uuid = @operation-OperationUUID
-            AND transaction_status = @zcl_pp_txn_type=>posted
-          INTO @original_type.
-        IF sy-subrc <> 0.
+        READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+          ENTITY AllocationTransaction
+            FIELDS ( OperationUUID TransactionType TransactionStatus )
+            WITH VALUE #(
+              ( %key-TransactionUUID = input-OriginalTransactionUUID ) )
+            RESULT DATA(original_transactions).
+        IF lines( original_transactions ) <> 1.
           report_failure( EXPORTING cid = cid text = 'ORIGINAL_TRANSACTION_NOT_FOUND'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
         ENDIF.
+        DATA(original_transaction) = original_transactions[ 1 ].
+        IF original_transaction-OperationUUID <> operation-OperationUUID
+           OR original_transaction-TransactionStatus <> zcl_pp_txn_type=>posted.
+          report_failure( EXPORTING cid = cid text = 'ORIGINAL_TRANSACTION_NOT_FOUND'
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+        ENDIF.
+        original_type = original_transaction-TransactionType.
       ENDIF.
 
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
@@ -1088,8 +1096,29 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      SELECT SINGLE FROM ztb_pp_alloc_txn FIELDS transaction_uuid
-        WHERE sync_item_uuid = @input-SyncItemUUID INTO @DATA(txn_uuid).
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation BY \_Transactions
+          FIELDS ( TransactionUUID SyncItemUUID )
+          WITH VALUE #( ( %key-OperationUUID = context-operation_uuid ) )
+          RESULT DATA(receipt_rows).
+      DATA(receipt_count) = 0.
+      DATA txn_uuid TYPE ztb_pp_alloc_txn-transaction_uuid.
+      LOOP AT receipt_rows ASSIGNING FIELD-SYMBOL(<receipt>)
+        WHERE SyncItemUUID = input-SyncItemUUID.
+        receipt_count = receipt_count + 1.
+        txn_uuid = <receipt>-TransactionUUID.
+        IF receipt_count > 1.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF receipt_count <> 1.
+        report_failure( EXPORTING cid = cid
+                          text = COND string(
+                            WHEN receipt_count = 0 THEN 'SYNC_RECEIPT_NOT_FOUND'
+                            ELSE 'SYNC_RECEIPT_DUPLICATE' )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       result = VALUE #( BASE result ( %cid = cid %param = VALUE #(
         Status = 'SUCCESS' SyncItemUUID = input-SyncItemUUID TransactionUUID = txn_uuid
         ProductionOrder = context-production_order Operation = context-operation_no
@@ -1129,8 +1158,29 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      SELECT SINGLE FROM ztb_pp_alloc_txn FIELDS transaction_uuid
-        WHERE sync_item_uuid = @input-SyncItemUUID INTO @DATA(txn_uuid).
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation BY \_Transactions
+          FIELDS ( TransactionUUID SyncItemUUID )
+          WITH VALUE #( ( %key-OperationUUID = context-operation_uuid ) )
+          RESULT DATA(receipt_rows).
+      DATA(receipt_count) = 0.
+      DATA txn_uuid TYPE ztb_pp_alloc_txn-transaction_uuid.
+      LOOP AT receipt_rows ASSIGNING FIELD-SYMBOL(<receipt>)
+        WHERE SyncItemUUID = input-SyncItemUUID.
+        receipt_count = receipt_count + 1.
+        txn_uuid = <receipt>-TransactionUUID.
+        IF receipt_count > 1.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF receipt_count <> 1.
+        report_failure( EXPORTING cid = cid
+                          text = COND string(
+                            WHEN receipt_count = 0 THEN 'SYNC_RECEIPT_NOT_FOUND'
+                            ELSE 'SYNC_RECEIPT_DUPLICATE' )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       result = VALUE #( BASE result ( %cid = cid %param = VALUE #(
         Status = 'SUCCESS' SyncItemUUID = input-SyncItemUUID TransactionUUID = txn_uuid
         ProductionOrder = context-production_order Operation = context-operation_no
@@ -1170,8 +1220,29 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      SELECT SINGLE FROM ztb_pp_alloc_txn FIELDS transaction_uuid
-        WHERE sync_item_uuid = @input-SyncItemUUID INTO @DATA(txn_uuid).
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation BY \_Transactions
+          FIELDS ( TransactionUUID SyncItemUUID )
+          WITH VALUE #( ( %key-OperationUUID = context-operation_uuid ) )
+          RESULT DATA(receipt_rows).
+      DATA(receipt_count) = 0.
+      DATA txn_uuid TYPE ztb_pp_alloc_txn-transaction_uuid.
+      LOOP AT receipt_rows ASSIGNING FIELD-SYMBOL(<receipt>)
+        WHERE SyncItemUUID = input-SyncItemUUID.
+        receipt_count = receipt_count + 1.
+        txn_uuid = <receipt>-TransactionUUID.
+        IF receipt_count > 1.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF receipt_count <> 1.
+        report_failure( EXPORTING cid = cid
+                          text = COND string(
+                            WHEN receipt_count = 0 THEN 'SYNC_RECEIPT_NOT_FOUND'
+                            ELSE 'SYNC_RECEIPT_DUPLICATE' )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       result = VALUE #( BASE result ( %cid = cid %param = VALUE #(
         Status = 'SUCCESS' SyncItemUUID = input-SyncItemUUID TransactionUUID = txn_uuid
         ProductionOrder = context-production_order Operation = context-operation_no
@@ -1211,8 +1282,29 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      SELECT SINGLE FROM ztb_pp_alloc_txn FIELDS transaction_uuid
-        WHERE sync_item_uuid = @input-SyncItemUUID INTO @DATA(txn_uuid).
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation BY \_Transactions
+          FIELDS ( TransactionUUID SyncItemUUID )
+          WITH VALUE #( ( %key-OperationUUID = context-operation_uuid ) )
+          RESULT DATA(receipt_rows).
+      DATA(receipt_count) = 0.
+      DATA txn_uuid TYPE ztb_pp_alloc_txn-transaction_uuid.
+      LOOP AT receipt_rows ASSIGNING FIELD-SYMBOL(<receipt>)
+        WHERE SyncItemUUID = input-SyncItemUUID.
+        receipt_count = receipt_count + 1.
+        txn_uuid = <receipt>-TransactionUUID.
+        IF receipt_count > 1.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF receipt_count <> 1.
+        report_failure( EXPORTING cid = cid
+                          text = COND string(
+                            WHEN receipt_count = 0 THEN 'SYNC_RECEIPT_NOT_FOUND'
+                            ELSE 'SYNC_RECEIPT_DUPLICATE' )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       result = VALUE #( BASE result ( %cid = cid %param = VALUE #(
         Status = 'SUCCESS' SyncItemUUID = input-SyncItemUUID TransactionUUID = txn_uuid
         ProductionOrder = context-production_order Operation = context-operation_no
@@ -1252,8 +1344,29 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      SELECT SINGLE FROM ztb_pp_alloc_txn FIELDS transaction_uuid
-        WHERE sync_item_uuid = @input-SyncItemUUID INTO @DATA(txn_uuid).
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation BY \_Transactions
+          FIELDS ( TransactionUUID SyncItemUUID )
+          WITH VALUE #( ( %key-OperationUUID = context-operation_uuid ) )
+          RESULT DATA(receipt_rows).
+      DATA(receipt_count) = 0.
+      DATA txn_uuid TYPE ztb_pp_alloc_txn-transaction_uuid.
+      LOOP AT receipt_rows ASSIGNING FIELD-SYMBOL(<receipt>)
+        WHERE SyncItemUUID = input-SyncItemUUID.
+        receipt_count = receipt_count + 1.
+        txn_uuid = <receipt>-TransactionUUID.
+        IF receipt_count > 1.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF receipt_count <> 1.
+        report_failure( EXPORTING cid = cid
+                          text = COND string(
+                            WHEN receipt_count = 0 THEN 'SYNC_RECEIPT_NOT_FOUND'
+                            ELSE 'SYNC_RECEIPT_DUPLICATE' )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       result = VALUE #( BASE result ( %cid = cid %param = VALUE #(
         Status = 'SUCCESS' SyncItemUUID = input-SyncItemUUID TransactionUUID = txn_uuid
         ProductionOrder = context-production_order Operation = context-operation_no
