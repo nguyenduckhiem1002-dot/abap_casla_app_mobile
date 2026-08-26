@@ -1,85 +1,174 @@
-# CASLA Mobile – Fiori Elements Admin Apps
+# CASLA – Fiori Elements Administration
 
-Backend admin UX is intentionally consolidated into **two** Fiori Elements applications. Do not create separate apps for User Roles, Role Functions or Role Work Contexts; those are composition sections of their parent Object Page.
+The ABAP backend currently provides four IAM-protected administration surfaces. User/Role mapping tables remain compositions inside their parent apps; they are not separate Launchpad apps.
 
 ## 1. User Administration
 
-**Service definition:** `ZUI_MOB_USER_ADM`  
-**Recommended OData V4 binding name:** `ZUI_MOB_USER_ADM_O4`  
-**Main entity set:** `SupervisorAccounts`
+**Service:** `ZUI_MOB_USER_ADM`  
+**OData V4 binding:** `ZUI_MOB_USER_ADM_O4`  
+**Main entity:** `SupervisorAccounts`
 
-Use a **List Report + Object Page** application.
+Recommended pattern: **List Report + Object Page**.
 
-The List Report exposes the `createUser` action. Its parameter entity `ZA_MOB_CreateUser` contains `RoleID`, so the create dialog collects the initial active Role together with Username, password, name, email and WorkerID. Backend validation rejects a missing/inactive Role and deep-creates **User + Credential + initial UserRole in one RAP LUW**.
+`createUser` collects Username, password, FullName, email, WorkerID and an initial active Role. Backend deep-creates User + Credential + initial UserRole in one RAP LUW.
 
-The User Object Page has two logical sections:
+Additional Roles are maintained through the `_Roles` composition on the same User Object Page.
 
-1. **Thông tin tài khoản** – account identification fields.
-2. **Chức danh** – `_Roles` table. Add/remove additional Role assignments here; `RoleID` uses the active-role value help.
-
-Do not expose credential/session entities or direct account create/update to the mobile service.
+Do not expose credential/session entities to the mobile production service.
 
 ## 2. RBAC & Work Administration
 
-**Service definition:** `ZUI_MOB_RBAC_ADM`  
-**Recommended OData V4 binding name:** `ZUI_MOB_RBAC_ADM_O4`  
-**Main entity set:** `Roles`
+**Service:** `ZUI_MOB_RBAC_ADM`  
+**OData V4 binding:** `ZUI_MOB_RBAC_ADM_O4`  
+**Main entity:** `Roles`
 
-Use one **List Report + Object Page** application with Role as the main navigation object. The Role Object Page contains:
+Recommended pattern: **List Report + Object Page**.
 
-1. **Thông tin chức danh** – Role ID/name/status.
-2. **Quyền chức năng** – `_Functions` composition table with Function value help.
-3. **Vị trí làm việc** – `_WorkAssignments` composition table with Work Context value help and read-only Work Name/Plant/Work Center/Bộ phận/Location columns.
+Role Object Page sections:
 
-The same service exposes `WorkContexts` as the Work master. Configure it as a **secondary route/page inside this application**, not as another Launchpad app/tile. This keeps Work master maintenance available without creating a third admin application.
+1. Role information.
+2. `_Functions` – Role -> Function assignments.
+3. `_WorkAssignments` – Role -> Work Context assignments.
 
-`WorkContexts` supports create/update. Hard delete is deliberately denied; set `IsActive = 'I'` when a Work ID is retired so existing grants/audit references are not orphaned.
+The same service exposes Function and Work master pages as secondary routes. Do not create separate apps for `UserRole`, `RoleFunction` or `RoleWork` mapping rows.
 
-## 3. Value helps
+Work hard delete is denied; retire a Work Context with `IsActive = 'I'`.
 
-| Admin service | Value help | Used by |
-| --- | --- | --- |
-| `ZUI_MOB_USER_ADM` | `RoleValueHelp` (`ZI_MOB_Role_VH`) | Initial Role + User Role assignment |
-| `ZUI_MOB_RBAC_ADM` | `FunctionValueHelp` (`ZI_MOB_Func_VH`) | Role Function assignment |
-| `ZUI_MOB_RBAC_ADM` | `WorkContextValueHelp` (`ZI_MOB_Work_VH`) | Role Work assignment |
+## 3. Master Công đoạn
 
-Role and Work value helps return active entries only. This is UX filtering; RAP/backend validation still verifies referenced master data, and runtime authorization never trusts a client-selected ID by itself.
+**Service:** `ZUI_MD_CONGDOAN_ADM`  
+**OData V4 binding:** `ZUI_MD_CONGDOAN_ADM_O4`  
+**Main entity:** `CongDoan`
 
-## 4. Runtime relationship
+Purpose: maintain versioned business enrichment for SAP `OperationStandardTextCode`.
+
+Business key:
 
 ```text
-User -> UserRole -> active Role
-                    |-> RoleFunction -> Function
-                    |-> RoleWork ----> active Work
-                                      (Plant + WorkCenter)
+MaCongDoan + ValidFrom
 ```
 
-`login` and `refresh` return both `_Permissions` and `_WorkContexts`.
+Fields include:
 
-Before `initialAssign`, `transfer` or `recall` changes balance/ledger, backend derives the actor from the access token and verifies that the operation's `Plant + WorkCenter` is inside an active Work Context granted through one of the actor's active Roles. A client cannot expand its work scope by changing the payload.
+- MaCongDoan
+- TenCongDoan
+- BoPhan
+- DonGiaXM
+- DonGiaGC
+- ValidFrom
+- ValidTo
 
-## 5. Target-tenant setup
+Backend rules:
 
-After abapGit import and activation:
+- no negative rates;
+- ValidTo >= ValidFrom;
+- same MaCongDoan cannot have overlapping validity intervals;
+- hard delete denied.
 
-1. Create and activate an **OData V4** service binding for `ZUI_MOB_USER_ADM`.
-2. Create and activate an **OData V4** service binding for `ZUI_MOB_RBAC_ADM`.
-3. Generate the two Fiori Elements apps above from those bindings in SAP Fiori tools/BAS, or the tenant-supported generator.
-4. In the RBAC app, keep `Roles` as the main List Report and route `WorkContexts` as a secondary page instead of a separate application.
-5. Publish only these two admin apps to the required Launchpad/Spaces/Pages.
-6. Protect them with the intended IAM business catalogs/business roles.
-7. Test the complete admin flow:
+This master is intended for future wage/price reporting. It does not authorize or validate a Production Order/Operation; the PP API still validates SAP live data independently.
+
+## 4. Production Allocation Correction & Audit
+
+**Service:** `ZUI_PP_ALLOC_ADM`  
+**OData V4 binding:** `ZUI_PP_ALLOC_ADM_O4`
+
+Entity sets:
+
+- `OperationAllocations` – operation snapshot and controlled action `correctConfirm`;
+- `AllocationTransactions` – read-only transaction ledger/audit list.
+
+This app exists because users may discover that a previously confirmed quantity was entered incorrectly.
+
+### Security rule
+
+There is deliberately no generic update for `ZTB_PP_EMP_ALLOC` and no update/delete for `ZTB_PP_ALLOC_TXN`.
+
+The supported correction flow is:
+
+```text
+Find the CONFIRM transaction in AllocationTransactions
+        ↓
+Open/select the corresponding OperationAllocation
+        ↓
+correctConfirm(
+  TransactionUUID,
+  NewQuantity,
+  UnitOfMeasure,
+  ReasonCode,
+  ReasonText
+)
+        ↓
+Backend validates current effective quantity and balance
+        ↓
+Update current balance
+        +
+Append immutable CORRECTION transaction
+```
+
+If a CONFIRM has already been reversed, correction is rejected.
+
+`CORRECTION.Quantity` is the signed delta from the prior effective quantity, which allows exact audit reconstruction.
+
+Examples:
+
+```text
+CONFIRM 100
+CORRECTION -20  -> effective 80
+CORRECTION +10  -> effective 90
+```
+
+The Fiori action uses SAP IAM/business-user context. It does not accept a mobile CASLA `ActorUserUUID`; standard RAP audit fields record the SAP user responsible for the Fiori change.
+
+## 5. Mobile vs Fiori service boundary
+
+| Surface | Audience | Mutation model |
+| --- | --- | --- |
+| `ZUI_MOB_AUTH` | Mobile communication user | login/session actions |
+| `ZUI_PP_OPALLOC` | Mobile communication user | token-guarded command/status/history actions |
+| `ZUI_MOB_USER_ADM` | Fiori IAM | controlled User/Role administration |
+| `ZUI_MOB_RBAC_ADM` | Fiori IAM | Role/Function/Work administration |
+| `ZUI_MD_CONGDOAN_ADM` | Fiori IAM | versioned Công đoạn master |
+| `ZUI_PP_ALLOC_ADM` | Fiori IAM | controlled quantity correction + read-only audit |
+
+Never put an admin service binding into the mobile communication scenario.
+
+Likewise, the mobile service must not expose raw EmployeeAllocation or AllocationTransaction entity sets.
+
+## 6. Value helps and backend validation
+
+| Service | Value help | Purpose |
+| --- | --- | --- |
+| `ZUI_MOB_USER_ADM` | `RoleValueHelp` | Initial/additional Role |
+| `ZUI_MOB_RBAC_ADM` | `FunctionValueHelp` | Role Function |
+| `ZUI_MOB_RBAC_ADM` | `WorkContextValueHelp` | Role Work Context |
+
+Value-help filtering is UX only. Direct OData/EML requests are still validated in RAP behavior.
+
+## 7. Target-tenant setup
+
+After abapGit import:
+
+1. Activate DDIC tables before dependent CDS/BDEF/classes.
+2. Activate and publish:
+   - `ZUI_MOB_USER_ADM_O4`
+   - `ZUI_MOB_RBAC_ADM_O4`
+   - `ZUI_MD_CONGDOAN_ADM_O4`
+   - `ZUI_PP_ALLOC_ADM_O4`
+3. Generate the Fiori Elements shells from the activated bindings on the real tenant.
+4. Assign separate IAM business catalogs/roles appropriate to each admin responsibility.
+5. Do not hard-code tenant-specific OData URLs, semantic objects, destinations or Launchpad target mappings into this backend repository.
+6. Test at minimum:
    - create User + initial Role;
-   - add/remove additional User Roles;
-   - create/update Role;
-   - add/remove Role Functions;
-   - create/update/deactivate Work Context;
-   - add/remove Role Work Context assignments;
-   - verify login/refresh returns effective Work Contexts;
-   - verify PP mutation outside assigned Plant/Work Center is rejected.
+   - add/remove Role/Function/Work assignments;
+   - deactivate Role/Work and verify effective access changes;
+   - maintain non-overlapping Công đoạn versions;
+   - locate a CONFIRM ledger row;
+   - execute `correctConfirm` and verify current balance + CORRECTION row;
+   - verify raw ledger update/delete is unavailable;
+   - verify admin services are not reachable through the mobile communication role.
 
-## 6. Why no UI5 manifest is hard-coded in this repository
+## 8. Frontend repository boundary
 
-This repository currently contains the ABAP RAP backend, not a tenant-bound UI5 deployment project. Service-binding URLs, semantic objects, Launchpad target mappings, catalogs and destinations are tenant-specific.
+This repository owns the ABAP RAP backend, stable annotations, service definitions and serialized bindings. Tenant-specific Fiori app shells may be generated in BAS/Fiori tools after activation.
 
-The ABAP source therefore owns what can be made stable here: transactional projections, composition structure, UI annotations, value helps, service definitions and server-side validation. Do not commit a fabricated OData URL merely to make a `manifest.json` look complete; generate the Fiori Elements shells from the actual activated bindings on the target tenant.
+Do not commit fabricated runtime URLs just to make a frontend manifest appear complete.
