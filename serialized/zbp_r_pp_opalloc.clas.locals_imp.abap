@@ -781,13 +781,9 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             WITH VALUE #(
               ( %key-TransactionUUID = input-OriginalTransactionUUID ) )
             RESULT DATA(original_transactions).
-        IF lines( original_transactions ) <> 1.
-          report_failure( EXPORTING cid = cid text = 'ORIGINAL_TRANSACTION_NOT_FOUND'
-                          CHANGING failed = failed reported = reported ).
-          CONTINUE.
-        ENDIF.
-        DATA(original_transaction) = original_transactions[ 1 ].
-        IF original_transaction-OperationUUID <> operation-OperationUUID
+        DATA(original_transaction) = VALUE #( original_transactions[ 1 ] OPTIONAL ).
+        IF original_transaction IS INITIAL
+           OR original_transaction-OperationUUID <> operation-OperationUUID
            OR original_transaction-TransactionStatus <> zcl_pp_txn_type=>posted.
           report_failure( EXPORTING cid = cid text = 'ORIGINAL_TRANSACTION_NOT_FOUND'
                           CHANGING failed = failed reported = reported ).
