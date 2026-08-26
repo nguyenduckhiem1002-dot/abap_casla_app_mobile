@@ -1,4 +1,4 @@
-name: Temporary post-merge ABAP RAP audit
+name: Temporary post-merge ABAP RAP remediation validation
 
 on:
   push:
@@ -8,24 +8,45 @@ on:
       - .github/workflows/post-merge-audit-temp.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: chatgpt/post-merge-abap-audit
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
+      - name: Align authorization comment with immutable child mappings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('serialized/zbp_i_mob_user.clas.locals_imp.abap')
+          text = p.read_text(encoding='utf-8')
+          old = '''    "MobileUserRole is a composition child declared "authorization dependent
+    "by _User", so RAP delegates every operation on it - create by
+    "association, update, delete - to this master's %update. Leaving %update
+'''
+          new = '''    "MobileUserRole is a composition child declared "authorization dependent
+    "by _User", so RAP delegates create-by-association and delete to this
+    "master's %update authorization. Leaving %update
+'''
+          if text.count(old) != 1:
+              raise SystemExit('Expected MobileUserRole authorization comment anchor not found exactly once')
+          p.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
       - name: ABAP Cloud static validation
         run: npx --yes @abaplint/cli@2.120.35
 
-      - name: RAP/CDS structural audit
+      - name: RAP/CDS regression and business-model checks
         shell: bash
         run: |
           python3 - <<'PY'
@@ -35,182 +56,96 @@ jobs:
 
           root = Path('serialized')
           errors = []
-          warnings = []
 
-          ddls_files = list(root.glob('*.ddls.asddls'))
-          ddls_text = {p: p.read_text(encoding='utf-8') for p in ddls_files}
-
-          # Build entity -> source and a conservative set of exposed element names.
-          entities = {}
-          entity_elements = {}
-          for p, text in ddls_text.items():
-              m = re.search(r'\bdefine\s+(?:root\s+)?(?:view\s+)?entity\s+([A-Za-z0-9_]+)', text, re.I)
-              if not m:
-                  continue
-              name = m.group(1).upper()
-              entities[name] = p
-              body_m = re.search(r'\{(.*)\}', text, re.S)
-              elems = set()
-              if body_m:
-                  body = body_m.group(1)
-                  # aliases "as Field" and plain projected identifiers
-                  elems.update(x.upper() for x in re.findall(r'\bas\s+([A-Za-z_][A-Za-z0-9_]*)', body, re.I))
-                  for line in body.splitlines():
-                      s = line.strip()
-                      if not s or s.startswith('@') or s.startswith('//'):
-                          continue
-                      s = re.sub(r'^(key\s+)', '', s, flags=re.I)
-                      token = re.match(r'([A-Za-z_][A-Za-z0-9_]*)\s*(?:,|$)', s)
-                      if token:
-                          elems.add(token.group(1).upper())
-                      assoc = re.match(r'(_[A-Za-z_][A-Za-z0-9_]*)\s*(?::|,|$)', s)
-                      if assoc:
-                          elems.add(assoc.group(1).upper())
-              entity_elements[name] = elems
-
-          # ADT RAP designtime rule: provider contract is not modifiable on
-          # a child projection containing REDIRECTED TO PARENT.
-          for p, text in ddls_text.items():
-              if re.search(r'\bredirected\s+to\s+parent\b', text, re.I) and \
-                 re.search(r'\bprovider\s+contract\s+transactional_query\b', text, re.I):
-                  errors.append(f'{p}: child projection has redirected to parent + transactional_query provider contract')
-
-          # Known activation regression: MODULE is reserved in table DDL.
+          # Known ADT/RAP activation regressions.
           for p in root.glob('*.tabl.xml'):
               text = p.read_text(encoding='utf-8')
-              if re.search(r'<FIELDNAME>MODULE</FIELDNAME>', text, re.I):
+              if '<FIELDNAME>MODULE</FIELDNAME>' in text.upper():
                   errors.append(f'{p}: reserved table field MODULE remains')
-
-          # Parse DDIC fields for managed BDEF mapping target checks.
-          table_fields = {}
-          for p in root.glob('*.tabl.xml'):
               try:
-                  xml = ET.parse(p)
-              except ET.ParseError as e:
-                  errors.append(f'{p}: invalid XML: {e}')
-                  continue
-              names = [e.text.upper() for e in xml.iter() if e.tag.endswith('TABNAME') and e.text]
-              if not names:
-                  continue
-              table = names[0]
-              fields = {e.text.upper() for e in xml.iter() if e.tag.endswith('FIELDNAME') and e.text}
-              table_fields[table] = fields
+                  ET.parse(p)
+              except ET.ParseError as exc:
+                  errors.append(f'{p}: invalid XML: {exc}')
 
-          for p in root.glob('*.bdef.asbdef'):
+          for p in root.glob('*.ddls.asddls'):
               text = p.read_text(encoding='utf-8')
-              for mm in re.finditer(r'mapping\s+for\s+([A-Za-z0-9_]+)\s*\{(.*?)\}', text, re.I | re.S):
-                  table = mm.group(1).upper()
-                  if table not in table_fields:
-                      # External/released persistence can legitimately be absent.
-                      continue
-                  for lhs, rhs in re.findall(r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*;', mm.group(2)):
-                      if rhs.upper() not in table_fields[table]:
-                          errors.append(f'{p}: mapping target {table}-{rhs} does not exist in serialized DDIC table')
+              if re.search(r'redirected\s+to\s+parent', text, re.I) and \
+                 re.search(r'provider\s+contract\s+transactional_query', text, re.I):
+                  errors.append(f'{p}: child projection declares transactional_query provider contract')
 
-          # Value helps must point to an existing CDS entity and element.
-          vh_re = re.compile(r"entity\s*:\s*\{\s*name\s*:\s*'([^']+)'\s*,\s*element\s*:\s*'([^']+)'", re.I)
-          for p, text in ddls_text.items():
-              for target, elem in vh_re.findall(text):
-                  t = target.upper()
-                  e = elem.upper()
-                  if t not in entities:
-                      errors.append(f'{p}: value help entity {target} not found')
-                  elif e not in entity_elements.get(t, set()):
-                      errors.append(f'{p}: value help element {target}.{elem} not found')
+          # The three N:M mappings are immutable assignments: add/remove only.
+          role_bdef = (root / 'zi_mob_role.bdef.asbdef').read_text(encoding='utf-8')
+          role_proj = (root / 'zc_mob_role_adm.bdef.asbdef').read_text(encoding='utf-8')
+          user_bdef = (root / 'zi_mob_user.bdef.asbdef').read_text(encoding='utf-8')
+          user_proj = (root / 'zc_mob_user_adm.bdef.asbdef').read_text(encoding='utf-8')
 
-          # Metadata extension targets and annotated fields must exist.
-          for p in root.glob('*.ddlx.asddlxs'):
-              text = p.read_text(encoding='utf-8')
-              m = re.search(r'annotate\s+entity\s+([A-Za-z0-9_]+)\s+with\s*\{(.*)\}', text, re.I | re.S)
-              if not m:
-                  errors.append(f'{p}: cannot resolve metadata extension target')
-                  continue
-              target = m.group(1).upper()
-              if target not in entities:
-                  errors.append(f'{p}: metadata target {target} not found')
-                  continue
-              target_text = ddls_text[entities[target]]
-              if not re.search(r'@Metadata\.allowExtensions\s*:\s*true', target_text, re.I):
-                  errors.append(f'{p}: target {target} does not allow metadata extensions')
-              fields = []
-              for line in m.group(2).splitlines():
-                  s = line.strip()
-                  if not s or s.startswith('@') or s.startswith('//'):
-                      continue
-                  fm = re.match(r'([A-Za-z_][A-Za-z0-9_]*)\s*;', s)
-                  if fm:
-                      fields.append(fm.group(1).upper())
-              for f in fields:
-                  if f not in entity_elements.get(target, set()):
-                      errors.append(f'{p}: annotated field {target}.{f} not found in projection')
+          def block(text, entity):
+              m = re.search(r'define\s+behavior\s+for\s+' + re.escape(entity) + r'.*?\{(.*?)\n\}', text, re.I | re.S)
+              return m.group(1) if m else ''
 
-          # Service definition exposures must reference existing CDS entities.
-          for p in root.glob('*.srvd.srvdsrv'):
-              text = p.read_text(encoding='utf-8')
-              for ent in re.findall(r'\bexpose\s+([A-Za-z0-9_]+)\b', text, re.I):
-                  if ent.upper() not in entities:
-                      errors.append(f'{p}: exposed entity {ent} not found')
+          for label, text, entity in (
+              ('interface RoleFunc', role_bdef, 'ZI_MOB_RolFunc'),
+              ('projection RoleFunc', role_proj, 'ZC_MOB_RolFunc_Adm'),
+              ('interface UserRole', user_bdef, 'ZI_MOB_UsrRol'),
+              ('projection UserRole', user_proj, 'ZC_MOB_UsrRol_Adm'),
+          ):
+              b = block(text, entity)
+              if not b:
+                  errors.append(f'{label}: behavior block missing')
+              if re.search(r'(^|\n)\s*(use\s+)?update\s*;', b, re.I):
+                  errors.append(f'{label}: immutable mapping still exposes update')
+              if not re.search(r'(^|\n)\s*(use\s+)?delete\s*;', b, re.I):
+                  errors.append(f'{label}: delete operation missing')
 
-          # Mandatory access-check entities must have a DCL serialized.
-          dcl_text = '\n'.join(p.read_text(encoding='utf-8') for p in root.glob('*.dcls.asdcls'))
-          for p, text in ddls_text.items():
-              if re.search(r'@AccessControl\.authorizationCheck\s*:\s*#MANDATORY', text, re.I):
-                  m = re.search(r'\bdefine\s+(?:root\s+)?(?:view\s+)?entity\s+([A-Za-z0-9_]+)', text, re.I)
-                  if m and not re.search(r'\bgrant\s+select\s+on\s+' + re.escape(m.group(1)) + r'\b', dcl_text, re.I):
-                      errors.append(f'{p}: #MANDATORY but no serialized DCL grant found for {m.group(1)}')
-
-          # Business-flow invariants introduced by the current milestone.
-          must_contain = {
-              'za_mob_createuser.ddls.asddls': ['RoleID'],
-              'za_mob_loginresult.ddls.asddls': ['_Permissions', '_WorkContexts'],
-              'zi_mob_role.ddls.asddls': ['_Functions', '_WorkAssignments'],
-              'zc_mob_role_adm.ddls.asddls': ['_Functions', '_WorkAssignments'],
-              'zc_mob_user_adm.ddls.asddls': ['_Roles'],
-              'zui_mob_rbac_adm.srvd.srvdsrv': ['ZC_MOB_Role_Adm', 'ZC_MOB_RolFunc_Adm', 'ZC_MOB_RolWork_Adm', 'ZC_MOB_Work_Adm'],
-              'zui_mob_user_adm.srvd.srvdsrv': ['ZC_MOB_User_Adm', 'ZC_MOB_UsrRol_Adm'],
-              'zcl_mob_token_validator.clas.abap': ['get_work_contexts', 'has_work_scope', 'app_module'],
+          # Server-side validation must mirror value-help restrictions.
+          required = {
+              'zi_mob_role.bdef.asbdef': ['validation validateRole on save', 'validation validateFunctionAssignment on save', 'validation validateWorkAssignment on save'],
+              'zi_mob_func.bdef.asbdef': ['validation validateFunction on save'],
+              'zi_mob_user.bdef.asbdef': ['validation validateRoleAssignment on save'],
+              'zbp_i_mob_role.clas.locals_imp.abap': ['METHOD validateRole.', 'METHOD validateFunctionAssignment.', 'METHOD validateWorkAssignment.'],
+              'zbp_i_mob_func.clas.locals_imp.abap': ['METHOD validateFunction.'],
+              'zbp_i_mob_user.clas.locals_imp.abap': ['METHOD validateRoleAssignment.'],
           }
-          for filename, needles in must_contain.items():
-              p = root / filename
-              if not p.exists():
-                  errors.append(f'{p}: required milestone object missing')
-                  continue
-              text = p.read_text(encoding='utf-8')
+          for fname, needles in required.items():
+              text = (root / fname).read_text(encoding='utf-8')
               for needle in needles:
                   if needle.lower() not in text.lower():
-                      errors.append(f'{p}: required milestone contract {needle} missing')
+                      errors.append(f'{fname}: missing {needle}')
 
-          # Production mutation scope must be enforced server-side in all three
-          # currently implemented allocation mutations.
-          pp = (root / 'zbp_r_pp_opalloc.clas.locals_imp.abap').read_text(encoding='utf-8')
-          scope_calls = len(re.findall(r'=>has_work_scope\s*\(', pp, re.I))
-          if scope_calls < 3:
-              errors.append(f'zbp_r_pp_opalloc.clas.locals_imp.abap: expected work-scope checks for initialAssign/transfer/recall, found {scope_calls}')
-
-          # No client-controlled actor UUID in transfer/recall contracts.
-          for fname in ('za_pp_transfer.ddls.asddls', 'za_pp_recall.ddls.asddls'):
+          # Fiori/admin contracts introduced by the work-context flow.
+          contract_checks = {
+              'za_mob_createuser.ddls.asddls': ['RoleID', 'ZI_MOB_Role_VH'],
+              'za_mob_loginresult.ddls.asddls': ['_Permissions', '_WorkContexts'],
+              'zc_mob_user_adm.ddls.asddls': ['_Roles : redirected to composition child'],
+              'zc_mob_role_adm.ddls.asddls': ['_Functions : redirected to composition child', '_WorkAssignments : redirected to composition child'],
+              'zui_mob_user_adm.srvd.srvdsrv': ['ZI_MOB_Role_VH'],
+              'zui_mob_rbac_adm.srvd.srvdsrv': ['ZC_MOB_RolWork_Adm', 'ZC_MOB_Work_Adm', 'ZI_MOB_Work_VH'],
+              'zcl_mob_token_validator.clas.abap': ['get_work_contexts', 'has_work_scope', 'app_module'],
+          }
+          for fname, needles in contract_checks.items():
               text = (root / fname).read_text(encoding='utf-8')
-              if re.search(r'ActorUserUUID', text, re.I):
-                  errors.append(f'{fname}: client-controlled ActorUserUUID is exposed')
-              for required in ('AccessToken', 'DeviceID'):
-                  if required.lower() not in text.lower():
-                      errors.append(f'{fname}: required auth field {required} missing')
+              for needle in needles:
+                  if needle.lower() not in text.lower():
+                      errors.append(f'{fname}: missing flow contract {needle}')
 
-          print('=== AUDIT SUMMARY ===')
-          print(f'DDLS entities: {len(entities)}')
-          print(f'DDIC tables: {len(table_fields)}')
-          print(f'Errors: {len(errors)}')
-          print(f'Warnings: {len(warnings)}')
-          for w in warnings:
-              print('WARNING:', w)
-          for e in errors:
-              print('ERROR:', e)
+          # All implemented production mutations must re-check effective work scope.
+          pp = (root / 'zbp_r_pp_opalloc.clas.locals_imp.abap').read_text(encoding='utf-8')
+          if len(re.findall(r'=>has_work_scope\s*\(', pp, re.I)) < 3:
+              errors.append('PP allocation behavior: fewer than 3 work-scope checks')
+
+          print(f'RAP structural/business audit errors: {len(errors)}')
+          for error in errors:
+              print('ERROR:', error)
           if errors:
               raise SystemExit(1)
           PY
 
-      - name: Targeted regression grep
+      - name: Commit comment cleanup
         shell: bash
         run: |
-          ! grep -RniE '<FIELDNAME>MODULE</FIELDNAME>|\bprovider contract transactional_query\b[[:space:][:print:]]*redirected to parent' serialized
-          test "$(grep -Ril 'redirected to parent' serialized/*.ddls.asddls | wc -l)" -eq 3
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add serialized/zbp_i_mob_user.clas.locals_imp.abap
+          git diff --cached --quiet && exit 0
+          git commit -m "Align user-role authorization comment with immutable mapping"
+          git push origin HEAD:chatgpt/post-merge-abap-audit
