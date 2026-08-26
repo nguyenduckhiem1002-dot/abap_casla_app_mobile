@@ -1,285 +1,179 @@
 # Trạng thái xử lý code review
 
-## Đã sửa trong source
+> Tài liệu này mô tả **trạng thái cuối hiện tại** của branch triển khai. Các ghi chú hardening cũ về `submitSync`, Sync Inbox, bgPF/SAP background worker và standard SAP Production Confirmation adapter đã được loại khỏi working tree vì kiến trúc đó đã bị thay thế. Lịch sử chi tiết vẫn còn nguyên trong Git history.
 
-- Bổ sung ABAP language version 5 cho metadata class, CDS, service definition
-  và table thuộc repo.
-- Sửa `ZBP_I_MOB_USER` thành behavior pool của `ZI_MOB_USER`.
-- Xóa bản sao table trong `src/tables`; `serialized/` là nguồn deploy duy nhất.
-- Bổ sung `@Semantics.*` cho audit field và local ETag.
-- Gộp khai báo UUID managed numbering, bổ sung create-by-association và update
-  trong projection BDEF.
-- Normalize `ValidTo = 00000000` thành `99991231` tại `ZI_PP_WORKERREF`.
-- Worker validator chỉ dùng type của wrapper CDS và hỗ trợ mass validation.
-- Auth action kiểm tra input rỗng/batch, đưa error vào cả `FAILED` và `REPORTED`,
-  capture lỗi EML và kiểm tra credential bị thiếu.
-- Login không còn trả message phân biệt credential inactive.
-- Đổi mật khẩu revoke toàn bộ session đang hoạt động.
-- Tách `ZUI_MOB_AUTH`, `ZUI_MOB_USER_ADM` khỏi service nghiệp vụ; auth entity
-  không cho phép read.
-- Domain BO đang fail-closed: direct mutation bị từ chối cho tới khi sync worker
-  xác thực token và gọi EML nội bộ.
-- Thêm validation bất biến cho `RemainingQuantity`.
-- Nâng cấu hình abaplint từ parser-only lên syntax/DDIC/runtime-oriented rules.
+## Kiến trúc đã chốt
 
-## Đã sửa trong đợt hardening 2
+CASLA Mobile ghi nhận nghiệp vụ trực tiếp vào các Z-table trên SAP thông qua RAP/OData V4 custom API của project.
 
-- Login không còn set `FAILED` khi sai mật khẩu: kết quả trả `Status = 'F'`
-  trong `ZA_MOB_LoginResult` để save sequence vẫn chạy và
-  `FailedLoginCount`/`LockedUntil` được persist (khôi phục lockout).
-  Client mobile phải đọc `Status` thay vì dựa vào HTTP error.
-- Xóa compensation DELETE session thừa trong `login` (LUW đã rollback khi
-  `FAILED` được set).
-- So sánh password hash bằng `equals_constant_time` (login và changePassword).
-- `changePassword` giữ lại session hiện tại khi revoke; chỉ các session khác
-  bị thu hồi với `RevokedReason = 'PWD_CHANGE'`.
-- Bật lại rule abaplint `unused_variables`, `unused_methods`.
+```text
+Mobile background queue
+        |
+        v
+ZUI_MOB_AUTH / ZUI_PP_OPALLOC
+        |
+        +-- validate CASLA token + session + device
+        +-- validate RBAC + Work Context server-side
+        +-- resolve Production Order / Operation từ released SAP CDS
+        +-- validate worker + worker password + UoM + quantity
+        +-- execute domain command trong managed RAP LUW
+        |
+        +--> ZTB_PP_EMP_ALLOC     (current balance)
+        +--> ZTB_PP_ALLOC_TXN     (immutable ledger)
+```
 
-## Đã sửa trong đợt hardening 3 (verify trên ADT)
+Không có:
 
-- `@Capabilities.ReadRestrictions.Readable` được ADT xác nhận **không tồn tại**
-  trong ABAP CDS (annotation của OData vocabulary, không phải ABAP annotation).
-  Thay bằng CDS access control. Lưu ý ràng buộc DCL trên transactional query
-  (ADT: "Access condition violates restrictions in projection views"): DCL của
-  projection chỉ được phép `INHERITING CONDITIONS FROM ENTITY` hoặc full access
-  rule, và projection tự áp access control của entity gốc theo 1:1. Thiết kế:
-  - `ZI_MOB_USER` (DCL mới): deny-all bằng điều kiện luôn sai trên view gốc.
-  - `ZC_MOB_USER` (DCL): `inheriting conditions from entity ZI_MOB_User`
-    → service auth bị chặn read hoàn toàn.
-  - `ZC_MOB_USER_ADM` (DCL mới): full access rule để override deny-all của
-    gốc; việc giới hạn ai gọi được service admin nằm ở IAM/business catalog
-    (mục 3 phần tenant).
-  - `ZI_MOB_User`, `ZC_MOB_User`, `ZC_MOB_User_Adm` đều đặt
-    `@AccessControl.authorizationCheck: #MANDATORY`.
-  Cả 4 action của service auth đều là static action nên không bị ảnh hưởng
-  bởi việc chặn read qua query path.
-- Sửa lỗi cú pháp typed literal tại `ZI_PP_WORKERREF`: `dats'...'` →
-  `abap.dats'...'` (ADT báo `Unexpected word`). Đây cũng chính là nguyên nhân
-  abaplint báo "zi_pp_workerref not found" (parser fail nên view không được
-  nhận diện).
-- `createUser`: ADT xác nhận result row của static action không có `%tky`
-  (`No component exists with the name "%TKY"`). Bỏ `%tky` khỏi result và gán
-  `%param` qua `CORRESPONDING` để loại các thành phần `%` của READ result.
-  Không còn mục nào chờ verify trên ADT.
+- standard SAP Production Confirmation posting;
+- SAP Application Job/bgPF để xử lý command mobile;
+- Sync Inbox `ZTB_PP_SYNC_H` / `ZTB_PP_SYNC_I`;
+- raw CRUD từ mobile vào allocation/ledger table.
 
-## Đã sửa trong đợt hardening 4 (luồng đồng bộ)
+## Mobile command surface
 
-- `zcl_mob_token_validator` nhận thêm `hash_token` và `validate_token`: băm
-  token giờ chỉ có một implementation duy nhất. Trước đây logic băm nằm trong
-  `PRIVATE SECTION` của `lhc_mobileuser`, nên mọi entry point mới (submitSync)
-  buộc phải chép lại; hai bản chép sẽ trôi khỏi nhau khi đổi cách băm, và
-  session sẽ hợp lệ ở đường này nhưng vô hiệu ở đường kia. `changePassword`
-  đã chuyển sang `validate_token`; handler giữ `hash_token` riêng chỉ để gọi
-  lại validator.
-- `ZC_PP_OpAlloc` (BDEF projection): bỏ `use create/update` và 4 `use action`.
-  Đường ghi tương lai đi qua sync worker gọi EML nội bộ trên `ZR_PP_OpAlloc`,
-  nên projection không bao giờ cần các thao tác này. Trước đây metadata OData
-  vẫn công bố chúng rồi bị `get_global_authorizations` từ chối — bề mặt thừa.
-- `IMPLEMENTATION_STATUS.md`: bổ sung unique index còn thiếu cho
-  `ZTB_PP_ALLOC_TXN` (chống replay ở tầng DB) và chốt bảng giá trị
-  `SYNC_STATUS` / `ITEM_STATUS` cùng quy tắc retry.
+`ZUI_PP_OPALLOC` chỉ expose command/status/history contract an toàn:
 
-Còn để mở trong luồng đồng bộ (chưa làm):
+- `submitInitialAssign`
+- `submitTransfer`
+- `submitRecall`
+- `submitConfirm`
+- `submitReverse`
+- `getSyncStatus`
+- `getWorkHistory`
 
-- App chưa có đường đọc kết quả: `ZA_PP_SubmitSyncResult` không có chi tiết
-  item, và không có CDS view nào trên `ZTB_PP_SYNC_H/_I`. Cần projection chỉ
-  đọc để app poll trạng thái từng item.
-- Chốt bgPF **per-header** thay vì per-item: thứ tự nghiệp vụ
-  (initialAssign → transfer → confirm) và đơn vị khóa là công đoạn.
-- `MOBILE_CHANGED_AT` do thiết bị gửi lên: chỉ dùng để sắp thứ tự trong một
-  batch, không dùng làm mốc nghiệp vụ. `EXECUTION_DATE` nên chặn ngày tương
-  lai và ngày quá cũ.
+Mỗi mutation dùng `SyncItemUUID` ổn định do mobile sinh **trước khi gửi request**.
 
-## Đã sửa trong đợt hardening 5 (lớp phân quyền RBAC)
+### Timeout/reconciliation
 
-- **Lỗi runtime**: `ZI_MOB_UsrRol` là composition child khai báo
-  `authorization dependent by _User`, mà RAP ủy quyền **mọi** thao tác của
-  child (create by association, update, delete) sang `%update` của entity
-  master. `lhc_mobileuser` đang đặt `%update = unauthorized`, nên gán chức
-  danh từ Fiori sẽ luôn bị từ chối. Đã đổi sang `allowed`; bề mặt ghi vẫn
-  đóng ở tầng projection vì `ZC_MOB_User_Adm` chỉ có `createUser` + `_Roles`
-  và `ZC_MOB_User` chỉ có các auth action — không view nào khai `use update`.
-- **Nối RBAC vào luồng auth**: thêm static action `getPermissions`
-  (`ZA_MOB_Token` → `ZA_MOB_Permission [0..*]`) trên service auth di động.
-  Action xác thực token qua `validate_token` rồi join
-  usr_rol × role × rol_fnc × func, chỉ lấy chức danh `Status = 'A'`, DISTINCT
-  theo `FuncID`. Trước đó 4 bảng RBAC chỉ có CRUD quản trị, app di động
-  không có đường nào đọc được quyền của mình.
-- **Chuẩn hóa access control**: 4 projection RBAC mới đều đặt
-  `#NOT_REQUIRED`, không theo quy ước đã chốt ở hardening 3. Nay root
-  projection (`ZC_MOB_Func_Adm`, `ZC_MOB_Role_Adm`) dùng `#MANDATORY` + DCL
-  full access như `ZC_MOB_User_Adm`; child projection giữ `#NOT_REQUIRED`
-  vì đi theo navigation từ root. Quy ước được viết thành bảng trong
-  `IMPLEMENTATION_STATUS.md` để lần sau không phải đoán.
-- **Dọn association hở**: `ZC_MOB_RolFunc_Adm._Func` và
-  `ZC_MOB_UsrRol_Adm._Role` trước đây trỏ thẳng vào interface view mà
-  không redirect — sẽ kéo `ZI_MOB_Func`/`ZI_MOB_Role` vào mô hình OData.
-  `_Func` nay redirect sang `ZC_MOB_Func_Adm` (cùng service RBAC); `_Role`
-  bị bỏ vì `ZUI_MOB_USER_ADM` không expose role và không chỗ nào dùng tới.
-  Value help cũng chuyển từ interface view sang admin projection.
+HTTP timeout hoặc mất response không phải business failure.
 
-Cần verify khi activate trên ADT:
+Mobile giữ item ở `UNKNOWN` / `PENDING_CONFIRMATION`, sau đó gọi `getSyncStatus` bằng cùng `SyncItemUUID`:
 
-- `result [0..*]` cho static action `getPermissions`: nếu release không chấp
-  nhận cardinality này thì đổi sang `[1..*]` (danh sách rỗng vẫn trả về
-  bình thường ở runtime).
-- Smoke-test: gán chức danh cho một tài khoản từ Fiori admin, rồi gọi
-  `getPermissions` bằng token của tài khoản đó để xác nhận hai đầu khớp nhau.
+- `SUCCESS`: backend chứng minh được một POSTED ledger receipt của actor hiện tại;
+- `NOT_FOUND`: backend chưa chứng minh được commit, không được coi là `FAILED`;
+- duplicate receipt: backend fail-closed thay vì chọn tùy ý một row.
 
-Còn để mở:
+Nếu phải resend mutation, mobile gửi lại đúng command và đúng idempotency identity.
 
-- `ZTB_MOB_FUNC` không có field audit/ETag trong khi `ZTB_MOB_ROLE` có đủ.
-  Sửa master data chức năng đồng thời sẽ ghi đè lẫn nhau mà không báo.
-- Danh sách chức năng của một chức danh hiện chỉ hiển `FuncID`, chưa có
-  `FuncName`; muốn hiển tên cần text element hoặc text association.
+## RAP transaction semantics đã harden
 
-## Đã sửa trong đợt hardening 6 (quyền đi kèm kết quả login)
+- `ZR_PP_OpAlloc` là managed RAP BO, root `OperationAllocation` là `lock master`; child balance/ledger lock dependent theo root.
+- Internal domain actions dùng `MODIFY ENTITIES ... IN LOCAL MODE` trong chính behavior pool.
+- Balance update và ledger append nằm trong cùng RAP LUW.
+- Facade action không dùng Open SQL để đọc ledger vừa tạo trước save. Nó dùng `READ ENTITIES ... BY \_Transactions IN LOCAL MODE`, vì receipt mới tồn tại trong RAP transactional buffer tại thời điểm đó.
+- `confirm` khi có `OriginalTransactionUUID` cũng đọc transaction gốc bằng EML trong transactional buffer và fail-closed nếu key không hợp lệ, sai operation hoặc không POSTED.
 
-- `ZA_MOB_LoginResult` chuyển thành **deep abstract entity**: thêm
-  `_Permissions : composition [0..*] of ZA_MOB_Permission`, kèm BDEF
-  `abstract; with hierarchy;` theo đúng mẫu `ZA_PP_SubmitSync` đã chạy được.
-  Cả `login` và `refresh` trả danh sách chức năng, nên quyền gán thêm lúc
-  phiên đang mở sẽ tới thiết bị ở lần xoay token kế tiếp.
-- Bỏ static action `getPermissions` vừa thêm ở hardening 5: danh sách đã đi
-  kèm kết quả login/refresh nên endpoint riêng thành thừa, và bề mặt API
-  di động không còn action nào mang tên RBAC.
-- **Validate phía backend** (điểm bắt buộc): `zcl_mob_token_validator` nhận
-  `get_permissions`, `has_function` và tham số `required_func` trên
-  `validate_token` / `validate_hash`. Mọi thao tác cần quyền chỉ việc truyền
-  `required_func`, validator tự đọc lại grant từ DB và trả
-  `MISSING_PERMISSION` nếu thiếu. Danh sách trả cho thiết bị **không bao giờ**
-  được đọc ngược lại làm căn cứ phân quyền — thiết bị có thể sửa hoặc bịa.
-  Cả hai đầu (hiển thị và kiểm tra) dùng chung một truy vấn
-  `get_permissions` nên không trôi khỏi nhau.
-- Value help chuyển sang hai view đọc thuần `ZI_MOB_ROLE_VH` /
-  `ZI_MOB_FUNC_VH` (không BDEF) thay vì trỏ vào projection có behavior ghi.
+## Domain behavior đã hoàn thiện
 
-Cần verify khi activate trên ADT:
+### Initial Assign
 
-- Cú pháp deep abstract entity làm **result** của action (trước đây repo mới
-  dùng deep abstract làm *parameter* cho `submitSync`). Nếu ADT báo lỗi ở
-  `_Permissions`, đối chiếu lại signature do quick fix sinh ra.
-- Smoke-test: gán chức danh cho một tài khoản từ Fiori admin, login bằng tài
-  khoản đó và kiểm tra `_Permissions` trong response; sau đó đổi chức danh
-  sang `Status = 'I'` và gọi `refresh` để xác nhận danh sách rỗng đi.
+- token/session/device validation;
+- Work Context validation;
+- worker active + worker password verification;
+- UoM/quantity validation;
+- update/create employee allocation balance;
+- append `INITIAL_ASSIGN` ledger row.
 
-## Đã xây trong đợt 7 (báo cáo lịch sử giao/nhận việc)
+### Transfer
 
-- Action `getWorkHistory` trên `ZR_PP_OpAlloc`, logic nằm trong
-  `ZCL_PP_WORK_HISTORY`. Là action chứ không phải entity set vì service di
-  động chạy dưới **một communication user** — DCL không phân biệt được
-  người dùng cuối, nên việc lọc dòng bắt buộc phải làm trong ABAP sau khi
-  xác thực token.
-- Phạm vi theo function RBAC: `PP_HIST_TEAM` (giám sát) thấy mọi dòng
-  POSTED trên các cặp (công đoạn, nhân công) mà chính tài khoản đó đã giao
-  — **kèm cả confirm do nhân viên post sau**, nếu không thì cột tiến độ sẽ
-  luôn rỗng. `PP_HIST_SELF` (nhân viên) chỉ thấy dòng của chính mình.
-- **Tính toàn vẹn lịch sử**: phạm vi chốt bằng `ACTOR_USER_UUID` trong
-  ledger, không join tổ hiện tại từ master data. Nhân viên chuyển tổ thì
-  quản lý cũ vẫn thấy nguyên việc đã giao. `ZTB_KB_NHANCONG` (qua
-  `ZI_PP_WorkerRef`) chỉ dùng lấy **tên**, lấy theo bản ghi còn hiệu lực tại
-  ngày phát sinh; nhân công bị xóa khỏi master data thì dòng vẫn còn, chỉ
-  trống tên.
-- `Username` đặt `readonly` trong BDEF: tên đăng nhập chính là mã nhân
-  công nên không được đổi. Tên dài hơn 8 ký tự bị từ chối
-  (`WORKER_NOT_MAPPED`) thay vì cắt bớt — cắt bớt sẽ trỏ sang dòng của
-  người khác.
-- **Đóng đường đọc thô**: `ZUI_PP_OPALLOC` trước đây expose cả
-  `EmployeeAllocations` và `AllocationTransactions` — comm user GET thẳng là
-  đọc được số liệu toàn bộ nhân công, làm mọi phân quyền trên thành vô
-  nghĩa. Đã bỏ hai entity set này; chỉ còn `OperationAllocations` (không
-  chứa dữ liệu cá nhân) và action.
-- `ZCL_PP_TXN_TYPE` chốt giá trị `TRANSACTION_TYPE` / `TRANSACTION_STATUS`
-  (trước đây là char tự do, chưa ai định nghĩa).
+- source/target worker validation;
+- source remaining quantity validation;
+- decrement source + increment/create target balance;
+- append `TRANSFER` ledger row.
 
-Lưu ý quan trọng khi nghiệm thu:
+### Recall
 
-- **Báo cáo sẽ trả rỗng cho tới khi đường ghi PP được đấu dây.**
-  `initialAssign` / `transfer` / `confirm` / `reverse` vẫn là stub fail-closed
-  và sync worker chưa có, nên `ZTB_PP_ALLOC_TXN` chưa bao giờ được ghi.
-  Phần đọc đã sẵn sàng và đúng hợp đồng dữ liệu.
-- Khi viết ledger phải theo đúng quy ước báo cáo đang giả định:
-  `ACTOR_USER_UUID` = người thực hiện, `WORKER_ID` = nhân công dòng đó ghi
-  vào, riêng TRANSFER dùng thêm `FROM_WORKER_ID` / `TO_WORKER_ID`, và
-  `TRANSACTION_STATUS = 'POSTED'` cho dòng đã hạch toán. Mọi dòng phát sinh
-  (`CONFIRM`, `REVERSE`) phải đặt `ORIGINAL_TRANSACTION_UUID` bằng UUID của
-  giao dịch `INITIAL_ASSIGN` / `TRANSFER` gốc; thiếu lineage thì báo cáo giám
-  sát chủ động bỏ dòng để không lẫn việc của giám sát khác.
+- only valid lineage from `INITIAL_ASSIGN` / `TRANSFER`;
+- validate remaining balance;
+- append `RECALL`; original transaction stays immutable.
 
-## Đã sửa trong đợt hardening 8 (audit báo cáo lịch sử)
+### Confirm
 
-- Xóa `_Employees` / `_Transactions` khỏi cả projection CDS và projection
-  BDEF, đồng thời xóa hai consumption projection không còn reference
-  `ZC_PP_EmpAlloc` / `ZC_PP_AllocTxn`. Interface `ZR_*` vẫn giữ cho sync worker.
-  Chỉ bỏ entity set trong service definition chưa đủ chắc chắn vì navigation
-  từ root vẫn có thể kéo child nhạy cảm vào metadata tùy release.
-- Worker self-view chuẩn hóa mọi row về chính worker đang đăng nhập; TRANSFER
-  không còn làm summary hoặc detail lộ mã người giao/người nhận còn lại.
-- Summary đổi key từ `WorkerID` thành `WorkerID + UoM`; không còn cộng lẫn các
-  đơn vị. `WorkerCount` vẫn đếm worker duy nhất.
-- Supervisor scope dùng lineage `TransactionUUID / OriginalTransactionUUID`,
-  tránh lấy nhầm việc của giám sát khác trên cùng công đoạn và nhân công.
-- Sửa message UTF-8 bị mojibake, chặn custom range kết thúc ở tương lai, và
-  set `IsTruncated` khi detail bị cắt ở 1.000 dòng.
-- Tối ưu lookup: scope và summary dùng sorted table; quyền team/self được đọc
-  một lần thay vì chạy join RBAC hai lần.
+- validate worker, password, Work Context, UoM and remaining quantity;
+- `Completed += Quantity`;
+- `Remaining -= Quantity`;
+- append `CONFIRM` ledger row.
 
-## Bắt buộc thực hiện trên tenant
+### Reverse
 
-Các mục sau không được giả lập trong repo vì phụ thuộc release và repository
-metadata do ADT/tenant sinh:
+- only reverses an existing POSTED `CONFIRM`;
+- rejects already-reversed transaction;
+- includes signed corrections in effective quantity;
+- restores Completed/Remaining;
+- appends `REVERSE` linked by `OriginalTransactionUUID`.
 
-1. Tạo unique secondary index:
-   - `ZTB_MOB_USER`: client + normalized username.
-   - `ZTB_MOB_SESSION`: client + access token hash.
-   - `ZTB_MOB_SESSION`: client + refresh token hash.
-   - Các index idempotency/domain được liệt kê trong `IMPLEMENTATION_STATUS.md`.
-2. Tạo/publish ba OData V4 service binding riêng cho `ZUI_PP_OPALLOC`,
-   `ZUI_MOB_AUTH`, `ZUI_MOB_USER_ADM`.
-3. Gắn service Fiori admin vào IAM app/business catalog chỉ dành cho quản trị.
-4. Xác nhận `ZTB_KB_NHANCONG` được release hoặc có package interface/use access.
-5. Xác nhận quy ước ngày kết thúc vô hạn của bảng đối tác là `00000000`.
-6. Benchmark KDF 10.000 vòng và kiểm tra KDF chuẩn nào được released trên tenant.
-7. Chuyển pepper/token secret sang secure store khi tenant cung cấp released API;
-   trong giai đoạn hiện tại không expose `ZTB_MOB_CONFIG` qua CDS/service.
-8. Sau khi activate bộ DCL mới: smoke-test `login`/`createUser` bằng
-   communication user của service mobile và kiểm tra GET trên `ZC_MOB_User`
-   trả rỗng còn Fiori admin vẫn đọc được. Kỳ vọng: DCL chỉ áp trên query path
-   (SADL/OData GET), không áp trên EML `IN LOCAL MODE` của BO runtime; nếu
-   action bị chặn thì phải chuyển sang mô hình pfcg_auth cho `ZI_MOB_USER`.
+### Controlled Fiori correction
 
-## Đã sửa trong đợt hardening 9 (security/performance scan)
+`ZUI_PP_ALLOC_ADM` provides IAM-protected `correctConfirm`:
 
-- Refresh token chuyển sang lifetime tuyệt đối; refresh kiểm tra user active và
-  không còn gia hạn `RefreshExpiresAt`.
-- Login chống enumeration bằng response thống nhất + dummy hash, giới hạn 5
-  session active, một session trên mỗi device và dùng một join user/credential.
-- Đổi mật khẩu nay revoke cả session hiện tại. Ghi chú ở hardening 2 về việc
-  giữ session hiện tại đã được thay thế bởi chính sách an toàn hơn này.
-- Áp password policy, giới hạn KDF iteration, exception config dạng checked,
-  message public không chứa exception text nội bộ.
-- Check một permission bằng query tồn tại trực tiếp; các lookup batch/history
-  chuyển sang sorted table theo key truy cập.
-- WorkerID immutable; create account validate WorkerID theo nhà máy/ngày hiệu
-  lực và chặn liên kết trùng ở application layer.
-- Không cho xóa cứng Role/Function. Header công đoạn được chặn GET bằng DCL
-  deny-all; static action token-scoped vẫn là API đọc duy nhất.
-- Báo cáo chi tiết và các việc còn lại trên tenant nằm tại
-  `SECURITY_PERFORMANCE_REVIEW.md`.
+- generic ledger update/delete is not exposed;
+- original `CONFIRM` is never edited;
+- balance is adjusted by signed delta;
+- new immutable `CORRECTION` row records reason and lineage.
 
-## Chưa triển khai nghiệp vụ
+## SAP live operation validation
 
-- `initialAssign`, `transfer`, `confirm`, `reverse` vẫn chủ động fail-closed.
-- Sync Inbox BO, `submitSync`, bgPF/APJ và SAP Production Confirmation adapter
-  chưa được đấu dây. README/implementation status không được hiểu là các phần này
-  đã sẵn sàng production.
-- Demo class được giữ lại theo yêu cầu demo workflow trước đó; không được dùng làm
-  implementation nghiệp vụ production.
+`ZCL_PP_OPERATION_GUARD` resolves the operation from SAP VDM rather than trusting mobile payload:
 
-## Kết quả kiểm tra local
+- `I_ManufacturingOrderStatus` for active system statuses;
+- `I_ManufacturingOrderOperation` for operation snapshot fields;
+- `I_WorkCenter` for semantic work-center ID.
 
-- XML abapGit: parse hợp lệ.
-- `git diff --check`: không có whitespace error.
-- abaplint 2.120.25, ABAP Cloud: `0 issue(s) found, 164 file(s) analyzed`.
-- `ZI_PP_WORKERREF` vẫn phụ thuộc bảng đối tác `ZTB_KB_NHANCONG`; việc activate
-  thật và package interface/use access phải được xác nhận trên tenant.
+Current business rules include REL required, terminal/deletion statuses blocked, operation control profile `YBP1`, required standard text code, positive planned quantity and valid Plant/Work Center/UoM.
+
+Release/field availability must still be activated and verified on the target Public Cloud tenant; repository lint cannot replace ADT activation/ATC.
+
+## RBAC / Work Context / auth
+
+- Login lockout, token validation and worker-password verification remain server-side.
+- `ActorUserUUID` is always derived from the authenticated token/session, not accepted from mobile input.
+- Mobile login/refresh returns effective permissions/work contexts for UX, but backend re-checks grants for protected operations.
+- Worker verification audit persists UUID/time/method without storing plaintext password.
+- User Role / Role Function / Role Work assignments remain composition-based admin data.
+
+## Fiori administration surfaces
+
+1. `ZUI_MOB_USER_ADM` — User Administration.
+2. `ZUI_MOB_RBAC_ADM` — Role / Function / Work Administration.
+3. `ZUI_MD_CONGDOAN_ADM` — versioned Công đoạn master.
+4. `ZUI_PP_ALLOC_ADM` — allocation audit + controlled confirm correction.
+
+Tenant-specific Launchpad targets, catalogs, semantic objects and runtime URLs are intentionally not fabricated in this repository.
+
+## Concurrency checks còn bắt buộc trên tenant
+
+Managed RAP locking protects modification of an existing operation BO instance. Tuy nhiên lần đầu `ensure_operation` phải CREATE snapshot, và RAP locking không thể dùng một active-instance key chưa tồn tại để bảo đảm uniqueness business key.
+
+Trước production phải:
+
+1. enforce/verify uniqueness của `CLIENT + PRODUCTION_ORDER + OPERATION_NO` cho `ZTB_PP_OP_ALLOC` ở target DDIC/database;
+2. stress-test hai request đầu tiên đồng thời cho cùng Order/Operation;
+3. stress-test duplicate `SyncItemUUID` đồng thời trên cùng operation;
+4. xác nhận lock conflict được mobile coi là transient/retryable, không phải permanent business failure.
+
+Không tạo một unique index mù trên `SYNC_ITEM_UUID` khi chưa xử lý semantics của các ledger row Fiori/CORRECTION có thể không dùng mobile sync identity.
+
+## Quality gate hiện tại
+
+- `@abaplint/cli 2.120.35`
+- ABAP language version: Cloud
+- `parser_error`, syntax, DDIC, host-variable escaping, `SELECT SINGLE` full-key, method length và cyclomatic complexity đều bật.
+- Latest source gate: **0 issue / 241 files analyzed**.
+
+## Còn phải verify trên SAP tenant
+
+- abapGit import + ADT activation toàn dependency chain;
+- ATC/ABAP Cloud checks trên đúng release;
+- released status/field của SAP CDS dùng trong `ZCL_PP_OPERATION_GUARD`;
+- OData V4 service binding publish;
+- IAM/business catalogs cho admin services;
+- concurrency/index checks nêu trên;
+- end-to-end smoke test mobile timeout -> `getSyncStatus` -> safe retry cùng `SyncItemUUID`.
+
+Xem thêm:
+
+- `README.md`
+- `IMPLEMENTATION_STATUS.md`
+- `docs/ABAP_RAP_MOBILE_SYNC_PLAN.md`
+- `docs/FIORI_ELEMENTS_ADMIN.md`
+- `docs/CASLA_DATA_MODEL.drawio`
