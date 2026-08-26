@@ -1,112 +1,189 @@
 # Rà soát bảo mật và hiệu năng ABAP RAP
 
-Ngày rà soát: 20/08/2026
-Phạm vi: toàn bộ `serialized/` của backend xác thực di động, RBAC và phân bổ
-sản lượng.
+Ngày rà soát cập nhật: **26/08/2026**  
+Phạm vi: backend xác thực mobile, RBAC/Work Context, production allocation, immutable ledger và các Fiori admin service trong `serialized/`.
 
-## Kết quả
+## Kết quả hiện tại
 
 - Không phát hiện secret hoặc mật khẩu hard-code trong source.
-- Không còn đường OData đọc thô tài khoản, credential, session, ledger hoặc
-  header công đoạn. Các static action vẫn hoạt động sau lớp xác thực token.
-- `abaplint` ABAP Cloud: **0 lỗi trên 164 file**.
-- Các lỗi có thể sửa an toàn trong source đã được xử lý. Các việc phụ thuộc
-  tenant được liệt kê riêng ở cuối tài liệu.
+- Mobile không có đường OData raw CRUD vào credential, session, employee allocation hoặc transaction ledger.
+- Mutation production đi qua static RAP command facade có token/session/device validation server-side.
+- `ActorUserUUID` được suy ra từ token/session; client không được tự khai actor.
+- Worker password chỉ dùng để verify trong request, không persist plaintext vào ledger.
+- `ZTB_PP_ALLOC_TXN` là append-only audit ledger; reverse/correction tạo transaction mới thay vì sửa/xóa original row.
+- `abaplint` ABAP Cloud hiện tại: **0 issue trên 241 file**.
 
-## Bản vá bảo mật đã áp dụng
+## Xác thực và vòng đời phiên
 
-### Xác thực và vòng đời phiên
+- Token hashing có một implementation dùng chung trong `ZCL_MOB_TOKEN_VALIDATOR`.
+- Access token được validate cùng DeviceID và trạng thái session/user.
+- Login lockout và password verification chạy ở backend; client response không được dùng làm nguồn phân quyền.
+- Permission và Work Context trả cho mobile chỉ phục vụ UX; protected operation vẫn kiểm tra grant server-side ở thời điểm request.
+- Đổi mật khẩu và session lifecycle giữ nguyên các hardening đã triển khai trước đó.
 
-- Refresh token có hạn tuyệt đối 30 ngày tính từ lúc login; refresh không còn
-  kéo dài `RefreshExpiresAt` thêm 30 ngày sau mỗi lần gọi.
-- Refresh kiểm tra lại trạng thái tài khoản và trạng thái bắt buộc đổi mật khẩu.
-- Đổi mật khẩu thu hồi toàn bộ session, kể cả session vừa dùng để đổi mật khẩu.
-- Mỗi tài khoản tối đa 5 session active; login lại cùng thiết bị thu hồi session
-  cũ của thiết bị đó.
-- Login dùng cùng response thất bại và chạy dummy password hash cho username
-  không tồn tại, tài khoản inactive/locked và credential không hợp lệ, giảm
-  user-enumeration và timing side-channel.
-- Password policy: tối thiểu 12 ký tự, có chữ hoa, chữ thường, chữ số, không
-  chứa username và không được trùng mật khẩu hiện tại.
-- Chặn iteration KDF ngoài khoảng 10.000–100.000 và salt rỗng để tránh bypass
-  hoặc CPU denial-of-service do dữ liệu credential hỏng.
-- Lỗi crypto/config nội bộ không còn trả exception text ra OData response.
+## Mobile production API boundary
 
-### Phân quyền và cô lập dữ liệu
+`ZUI_PP_OPALLOC` cung cấp command/status/history contract, không expose raw balance/ledger mutation:
 
-- `WorkerID` của tài khoản là immutable sau khi tạo, tránh đổi chủ sở hữu của
-  toàn bộ lịch sử đã ghi.
-- Khi tạo tài khoản có WorkerID, backend xác nhận nhân công còn hiệu lực trong
-  đúng nhà máy và từ chối WorkerID đã gắn với tài khoản khác.
-- Xóa cứng Role và Function bị tắt; Role phải được vô hiệu hóa bằng `Status`.
-  Điều này bảo toàn assignment và dấu vết phân quyền.
-- `ZR_PP_OpAlloc` và `ZC_PP_OpAlloc` dùng DCL deny-all/inherited deny-all.
-  Communication user không thể GET dữ liệu header toàn nhà máy; app chỉ dùng
-  static action có kiểm tra access token và function server-side.
-- Các lỗi xác thực nhân công dùng chung `WORKER_AUTH_FAILED`, không tiết lộ mã
-  nhân công có tồn tại, inactive hay chưa có credential.
+- `submitInitialAssign`
+- `submitTransfer`
+- `submitRecall`
+- `submitConfirm`
+- `submitReverse`
+- `getSyncStatus`
+- `getWorkHistory`
 
-## Tối ưu hiệu năng đã áp dụng
+Kiến trúc hiện tại **không** có SAP-side background queue, bgPF worker hoặc standard SAP Production Confirmation posting.
 
-- Login đọc user + credential bằng một `INNER JOIN`, giảm một DB round-trip.
-- Validate access token đọc session + user trong một truy vấn thay vì hai.
-- Kiểm tra một function RBAC dùng truy vấn `UP TO 1 ROWS`; không còn dựng toàn
-  bộ danh sách permission cho mọi request nghiệp vụ.
-- Permission result, worker reference và master history dùng sorted table với
-  key phù hợp cho lookup, tránh linear scan lặp lại trong batch.
-- Login dọn session theo một mass EML update, không update từng dòng.
+Mobile background worker tự quản pending/retry. Mỗi mutation dùng `SyncItemUUID` ổn định được sinh trước khi gửi.
 
-## Việc bắt buộc trên tenant
+### Timeout safety
 
-1. Tạo các secondary index sau rồi kiểm tra execution plan/ST05 trên dữ liệu
-   gần production:
-   - `ZTB_MOB_USER`: unique `CLIENT + NORMALIZED_USERNAME`.
-   - `ZTB_MOB_SESSION`: unique `CLIENT + ACCESS_TOKEN_HASH`.
-   - `ZTB_MOB_SESSION`: unique `CLIENT + REFRESH_TOKEN_HASH`.
-   - `ZTB_MOB_SESSION`: `CLIENT + USER_UUID + STATUS + LOGIN_AT`.
-   - Các index idempotency và ledger trong `IMPLEMENTATION_STATUS.md`.
-2. Activate DCL mới và smoke-test: GET `OperationAllocations` phải không trả
-   row; `getWorkHistory` vẫn chạy sau khi token/function hợp lệ.
-3. Cấu hình HTTPS bắt buộc; tắt/redact request-body logging vì access token và
-   password đang nằm trong action parameter.
-4. Đặt rate limit ở Web Dispatcher/API layer cho login, refresh và action PP.
-   Lockout trong application không thay thế rate limit theo IP/device.
-5. Ghi failed login, refresh replay, revoke, đổi mật khẩu và lỗi permission vào
-   Application Log; hiện source chưa có security audit trail đầy đủ.
-6. Fiori tạo tài khoản phải dùng password input được che ký tự; action metadata
-   RAP không được coi là bảo đảm field password luôn được mask trên mọi client.
-7. Tạo APJ dọn session revoked/expired theo retention đã thống nhất.
+Network timeout không được map trực tiếp thành business `FAILED`.
 
-## Rủi ro còn lại cần quyết định kiến trúc
+Sau timeout, mobile gọi `getSyncStatus`:
 
-### Mức cao
+- `SUCCESS`: backend tìm đúng một POSTED ledger receipt thuộc actor hiện tại;
+- `NOT_FOUND`: backend chưa chứng minh được commit, không phải permanent failure;
+- duplicate receipt: fail-closed để lộ data-integrity problem thay vì chọn tùy ý một row.
 
-- `PASSWORD_PEPPER` và `TOKEN_SECRET` hiện nằm trong `ZTB_MOB_CONFIG`. Bảng
-  không được expose nhưng vẫn là plaintext at rest. Cần chuyển sang secure
-  store/released API của đúng release tenant và lập quy trình rotation.
-- KDF hiện là SHA-256 lặp 10.000 vòng có pepper, không phải password KDF chuẩn.
-  Cần benchmark và migrate có version sang PBKDF2/bcrypt/Argon2 nếu tenant có
-  released API phù hợp. Không đổi trực tiếp nếu chưa có migration credential.
+## RAP transactional consistency
 
-### Mức trung bình
+`ZR_PP_OpAlloc` là managed RAP BO:
 
-- Hai request refresh đồng thời có thể cùng đọc refresh token cũ trước khi một
-  request rotate nó. Cần PoC khóa/ETag hoặc compare-and-swap trong unmanaged
-  save để refresh token thực sự single-use dưới concurrency.
-- Check username/WorkerID trước create vẫn có race. Unique index username là
-  lớp bảo vệ bắt buộc; WorkerID cần index thường và quy tắc xử lý duplicate
-  phù hợp vì tài khoản quản lý có thể không có WorkerID.
-- Failed-login counter là read-then-update; cần stress-test song song. Nếu tenant
-  cho thấy lost update, chuyển sang update có khóa/atomic counter.
+- root `OperationAllocation` là `lock master`;
+- employee allocation và transaction ledger là lock-dependent child;
+- balance update + ledger append nằm trong cùng RAP LUW;
+- internal domain actions dùng EML `IN LOCAL MODE` trong chính behavior pool.
 
-## Kiểm thử nghiệm thu tối thiểu
+Một hardening quan trọng ở facade: sau khi internal action tạo transaction child, code dùng
 
-- Username sai, password sai, user inactive/locked và credential inactive trả
-  cùng public response và thời gian không chênh lệch đáng kể.
-- Login lần thứ 6 chỉ còn tối đa 5 session active; login lại cùng DeviceID làm
-  token cũ hết hiệu lực.
-- Sau đổi mật khẩu, mọi access/refresh token cũ đều bị từ chối.
-- Refresh nhiều lần không thay đổi `RefreshExpiresAt` ban đầu.
-- Role inactive mất quyền ngay ở request kế tiếp dù token còn hạn.
-- GET các entity nhạy cảm không trả dữ liệu; static action hợp lệ vẫn chạy.
-- Chạy test đồng thời cho create username trùng, failed login và refresh replay.
+```abap
+READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+  ENTITY OperationAllocation BY \_Transactions
+```
+
+để đọc receipt từ **RAP transactional buffer**. Không dùng Open SQL để đọc một row chưa tới save sequence.
+
+## Domain invariants
+
+Employee balance phải luôn thỏa:
+
+```text
+Remaining = InitialAssigned
+          + TransferredIn
+          - TransferredOut
+          - Recalled
+          - Completed
+```
+
+`validateBalance` fail nếu invariant sai hoặc Remaining âm.
+
+Các command đều kiểm tra quantity/UoM và ledger lineage trước mutation. `reverse` chỉ đảo effective quantity của một POSTED `CONFIRM`; `correctConfirm` ghi signed `CORRECTION` delta và giữ original transaction immutable.
+
+## SAP live master-data guard
+
+`ZCL_PP_OPERATION_GUARD` không tin production-order snapshot do mobile gửi. Nó đọc SAP VDM trực tiếp:
+
+- `I_ManufacturingOrderStatus`;
+- `I_ManufacturingOrderOperation`;
+- `I_WorkCenter`.
+
+Guard hiện kiểm tra active system status, REL, terminal/deletion status, control profile `YBP1`, standard text code, planned quantity, UoM, Plant và Work Center.
+
+Các CDS/field này phải được verify release status trên **đúng target tenant/release** khi activate. Static lint không thay thế ADT activation hoặc ATC.
+
+## Phân quyền và cô lập dữ liệu
+
+- DCL deny/inherited-deny bảo vệ mobile projection khỏi query raw data.
+- Static action vẫn validate end-user CASLA token vì service có thể chạy dưới communication user.
+- Work Context giới hạn operation theo Plant + Work Center.
+- Fiori admin services tách khỏi mobile communication surface.
+- `ZUI_PP_ALLOC_ADM` chỉ cho controlled `correctConfirm`; ledger list là read-only.
+
+## Concurrency review
+
+### Existing operation instance
+
+Managed RAP `lock master` cung cấp pessimistic locking cho modify/action trên một operation BO instance. Child balance/ledger mutation cùng operation đi theo lock master.
+
+### First snapshot creation — cần tenant hardening
+
+`ensure_operation` có thể CREATE `ZTB_PP_OP_ALLOC` khi snapshot chưa tồn tại. RAP lock của active instance không thể tự bảo đảm business-key uniqueness cho một row chưa tồn tại.
+
+Trước production phải enforce và test uniqueness:
+
+```text
+CLIENT + PRODUCTION_ORDER + OPERATION_NO
+```
+
+Không chỉ check application bằng `SELECT ... UP TO 2 ROWS`; cần constraint/index phù hợp trên target DDIC/database để đóng race của hai first request đồng thời.
+
+### SyncItemUUID replay
+
+Application đã fail-closed khi thấy 0/1/>1 receipt. Với existing operation, RAP locking giúp serialize modification cùng BO instance, nhưng vẫn phải stress-test duplicate request đồng thời trên target runtime.
+
+Không nên tạo một unique index mù trên `SYNC_ITEM_UUID` trước khi chốt semantics cho mọi source channel, vì Fiori `CORRECTION` không phải mobile command và không nhất thiết có mobile sync identity.
+
+Nếu tenant test chứng minh còn race ngoài phạm vi root lock, chọn một cơ chế uniqueness/receipt riêng có semantics rõ ràng thay vì dựa vào `SELECT`-before-create.
+
+## Hiệu năng
+
+Các đường nóng hiện chủ yếu lookup theo:
+
+- normalized username;
+- access/refresh token hash;
+- user/session status;
+- operation business key;
+- operation UUID + worker ID;
+- SyncItemUUID;
+- transaction lineage (`ORIGINAL_TRANSACTION_UUID`);
+- actor/history date range.
+
+Secondary indexes phải được xác nhận bằng data volume gần production và execution plan/ST05 trên tenant; không index mọi field theo cảm tính.
+
+Các index tối thiểu cần verify/enforce:
+
+1. `ZTB_MOB_USER`: unique `CLIENT + NORMALIZED_USERNAME`.
+2. `ZTB_MOB_SESSION`: unique `CLIENT + ACCESS_TOKEN_HASH`.
+3. `ZTB_MOB_SESSION`: unique `CLIENT + REFRESH_TOKEN_HASH`.
+4. `ZTB_MOB_SESSION`: `CLIENT + USER_UUID + STATUS` hoặc biến thể có `LOGIN_AT` nếu đúng query thực tế.
+5. `ZTB_PP_OP_ALLOC`: unique `CLIENT + PRODUCTION_ORDER + OPERATION_NO`.
+6. `ZTB_PP_EMP_ALLOC`: lookup `CLIENT + OPERATION_UUID + WORKER_ID` nếu target table size/query plan yêu cầu.
+7. `ZTB_PP_ALLOC_TXN`: index đọc theo `CLIENT + SYNC_ITEM_UUID` và lineage/history theo query thực tế; uniqueness phải theo semantics đã chốt, không áp mù.
+
+## Việc bắt buộc trên target tenant
+
+1. Import bằng abapGit và activate dependency chain trong ADT.
+2. Chạy ATC/ABAP Cloud checks trên đúng release.
+3. Verify released status/field của SAP CDS trong `ZCL_PP_OPERATION_GUARD` bằng View Browser/ADT.
+4. Activate/publish OData V4 bindings và test service metadata.
+5. Smoke-test IAM separation: mobile communication role không gọi được admin surfaces.
+6. Bắt buộc HTTPS và redact request-body logging vì action parameter chứa token/password.
+7. Rate-limit login/refresh/production commands ở API/Web Dispatcher layer phù hợp tenant.
+8. Stress-test concurrent first-create operation snapshot, duplicate SyncItemUUID, failed login và refresh replay.
+9. Test timeout sau server commit: mobile không resend với ID mới; `getSyncStatus` phải reconcile đúng receipt.
+10. Thiết lập retention/cleanup session theo chính sách vận hành; việc này độc lập với production command flow và không biến thành SAP-side mobile queue.
+
+## Rủi ro còn lại cần quyết định vận hành
+
+- `PASSWORD_PEPPER` / `TOKEN_SECRET` trong config Z-table vẫn cần đánh giá secure-store/released API theo target release và rotation policy.
+- Password KDF hiện tại cần được benchmark và migrate có version nếu tenant có released password-KDF API phù hợp; không đổi hash scheme trực tiếp khi chưa có migration path.
+- Concurrent refresh / failed-login counter cần stress-test để loại lost-update trên runtime thật.
+- Mọi target-specific index, IAM catalog, communication arrangement và Launchpad mapping phải được tạo từ hệ thống thật, không fabricate trong repo.
+
+## Nghiệm thu tối thiểu
+
+- Login/lockout/password-change/session tests.
+- Role inactive mất quyền ở request kế tiếp.
+- Work Context chặn operation ngoài Plant + Work Center được gán.
+- Initial assign / transfer / recall / confirm giữ balance invariant.
+- Reverse không sửa original CONFIRM và không reverse hai lần.
+- `correctConfirm` append CORRECTION delta với reason.
+- Same SyncItemUUID + same logical command không tạo duplicate ledger.
+- Same SyncItemUUID + khác payload bị từ chối.
+- Lost HTTP response -> `getSyncStatus` -> `SUCCESS` nếu ledger đã commit.
+- `NOT_FOUND` không bị client coi là business failure.
+- Mobile không query/update/delete raw ledger.
+
+Xem sơ đồ tổng thể tại `docs/CASLA_DATA_MODEL.drawio`.
