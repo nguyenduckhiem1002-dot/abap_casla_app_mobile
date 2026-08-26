@@ -425,7 +425,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       _Permissions = VALUE #( FOR permission IN permissions
         ( FuncID = permission-func_id
           FuncName = permission-func_name
-          Module = permission-module ) )
+          AppModule = permission-app_module ) )
       _WorkContexts = VALUE #( FOR work_context IN work_contexts
         ( WorkID = work_context-work_id
           WorkName = work_context-work_name
@@ -567,7 +567,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       _Permissions = VALUE #( FOR permission IN permissions
         ( FuncID = permission-func_id
           FuncName = permission-func_name
-          Module = permission-module ) )
+          AppModule = permission-app_module ) )
       _WorkContexts = VALUE #( FOR work_context IN work_contexts
         ( WorkID = work_context-work_id
           WorkName = work_context-work_name

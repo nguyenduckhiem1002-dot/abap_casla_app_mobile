@@ -33,7 +33,7 @@ authorization dependent by _Role
 {
   update;
   delete;
-  field ( readonly ) RoleID, FuncName, Module;
+  field ( readonly ) RoleID, FuncName, AppModule;
   association _Role;
   mapping for ztb_mob_rol_fnc {
     RoleID = role_id;

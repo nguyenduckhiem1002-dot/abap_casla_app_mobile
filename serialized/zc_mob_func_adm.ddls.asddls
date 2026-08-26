@@ -7,5 +7,5 @@ define root view entity ZC_MOB_Func_Adm
 {
   key FuncID,
       FuncName,
-      Module
+      AppModule
 }

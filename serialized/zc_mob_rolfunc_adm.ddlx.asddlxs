@@ -17,5 +17,5 @@ annotate entity ZC_MOB_RolFunc_Adm with
   FuncName;
 
   @UI.lineItem: [{ position: 30 }]
-  Module;
+  AppModule;
 }

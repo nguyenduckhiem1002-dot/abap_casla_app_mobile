@@ -2,7 +2,6 @@
 @EndUserText.label: 'Chức danh của tài khoản (Admin)'
 @Metadata.allowExtensions: true
 define view entity ZC_MOB_UsrRol_Adm
-  provider contract transactional_query
   as projection on ZI_MOB_UsrRol
 {
   key UserUUID,

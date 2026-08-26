@@ -2,7 +2,6 @@
 @EndUserText.label: 'Vị trí làm việc của chức danh (Admin)'
 @Metadata.allowExtensions: true
 define view entity ZC_MOB_RolWork_Adm
-  provider contract transactional_query
   as projection on ZI_MOB_RolWork
 {
   key RoleID,
