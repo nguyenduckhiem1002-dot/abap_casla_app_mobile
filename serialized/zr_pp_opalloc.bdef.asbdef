@@ -94,40 +94,46 @@ authorization dependent by _Operation
 {
   field ( numbering : managed, readonly ) TransactionUUID;
   field ( readonly ) OperationUUID, OriginalTransactionUUID,
-                     SyncItemUUID, ActorUserUUID, TransactionType,
-                     OriginalTransactionType, FromWorkerID,
-                     ToWorkerID, WorkerID, Quantity, UnitOfMeasure,
-                     ExecutionDate, TransactionStatus,
+                     SyncItemUUID, ActorUserUUID,
+                     VerifiedWorkerUserUUID, WorkerVerifiedAt,
+                     InitiatorSessionID, DeviceID, VerificationMethod,
+                     TransactionType, OriginalTransactionType,
+                     FromWorkerID, ToWorkerID, WorkerID, Quantity,
+                     UnitOfMeasure, ExecutionDate, TransactionStatus,
                      SAPConfirmationGroup, SAPConfirmationCount,
                      SAPErrorCode, SAPErrorText, ReversalReason,
-                     CreatedBy, CreatedAt,
-                     LocalLastChangedAt;
+                     CreatedBy, CreatedAt, LocalLastChangedAt;
 
   association _Operation;
 
   mapping for ztb_pp_alloc_txn
   {
-    TransactionUUID        = transaction_uuid;
-    OperationUUID          = operation_uuid;
-    OriginalTransactionUUID = original_transaction_uuid;
-    SyncItemUUID           = sync_item_uuid;
-    ActorUserUUID          = actor_user_uuid;
-    TransactionType        = transaction_type;
+    TransactionUUID          = transaction_uuid;
+    OperationUUID            = operation_uuid;
+    OriginalTransactionUUID  = original_transaction_uuid;
+    SyncItemUUID             = sync_item_uuid;
+    ActorUserUUID            = actor_user_uuid;
+    VerifiedWorkerUserUUID   = verified_worker_user_uuid;
+    WorkerVerifiedAt         = worker_verified_at;
+    InitiatorSessionID       = initiator_session_id;
+    DeviceID                 = device_id;
+    VerificationMethod       = verification_method;
+    TransactionType          = transaction_type;
     OriginalTransactionType = original_transaction_type;
-    FromWorkerID           = from_worker_id;
-    ToWorkerID             = to_worker_id;
-    WorkerID               = worker_id;
-    Quantity               = quantity;
-    UnitOfMeasure          = uom;
-    ExecutionDate          = execution_date;
-    TransactionStatus      = transaction_status;
-    SAPConfirmationGroup   = sap_confirmation_group;
-    SAPConfirmationCount   = sap_confirmation_count;
-    SAPErrorCode           = sap_error_code;
-    SAPErrorText           = sap_error_text;
-    ReversalReason         = reversal_reason;
-    CreatedBy              = created_by;
-    CreatedAt              = created_at;
-    LocalLastChangedAt     = local_last_changed_at;
+    FromWorkerID             = from_worker_id;
+    ToWorkerID               = to_worker_id;
+    WorkerID                 = worker_id;
+    Quantity                 = quantity;
+    UnitOfMeasure            = uom;
+    ExecutionDate            = execution_date;
+    TransactionStatus        = transaction_status;
+    SAPConfirmationGroup     = sap_confirmation_group;
+    SAPConfirmationCount     = sap_confirmation_count;
+    SAPErrorCode             = sap_error_code;
+    SAPErrorText             = sap_error_text;
+    ReversalReason           = reversal_reason;
+    CreatedBy                = created_by;
+    CreatedAt                = created_at;
+    LocalLastChangedAt       = local_last_changed_at;
   }
 }
