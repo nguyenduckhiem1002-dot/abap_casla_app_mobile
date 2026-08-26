@@ -1,0 +1,27 @@
+name: Temporary RBAC syntax inspection
+
+on:
+  push:
+    branches:
+      - chatgpt/role-work-context-fiori-admin
+    paths:
+      - .github/workflows/rbac-syntax-fix-temp.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/role-work-context-fiori-admin
+      - name: Find MODULE references
+        run: |
+          echo '=== MODULE references ==='
+          grep -RniE '\b(MODULE|Module|module)\b' serialized || true
+      - name: Find redirected-to-parent projections
+        run: |
+          echo '=== redirected to parent ==='
+          grep -Rni -B8 -A4 'redirected to parent' serialized/*.ddls.asddls || true
