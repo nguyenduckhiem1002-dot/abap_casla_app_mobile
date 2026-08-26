@@ -1,13 +1,12 @@
 @EndUserText.label: 'Dịch vụ phân bổ sản lượng công đoạn'
 define service ZUI_PP_OPALLOC {
-  // Operation headers carry no personal data and the app needs them to
-  // navigate its own screens.
+  // The mobile API exposes operation headers plus controlled static actions.
+  // Every business command validates CASLA token/session/device, checks the
+  // caller's work scope and writes through the RAP domain layer.
   //
-  // EmployeeAllocations and AllocationTransactions are deliberately not
-  // exposed. They hold per worker figures, and the mobile binding runs
-  // under a single communication user, so an entity set would hand every
-  // device the whole factory regardless of role. Worker level data is
-  // reachable only through the getWorkHistory action, which resolves the
-  // caller from their token and filters accordingly.
+  // EmployeeAllocation and AllocationTransaction entity sets stay hidden.
+  // Per-worker history is returned only by the token-scoped getWorkHistory
+  // action. Ambiguous HTTP outcomes are reconciled by getSyncStatus using the
+  // client-generated SyncItemUUID; raw ledger CRUD is never exposed.
   expose ZC_PP_OpAlloc as OperationAllocations;
 }
