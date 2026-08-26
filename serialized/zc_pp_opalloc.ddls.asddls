@@ -7,6 +7,7 @@ define root view entity ZC_PP_OpAlloc
   key OperationUUID,
       ProductionOrder,
       Operation,
+      MaCongDoan,
       Plant,
       WorkCenter,
       OperationQuantity,
