@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - chatgpt/wf-alignment-syntax-hardening
+  pull_request:
+    branches:
+      - main
 
 jobs:
   abaplint:
