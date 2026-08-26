@@ -3,6 +3,9 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
     CONSTANTS c_iterations TYPE i VALUE 10000.
     CONSTANTS c_min_password_length TYPE i VALUE 12.
     CONSTANTS c_max_active_sessions TYPE i VALUE 5.
+    CONSTANTS c_max_failed_logins TYPE i VALUE 5.
+    CONSTANTS c_failure_window_minutes TYPE i VALUE 1.
+    CONSTANTS c_lock_minutes TYPE i VALUE 10.
     TYPES reported_response TYPE RESPONSE FOR REPORTED zi_mob_user.
     TYPES failed_response TYPE RESPONSE FOR FAILED zi_mob_user.
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
@@ -240,7 +243,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     SELECT FROM ztb_mob_user AS user
       INNER JOIN ztb_mob_cred AS credential
         ON credential~user_uuid = user~user_uuid
-      FIELDS user~user_uuid, user~failed_login_count,
+      FIELDS user~user_uuid, user~failed_login_count, user~last_fail_at,
              user~password_change_required,
              credential~password_hash, credential~password_salt,
              credential~hash_iterations
@@ -276,17 +279,26 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     IF zcl_mob_hasher=>equals_constant_time(
          value_1 = CONV string( input_hash )
          value_2 = CONV string( credential-password_hash ) ) = abap_false.
-      "Business failure is returned in the result payload instead of FAILED:
-      "setting FAILED would skip the save sequence and roll back the
-      "FailedLoginCount/LockedUntil update, disabling the lockout protection.
-      DATA(failed_count) = user-failed_login_count + 1.
+      "The WF rule counts a burst of failures, not failures accumulated over
+      "the lifetime of the account: 5 wrong passwords inside 1 minute lock
+      "the account for 10 minutes. A failure outside the window starts at 1.
+      DATA(failure_window_end) = COND utclong(
+        WHEN user-last_fail_at IS INITIAL THEN VALUE utclong( )
+        ELSE utclong_add(
+          val = user-last_fail_at minutes = c_failure_window_minutes ) ).
+      DATA(failed_count) = COND i(
+        WHEN user-last_fail_at IS INITIAL OR now > failure_window_end THEN 1
+        ELSE user-failed_login_count + 1 ).
       DATA(locked_until) = COND utclong(
-        WHEN failed_count >= 5 THEN utclong_add( val = now minutes = 15 )
+        WHEN failed_count >= c_max_failed_logins
+        THEN utclong_add( val = now minutes = c_lock_minutes )
         ELSE VALUE utclong( ) ).
       MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE ENTITY MobileUser
-        UPDATE FIELDS ( FailedLoginCount LockedUntil )
+        UPDATE FIELDS ( FailedLoginCount LastFailedLoginAt LockedUntil )
         WITH VALUE #( ( UserUUID = user-user_uuid
-          FailedLoginCount = failed_count LockedUntil = locked_until ) )
+          FailedLoginCount = failed_count
+          LastFailedLoginAt = now
+          LockedUntil = locked_until ) )
         FAILED DATA(failed_counter_update)
         REPORTED DATA(reported_counter_update).
       IF failed_counter_update IS NOT INITIAL.
@@ -364,8 +376,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(session_id) = VALUE sysuuid_x16(
       mapped_session-mobilesession[ %cid = 'SES' ]-SessionID OPTIONAL ).
     MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE ENTITY MobileUser
-      UPDATE FIELDS ( FailedLoginCount LockedUntil LastLoginAt )
+      UPDATE FIELDS ( FailedLoginCount LastFailedLoginAt LockedUntil LastLoginAt )
       WITH VALUE #( ( UserUUID = user-user_uuid FailedLoginCount = 0
+        LastFailedLoginAt = VALUE utclong( )
         LockedUntil = VALUE utclong( ) LastLoginAt = now ) )
       FAILED DATA(failed_login_update)
       REPORTED DATA(reported_login_update).
