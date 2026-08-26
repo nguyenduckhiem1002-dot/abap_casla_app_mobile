@@ -53,7 +53,6 @@ persistent table ztb_mob_usr_rol
 lock dependent by _User
 authorization dependent by _User
 {
-  update;
   delete;
   field ( readonly ) UserUUID, RoleName, RoleStatus;
   association _User;
