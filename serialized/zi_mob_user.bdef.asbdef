@@ -13,7 +13,7 @@ etag master LocalLastChangedAt
   field ( numbering : managed, readonly ) UserUUID;
   "Identity and worker mapping are fixed at creation time. Account changes
   "are restricted to the Fiori administration projection.
-  field ( readonly ) Username, NormalizedUsername, WorkerID, Plant, BoPhan,
+  field ( readonly ) Username, NormalizedUsername, WorkerID,
                      FailedLoginCount, LockedUntil,
                      FirstLoginAt, LastLoginAt, CreatedBy, CreatedAt,
                      LastChangedBy, LastChangedAt, LocalLastChangedAt;
@@ -30,8 +30,6 @@ etag master LocalLastChangedAt
     Username = username;
     NormalizedUsername = normalized_username;
     WorkerID = worker_id;
-    Plant = plant;
-    BoPhan = bo_phan;
     FullName = full_name;
     Email = email;
     Status = status;

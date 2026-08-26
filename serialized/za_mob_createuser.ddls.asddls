@@ -5,6 +5,4 @@ define abstract entity ZA_MOB_CreateUser {
   FullName : abap.char(120);
   Email : abap.char(255);
   WorkerID : abap.char(8);
-  Plant : werks_d;
-  BoPhan : abap.char(255);
 }

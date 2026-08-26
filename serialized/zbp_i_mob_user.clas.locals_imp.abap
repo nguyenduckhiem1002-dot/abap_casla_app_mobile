@@ -109,13 +109,13 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(now) = utclong_current( ).
     MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
       ENTITY MobileUser CREATE FIELDS
-        ( Username NormalizedUsername FullName Email WorkerID Plant BoPhan
+        ( Username NormalizedUsername FullName Email WorkerID
           Status FailedLoginCount
           PasswordChangeRequired )
       WITH VALUE #( ( %cid = 'USR' Username = input-Username
         NormalizedUsername = normalized FullName = input-FullName
-        Email = input-Email WorkerID = input-WorkerID Plant = input-Plant
-        BoPhan = input-BoPhan Status = 'A' FailedLoginCount = 0
+        Email = input-Email WorkerID = input-WorkerID
+        Status = 'A' FailedLoginCount = 0
         PasswordChangeRequired = abap_true ) )
       ENTITY MobileUser CREATE BY \_Credential FIELDS
         ( PasswordHash PasswordSalt HashAlgorithm HashIterations

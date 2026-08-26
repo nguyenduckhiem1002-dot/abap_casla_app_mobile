@@ -9,8 +9,6 @@ define root view entity ZC_MOB_User
       FullName,
       Email,
       WorkerID,
-      Plant,
-      BoPhan,
       Status,
       PasswordChangeRequired,
       LastLoginAt
