@@ -55,8 +55,9 @@ authorization dependent by _User
 {
   update;
   delete;
-  field ( readonly ) UserUUID;
+  field ( readonly ) UserUUID, RoleName, RoleStatus;
   association _User;
+  validation validateRoleAssignment on save { create; field RoleID; }
   mapping for ztb_mob_usr_rol {
     UserUUID = user_uuid;
     RoleID = role_id;
