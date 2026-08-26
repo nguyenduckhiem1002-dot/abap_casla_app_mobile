@@ -15,6 +15,8 @@ define view entity ZR_PP_EmpAlloc
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       transferred_out_qty  as TransferredOutQuantity,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+      recalled_qty         as RecalledQuantity,
+      @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       completed_qty        as CompletedQuantity,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       remaining_qty        as RemainingQuantity,

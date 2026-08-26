@@ -11,6 +11,7 @@ define view entity ZR_PP_AllocTxn
       sync_item_uuid            as SyncItemUUID,
       actor_user_uuid           as ActorUserUUID,
       transaction_type          as TransactionType,
+      original_transaction_type as OriginalTransactionType,
       from_worker_id            as FromWorkerID,
       to_worker_id              as ToWorkerID,
       worker_id                 as WorkerID,
@@ -23,6 +24,7 @@ define view entity ZR_PP_AllocTxn
       sap_confirmation_count    as SAPConfirmationCount,
       sap_error_code            as SAPErrorCode,
       sap_error_text            as SAPErrorText,
+      reversal_reason           as ReversalReason,
       @Semantics.user.createdBy: true
       created_by                as CreatedBy,
       @Semantics.systemDateTime.createdAt: true

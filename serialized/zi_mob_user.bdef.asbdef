@@ -11,9 +11,10 @@ etag master LocalLastChangedAt
   update;
   delete;
   field ( numbering : managed, readonly ) UserUUID;
-  "Username carries the worker id that the history report resolves the
-  "caller with, so it is fixed at creation time and never updatable.
-  field ( readonly ) Username, NormalizedUsername, FailedLoginCount, LockedUntil,
+  "Identity and worker mapping are fixed at creation time. Account changes
+  "are restricted to the Fiori administration projection.
+  field ( readonly ) Username, NormalizedUsername, WorkerID, Plant, BoPhan,
+                     FailedLoginCount, LockedUntil,
                      FirstLoginAt, LastLoginAt, CreatedBy, CreatedAt,
                      LastChangedBy, LastChangedAt, LocalLastChangedAt;
   association _Credential { create; }
@@ -28,6 +29,9 @@ etag master LocalLastChangedAt
     UserUUID = user_uuid;
     Username = username;
     NormalizedUsername = normalized_username;
+    WorkerID = worker_id;
+    Plant = plant;
+    BoPhan = bo_phan;
     FullName = full_name;
     Email = email;
     Status = status;

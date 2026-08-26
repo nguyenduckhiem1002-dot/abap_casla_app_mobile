@@ -20,6 +20,10 @@ CLASS lhc_operationallocation DEFINITION
       IMPORTING keys FOR ACTION OperationAllocation~transfer
       RESULT result.
 
+    METHODS recall FOR MODIFY
+      IMPORTING keys FOR ACTION OperationAllocation~recall
+      RESULT result.
+
     METHODS confirm FOR MODIFY
       IMPORTING keys FOR ACTION OperationAllocation~confirm
       RESULT result.
@@ -49,7 +53,8 @@ CLASS lhc_employeeallocation IMPLEMENTATION.
     READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
       ENTITY EmployeeAllocation
       FIELDS ( InitialAssignedQuantity TransferredInQuantity
-               TransferredOutQuantity CompletedQuantity RemainingQuantity )
+               TransferredOutQuantity RecalledQuantity CompletedQuantity
+               RemainingQuantity )
       WITH CORRESPONDING #( keys )
       RESULT DATA(allocations).
 
@@ -58,6 +63,7 @@ CLASS lhc_employeeallocation IMPLEMENTATION.
         <allocation>-InitialAssignedQuantity
         + <allocation>-TransferredInQuantity
         - <allocation>-TransferredOutQuantity
+        - <allocation>-RecalledQuantity
         - <allocation>-CompletedQuantity.
       IF expected_remaining < 0
          OR <allocation>-RemainingQuantity <> expected_remaining.
@@ -82,6 +88,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     result-%update = if_abap_behv=>auth-unauthorized.
     result-%action-initialAssign = if_abap_behv=>auth-unauthorized.
     result-%action-transfer = if_abap_behv=>auth-unauthorized.
+    result-%action-recall = if_abap_behv=>auth-unauthorized.
     result-%action-confirm = if_abap_behv=>auth-unauthorized.
     result-%action-reverse = if_abap_behv=>auth-unauthorized.
     "The history query mutates nothing and does its own token check.
@@ -125,27 +132,308 @@ CLASS lhc_operationallocation IMPLEMENTATION.
 
   METHOD initialAssign.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
-      APPEND VALUE #( %tky = <key>-%tky )
-        TO failed-operationallocation.
-      APPEND VALUE #(
-        %tky = <key>-%tky
-        %msg = new_message_with_text(
+      DATA(input) = <key>-%param.
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation ALL FIELDS
+        WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
+      IF operations IS INITIAL OR input-Quantity <= 0
+         OR input-ToWorkerID IS INITIAL OR input-ActorUserUUID IS INITIAL
+         OR input-SyncItemUUID IS INITIAL OR input-ExecutionDate IS INITIAL.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+        APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
           severity = if_abap_behv_message=>severity-error
-          text = 'INITIAL_ASSIGNMENT implementation is not activated yet' ) )
-        TO reported-operationallocation.
+          text = 'Thiếu dữ liệu giao việc bắt buộc' ) )
+          TO reported-operationallocation.
+        CONTINUE.
+      ENDIF.
+      DATA(operation) = operations[ 1 ].
+      IF input-UnitOfMeasure <> operation-UnitOfMeasure
+         OR zcl_pp_worker_validator=>is_worker_active(
+           worker_id = input-ToWorkerID plant = operation-Plant
+           work_center = operation-WorkCenter
+           execution_date = input-ExecutionDate ) = abap_false.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+        APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-error
+          text = 'Nhân công không hợp lệ tại ngày, nhà máy hoặc tổ đã chọn' ) )
+          TO reported-operationallocation.
+        CONTINUE.
+      ENDIF.
+      TRY.
+          DATA(worker_auth) = zcl_mob_password_service=>verify_worker(
+            worker_id = input-ToWorkerID
+            password = CONV string( input-WorkerPassword ) ).
+        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(auth_error).
+          APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+          APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = auth_error->get_text( ) ) ) TO reported-operationallocation.
+          CONTINUE.
+      ENDTRY.
+      IF worker_auth-is_valid = abap_false.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+        APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-error
+          text = |Xác minh nhân công thất bại: { worker_auth-error_code }| ) )
+          TO reported-operationallocation.
+        CONTINUE.
+      ENDIF.
+      SELECT SINGLE transaction_uuid FROM ztb_pp_alloc_txn
+        WHERE sync_item_uuid = @input-SyncItemUUID
+        INTO @DATA(existing_txn).
+      IF existing_txn IS NOT INITIAL.
+        APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
+        CONTINUE.
+      ENDIF.
+      SELECT FROM ztb_pp_emp_alloc
+        FIELDS SUM( initial_assigned_qty ) AS assigned
+        WHERE operation_uuid = @operation-OperationUUID
+        INTO @DATA(operation_balance).
+      IF operation_balance-assigned + input-Quantity
+         > operation-OperationQuantity.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+        APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-error
+          text = 'Tổng số lượng giao vượt số lượng công đoạn' ) )
+          TO reported-operationallocation.
+        CONTINUE.
+      ENDIF.
+      SELECT SINGLE FROM ztb_pp_emp_alloc
+        FIELDS emp_alloc_uuid, initial_assigned_qty, remaining_qty
+        WHERE operation_uuid = @operation-OperationUUID
+          AND worker_id = @input-ToWorkerID
+        INTO @DATA(balance).
+      IF balance IS INITIAL.
+        MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+          ENTITY OperationAllocation CREATE BY \_Employees FIELDS
+            ( WorkerID InitialAssignedQuantity RemainingQuantity
+              UnitOfMeasure LastExecutionDate )
+          WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
+            ( %cid = |EMP{ sy-tabix }| WorkerID = input-ToWorkerID
+              InitialAssignedQuantity = input-Quantity
+              RemainingQuantity = input-Quantity
+              UnitOfMeasure = input-UnitOfMeasure
+              LastExecutionDate = input-ExecutionDate ) ) ) ).
+      ELSE.
+        MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+          ENTITY EmployeeAllocation UPDATE FIELDS
+            ( InitialAssignedQuantity RemainingQuantity LastExecutionDate )
+          WITH VALUE #( ( EmployeeAllocationUUID = balance-emp_alloc_uuid
+            InitialAssignedQuantity = balance-initial_assigned_qty + input-Quantity
+            RemainingQuantity = balance-remaining_qty + input-Quantity
+            LastExecutionDate = input-ExecutionDate ) ).
+      ENDIF.
+      MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
+          ( SyncItemUUID ActorUserUUID TransactionType WorkerID ToWorkerID
+            Quantity UnitOfMeasure ExecutionDate TransactionStatus )
+        WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
+          ( %cid = |TXN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
+            ActorUserUUID = input-ActorUserUUID
+            TransactionType = zcl_pp_txn_type=>initial_assign
+            WorkerID = input-ToWorkerID ToWorkerID = input-ToWorkerID
+            Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
+            ExecutionDate = input-ExecutionDate
+            TransactionStatus = zcl_pp_txn_type=>posted ) ) ) ).
+      APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
     ENDLOOP.
   ENDMETHOD.
 
   METHOD transfer.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
-      APPEND VALUE #( %tky = <key>-%tky )
-        TO failed-operationallocation.
-      APPEND VALUE #(
-        %tky = <key>-%tky
-        %msg = new_message_with_text(
+      DATA(input) = <key>-%param.
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation ALL FIELDS
+        WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
+      IF operations IS INITIAL OR input-Quantity <= 0
+         OR input-FromWorkerID IS INITIAL OR input-ToWorkerID IS INITIAL
+         OR input-FromWorkerID = input-ToWorkerID
+         OR input-ActorUserUUID IS INITIAL OR input-SyncItemUUID IS INITIAL
+         OR input-ExecutionDate IS INITIAL.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+        APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
           severity = if_abap_behv_message=>severity-error
-          text = 'TRANSFER implementation is not activated yet' ) )
-        TO reported-operationallocation.
+          text = 'Thiếu hoặc sai dữ liệu điều chuyển' ) )
+          TO reported-operationallocation.
+        CONTINUE.
+      ENDIF.
+      DATA(operation) = operations[ 1 ].
+      TRY.
+          DATA(worker_auth) = zcl_mob_password_service=>verify_worker(
+            worker_id = input-ToWorkerID
+            password = CONV string( input-WorkerPassword ) ).
+        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(auth_error).
+          APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+          APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = auth_error->get_text( ) ) ) TO reported-operationallocation.
+          CONTINUE.
+      ENDTRY.
+      IF worker_auth-is_valid = abap_false
+         OR input-UnitOfMeasure <> operation-UnitOfMeasure
+         OR zcl_pp_worker_validator=>is_worker_active(
+           worker_id = input-ToWorkerID plant = operation-Plant
+           work_center = operation-WorkCenter
+           execution_date = input-ExecutionDate ) = abap_false.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+        APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-error
+          text = 'Nhân công nhận việc hoặc mật khẩu không hợp lệ' ) )
+          TO reported-operationallocation.
+        CONTINUE.
+      ENDIF.
+      SELECT SINGLE transaction_uuid FROM ztb_pp_alloc_txn
+        WHERE sync_item_uuid = @input-SyncItemUUID INTO @DATA(existing_txn).
+      IF existing_txn IS NOT INITIAL.
+        APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
+        CONTINUE.
+      ENDIF.
+      SELECT FROM ztb_pp_emp_alloc
+        FIELDS emp_alloc_uuid, worker_id, transferred_in_qty,
+               transferred_out_qty, remaining_qty, uom
+        WHERE operation_uuid = @operation-OperationUUID
+          AND worker_id IN ( @input-FromWorkerID, @input-ToWorkerID )
+        INTO TABLE @DATA(balances).
+      DATA(source) = VALUE #( balances[ worker_id = input-FromWorkerID ] OPTIONAL ).
+      DATA(target) = VALUE #( balances[ worker_id = input-ToWorkerID ] OPTIONAL ).
+      IF source IS INITIAL OR source-uom <> input-UnitOfMeasure
+         OR source-remaining_qty < input-Quantity.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+        APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-error
+          text = 'Số dư nhân công nguồn không đủ để điều chuyển' ) )
+          TO reported-operationallocation.
+        CONTINUE.
+      ENDIF.
+      MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY EmployeeAllocation UPDATE FIELDS
+          ( TransferredOutQuantity RemainingQuantity LastExecutionDate )
+        WITH VALUE #( ( EmployeeAllocationUUID = source-emp_alloc_uuid
+          TransferredOutQuantity = source-transferred_out_qty + input-Quantity
+          RemainingQuantity = source-remaining_qty - input-Quantity
+          LastExecutionDate = input-ExecutionDate ) ).
+      IF target IS INITIAL.
+        MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+          ENTITY OperationAllocation CREATE BY \_Employees FIELDS
+            ( WorkerID TransferredInQuantity RemainingQuantity UnitOfMeasure
+              LastExecutionDate )
+          WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
+            ( %cid = |TRG{ sy-tabix }| WorkerID = input-ToWorkerID
+              TransferredInQuantity = input-Quantity
+              RemainingQuantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
+              LastExecutionDate = input-ExecutionDate ) ) ) ).
+      ELSE.
+        MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+          ENTITY EmployeeAllocation UPDATE FIELDS
+            ( TransferredInQuantity RemainingQuantity LastExecutionDate )
+          WITH VALUE #( ( EmployeeAllocationUUID = target-emp_alloc_uuid
+            TransferredInQuantity = target-transferred_in_qty + input-Quantity
+            RemainingQuantity = target-remaining_qty + input-Quantity
+            LastExecutionDate = input-ExecutionDate ) ).
+      ENDIF.
+      MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
+          ( SyncItemUUID ActorUserUUID TransactionType FromWorkerID ToWorkerID
+            Quantity UnitOfMeasure ExecutionDate TransactionStatus )
+        WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
+          ( %cid = |TRN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
+            ActorUserUUID = input-ActorUserUUID
+            TransactionType = zcl_pp_txn_type=>transfer
+            FromWorkerID = input-FromWorkerID ToWorkerID = input-ToWorkerID
+            Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
+            ExecutionDate = input-ExecutionDate
+            TransactionStatus = zcl_pp_txn_type=>posted ) ) ) ).
+      APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD recall.
+    LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
+      DATA(input) = <key>-%param.
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation ALL FIELDS
+        WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
+      IF operations IS INITIAL OR input-Quantity <= 0
+         OR input-WorkerID IS INITIAL OR input-ActorUserUUID IS INITIAL
+         OR input-SyncItemUUID IS INITIAL
+         OR input-OriginalTransactionUUID IS INITIAL
+         OR input-ExecutionDate IS INITIAL.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+        APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-error
+          text = 'Thiếu dữ liệu thu hồi bắt buộc' ) )
+          TO reported-operationallocation.
+        CONTINUE.
+      ENDIF.
+      DATA(operation) = operations[ 1 ].
+      TRY.
+          DATA(worker_auth) = zcl_mob_password_service=>verify_worker(
+            worker_id = input-WorkerID
+            password = CONV string( input-WorkerPassword ) ).
+        CATCH cx_abap_message_digest zcx_mob_config INTO DATA(auth_error).
+          APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+          APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = auth_error->get_text( ) ) ) TO reported-operationallocation.
+          CONTINUE.
+      ENDTRY.
+      IF worker_auth-is_valid = abap_false.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+        APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-error
+          text = |Xác minh nhân công thất bại: { worker_auth-error_code }| ) )
+          TO reported-operationallocation.
+        CONTINUE.
+      ENDIF.
+      SELECT SINGLE transaction_uuid FROM ztb_pp_alloc_txn
+        WHERE sync_item_uuid = @input-SyncItemUUID INTO @DATA(existing_txn).
+      IF existing_txn IS NOT INITIAL.
+        APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
+        CONTINUE.
+      ENDIF.
+      SELECT SINGLE FROM ztb_pp_alloc_txn
+        FIELDS transaction_type
+        WHERE transaction_uuid = @input-OriginalTransactionUUID
+          AND operation_uuid = @operation-OperationUUID
+          AND transaction_status = @zcl_pp_txn_type=>posted
+        INTO @DATA(root_type).
+      SELECT SINGLE FROM ztb_pp_emp_alloc
+        FIELDS emp_alloc_uuid, recalled_qty, remaining_qty, uom
+        WHERE operation_uuid = @operation-OperationUUID
+          AND worker_id = @input-WorkerID INTO @DATA(balance).
+      IF ( root_type <> zcl_pp_txn_type=>initial_assign
+           AND root_type <> zcl_pp_txn_type=>transfer )
+         OR balance IS INITIAL OR balance-uom <> input-UnitOfMeasure
+         OR balance-remaining_qty < input-Quantity.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
+        APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-error
+          text = 'Thu hồi vượt số dư hoặc không thuộc giao dịch giao việc' ) )
+          TO reported-operationallocation.
+        CONTINUE.
+      ENDIF.
+      MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY EmployeeAllocation UPDATE FIELDS
+          ( RecalledQuantity RemainingQuantity LastExecutionDate )
+        WITH VALUE #( ( EmployeeAllocationUUID = balance-emp_alloc_uuid
+          RecalledQuantity = balance-recalled_qty + input-Quantity
+          RemainingQuantity = balance-remaining_qty - input-Quantity
+          LastExecutionDate = input-ExecutionDate ) )
+        ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
+          ( OriginalTransactionUUID SyncItemUUID ActorUserUUID
+            TransactionType WorkerID FromWorkerID Quantity UnitOfMeasure
+            ExecutionDate TransactionStatus )
+        WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
+          ( %cid = |RCL{ sy-tabix }|
+            OriginalTransactionUUID = input-OriginalTransactionUUID
+            SyncItemUUID = input-SyncItemUUID
+            ActorUserUUID = input-ActorUserUUID
+            TransactionType = zcl_pp_txn_type=>recall
+            WorkerID = input-WorkerID FromWorkerID = input-WorkerID
+            Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
+            ExecutionDate = input-ExecutionDate
+            TransactionStatus = zcl_pp_txn_type=>posted ) ) ) ).
+      APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
     ENDLOOP.
   ENDMETHOD.
 

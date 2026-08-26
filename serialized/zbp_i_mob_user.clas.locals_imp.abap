@@ -48,13 +48,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD hash_password.
-    DATA(hasher) = NEW zcl_mob_hasher(
-      iv_secret_key = zcl_mob_sec_config=>get_password_secret( ) ).
-    DATA(hash_value) = salt && ':' && password.
-    DO iterations TIMES.
-      hash_value = hasher->calculate_hash( hash_value ).
-    ENDDO.
-    hash = hash_value.
+    hash = zcl_mob_password_service=>calculate_hash(
+      password = password salt = salt iterations = iterations ).
   ENDMETHOD.
 
   METHOD hash_token.
@@ -114,11 +109,13 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(now) = utclong_current( ).
     MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
       ENTITY MobileUser CREATE FIELDS
-        ( Username NormalizedUsername FullName Email Status FailedLoginCount
+        ( Username NormalizedUsername FullName Email WorkerID Plant BoPhan
+          Status FailedLoginCount
           PasswordChangeRequired )
       WITH VALUE #( ( %cid = 'USR' Username = input-Username
         NormalizedUsername = normalized FullName = input-FullName
-        Email = input-Email Status = 'A' FailedLoginCount = 0
+        Email = input-Email WorkerID = input-WorkerID Plant = input-Plant
+        BoPhan = input-BoPhan Status = 'A' FailedLoginCount = 0
         PasswordChangeRequired = abap_true ) )
       ENTITY MobileUser CREATE BY \_Credential FIELDS
         ( PasswordHash PasswordSalt HashAlgorithm HashIterations

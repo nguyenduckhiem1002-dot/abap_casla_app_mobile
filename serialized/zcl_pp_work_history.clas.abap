@@ -58,6 +58,8 @@ CLASS zcl_pp_work_history DEFINITION
              plant              TYPE ztb_pp_op_alloc-plant,
              work_center        TYPE ztb_pp_op_alloc-work_center,
              transaction_type   TYPE ztb_pp_alloc_txn-transaction_type,
+             original_transaction_type
+               TYPE ztb_pp_alloc_txn-original_transaction_type,
              quantity           TYPE ztb_pp_alloc_txn-quantity,
              uom                TYPE ztb_pp_alloc_txn-uom,
              transaction_status TYPE ztb_pp_alloc_txn-transaction_status,
@@ -282,24 +284,15 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD worker_of_account.
-    "The account name is the worker id by convention, and Username is
-    "readonly in the behaviour definition so the link cannot drift. A name
-    "that does not fit a worker id would truncate into somebody else's rows,
-    "so it is rejected rather than shortened.
     SELECT FROM ztb_mob_user
-      FIELDS username
+      FIELDS worker_id
       WHERE user_uuid = @user_uuid
       INTO TABLE @DATA(accounts)
       UP TO 1 ROWS.
     IF accounts IS INITIAL.
       RETURN.
     ENDIF.
-    DATA(candidate) = to_upper(
-      condense( CONV string( accounts[ 1 ]-username ) ) ).
-    IF candidate IS INITIAL OR strlen( candidate ) > 8.
-      RETURN.
-    ENDIF.
-    result = CONV #( candidate ).
+    result = accounts[ 1 ]-worker_id.
   ENDMETHOD.
 
   METHOD select_self.
@@ -309,6 +302,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
              txn~execution_date, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
+             txn~original_transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~plant, op~work_center
       WHERE txn~execution_date BETWEEN @date_from AND @date_to
@@ -394,6 +388,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
              txn~execution_date, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
+             txn~original_transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~plant, op~work_center
       FOR ALL ENTRIES IN @scope
@@ -472,14 +467,33 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
                                   uom = <row>-uom
                                   completed = <row>-quantity
                         CHANGING summaries = result ).
-        WHEN zcl_pp_txn_type=>reverse.
+        WHEN zcl_pp_txn_type=>recall.
           IF <row>-worker_id <> <row>-report_worker_id.
             CONTINUE.
           ENDIF.
           add_quantity( EXPORTING worker = <row>-report_worker_id
                                   uom = <row>-uom
-                                  completed = <row>-quantity * -1
+                                  assigned = <row>-quantity * -1
                         CHANGING summaries = result ).
+        WHEN zcl_pp_txn_type=>reverse.
+          CASE <row>-original_transaction_type.
+            WHEN zcl_pp_txn_type=>confirm.
+              add_quantity( EXPORTING worker = <row>-report_worker_id
+                                      uom = <row>-uom
+                                      completed = <row>-quantity * -1
+                            CHANGING summaries = result ).
+            WHEN zcl_pp_txn_type=>initial_assign
+              OR zcl_pp_txn_type=>transfer.
+              add_quantity( EXPORTING worker = <row>-report_worker_id
+                                      uom = <row>-uom
+                                      assigned = <row>-quantity * -1
+                            CHANGING summaries = result ).
+            WHEN zcl_pp_txn_type=>recall.
+              add_quantity( EXPORTING worker = <row>-report_worker_id
+                                      uom = <row>-uom
+                                      assigned = <row>-quantity
+                            CHANGING summaries = result ).
+          ENDCASE.
         WHEN OTHERS.
           "An unknown type is counted but not booked, so adding a
           "transaction type later cannot silently distort the figures.
