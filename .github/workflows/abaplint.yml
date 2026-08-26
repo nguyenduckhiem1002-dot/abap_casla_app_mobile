@@ -19,6 +19,6 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Run abaplint
         run: npx --yes @abaplint/cli@2.120.35
