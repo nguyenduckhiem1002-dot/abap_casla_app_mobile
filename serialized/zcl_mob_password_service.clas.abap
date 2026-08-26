@@ -11,12 +11,12 @@ CLASS zcl_mob_password_service DEFINITION
                 salt TYPE string
                 iterations TYPE i
       RETURNING VALUE(hash) TYPE ztb_mob_cred-password_hash
-      RAISING cx_abap_message_digest.
+      RAISING cx_abap_message_digest zcx_mob_config.
     CLASS-METHODS verify_worker
       IMPORTING worker_id TYPE ztb_mob_user-worker_id
                 password TYPE string
       RETURNING VALUE(result) TYPE verification
-      RAISING cx_abap_message_digest.
+      RAISING cx_abap_message_digest zcx_mob_config.
 ENDCLASS.
 
 CLASS zcl_mob_password_service IMPLEMENTATION.
