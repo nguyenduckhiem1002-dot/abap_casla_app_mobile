@@ -163,12 +163,6 @@ Global authorization denies direct external domain mutations; a future sync work
 
 The repository does not yet contain a target-tenant-verified SAP Production Confirmation/reversal adapter. Writing local `CompletedQuantity` or a `POSTED` confirmation before SAP succeeds would create two conflicting production truths, so these actions must not be enabled yet.
 
-## Shift >= 60 minute rule
-
-The supplied business flow contains a rule that an assignee change is allowed only when at least 60 minutes remain in the shift.
-
-It is intentionally not implemented because this repository still has no authoritative shift/end-time source. Do not infer or hard-code shift times.
-
 ## Work history
 
 `getWorkHistory` is exposed through `ZUI_PP_OPALLOC` as a read-only token-scoped action.
@@ -270,10 +264,9 @@ This run covered the Work Context RAP model and the runtime User/Role/Work + PP 
 
 ## Next implementation slice
 
-1. Establish the authoritative shift/end-time source.
-2. Complete `submitSync` accept-only API and read-back status surface.
-3. Complete the background worker/retry/dead-letter pipeline.
-4. Define canonical external mutation Function IDs without guessing names.
-5. Select and verify the released SAP Production Confirmation API on the target tenant.
-6. Implement SAP confirmation/reversal adapters and integration tests.
-7. Add ABAP Unit/integration tests for UserRole/RoleWork validation, work-scope enforcement, balance transitions and duplicate sync behavior.
+1. Complete `submitSync` accept-only API and read-back status surface.
+2. Complete the background worker/retry/dead-letter pipeline.
+3. Define canonical external mutation Function IDs without guessing names.
+4. Select and verify the released SAP Production Confirmation API on the target tenant.
+5. Implement SAP confirmation/reversal adapters and integration tests.
+6. Add ABAP Unit/integration tests for UserRole/RoleWork validation, work-scope enforcement, balance transitions and duplicate sync behavior.
