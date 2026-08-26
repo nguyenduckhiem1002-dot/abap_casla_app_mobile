@@ -1,0 +1,17 @@
+name: Temporary ABAP syntax check
+
+on:
+  push:
+    branches:
+      - chatgpt/wf-alignment-syntax-hardening
+
+jobs:
+  abaplint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run abaplint Cloud checks
+        run: npx --yes @abaplint/cli@2.120.35
