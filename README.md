@@ -1,397 +1,209 @@
 # CASLA Mobile Production Allocation – ABAP RAP Backend
 
-Backend ABAP RAP cho **CASLA Mobile**, phục vụ luồng giám sát sản xuất từ quản trị tài khoản/phân quyền đến giao việc, điều chuyển, thu hồi, xác minh công nhân, lịch sử thực hiện và chuẩn bị đồng bộ xác nhận sản lượng về SAP.
+Backend ABAP RAP cho **CASLA Mobile Production Allocation** trên SAP S/4HANA Cloud Public Edition / ABAP Cloud.
 
-Thiết kế của repository bám theo các nguyên tắc:
+Repository quản lý authentication/session, RBAC + Work Context, giao/điều chuyển/thu hồi công việc, ghi nhận sản lượng, immutable transaction ledger, timeout reconciliation, Fiori correction/audit và master Công đoạn phục vụ enrichment/đơn giá.
 
-- **server-authoritative**: quyền, actor và Work Context luôn được backend đọc lại;
-- **ledger-first**: mọi thay đổi sản lượng phải có transaction/audit rõ ràng;
-- **fail-closed**: phần tích hợp SAP chưa hoàn tất thì không giả lập success;
-- **composition-first**: User → Role và Role → Function/Work được quản trị ngay trên Object Page cha, không tách thành nhiều app nhỏ;
-- **ABAP Cloud / RAP strict(2)**: các BO mới dùng managed RAP, validation backend và service boundary rõ ràng.
+> **Business boundary quan trọng:** trong project này, “ghi nhận về SAP” nghĩa là **ghi nhận nghiệp vụ CASLA vào custom Z tables chạy trên SAP thông qua custom RAP/OData V4 APIs**. Backend **không tạo standard SAP Production Confirmation**, material document hay business document chuẩn khác.
 
-> **Target**
->
-> - SAP S/4HANA Cloud Public Edition / ABAP Cloud
-> - Managed RAP, non-draft
-> - OData V4
-> - Fiori Elements cho admin
-> - abapGit source: `serialized/`
+## Trạng thái hiện tại
 
----
+Kiến trúc production-allocation đã được chuyển hoàn toàn sang **direct mobile command + managed RAP LUW + immutable ledger**.
 
-## 1. Luồng nghiệp vụ tổng thể
+Đã có:
+
+- `initialAssign`, `transfer`, `recall`, `confirm`, `reverse`;
+- direct mobile facade theo `ProductionOrder + Operation`;
+- token/session/device guard cho protected mobile API;
+- live SAP Manufacturing Order / Operation guard;
+- `OperationStandardTextCode -> MaCongDoan`;
+- `getSyncStatus` cho request timeout/chưa xác nhận;
+- append-only `ZTB_PP_ALLOC_TXN` cho reconciliation/audit;
+- Fiori controlled `correctConfirm`;
+- versioned `ZTB_MD_CONGDOAN` + Fiori OData V4 service;
+- draw.io ERD + execution flow;
+- GitHub Actions ABAP Cloud quality gate.
+
+Đã loại bỏ khỏi kiến trúc hiện hành:
+
+- `ZTB_PP_SYNC_H` / `ZTB_PP_SYNC_I`;
+- generic `submitSync` batch contract;
+- SAP-side background worker/bgPF cho mobile commands;
+- standard SAP Production Confirmation adapter;
+- mọi rule liên quan “ca còn >= 60 phút”.
+
+Latest quality gate của source final:
+
+```text
+@abaplint/cli 2.120.35
+ABAP language version: Cloud
+0 issue(s) found
+241 file(s) analyzed
+```
+
+## Nguyên tắc kiến trúc
+
+- **Server authoritative:** actor, session, permission và Work Context luôn được backend xác thực lại.
+- **Session guard:** protected mobile API kiểm tra access token + active session + device.
+- **Domain command only:** mobile/Fiori không được free-form CRUD balance hoặc ledger.
+- **Immutable ledger:** mọi thay đổi nghiệp vụ được giải thích bằng transaction mới trong `ZTB_PP_ALLOC_TXN`.
+- **Same RAP LUW:** current balance update và ledger append nằm trong cùng managed RAP transaction boundary.
+- **Idempotent mobile commands:** mobile sinh `SyncItemUUID` trước khi gửi và reuse đúng ID khi retry.
+- **Timeout != failure:** mất HTTP response không được kết luận business FAILED.
+- **Mobile-owned reliability queue:** pending/retry nằm ở mobile; SAP không giữ queue xử lý mobile riêng.
+- **Long-lived assignment:** công việc có thể kéo dài nhiều ngày hoặc nhiều tuần; ca làm việc không phải constraint.
+- **SAP live validation:** custom snapshot không thay thế việc kiểm tra live Production Order / Operation trước mutation.
+
+## 1. Luồng mobile
 
 ```mermaid
 flowchart TD
-    A[Admin khai báo Function / Role / Work Context] --> B[Role gán Functions + Work Contexts]
-    B --> C[Tạo User và gán Role ban đầu]
-    C --> D[Mobile Login]
+    A[Login] --> B[Access token + refresh token + session]
+    B --> C[Mobile command + stable SyncItemUUID]
+    C --> D[Token / session / device guard]
+    D -->|invalid| E[Reject]
+    D -->|valid| F[Resolve Production Order + Operation]
+    F --> G[I_ManufacturingOrderStatus]
+    G --> H{REL active và không TECO/CLSD/DLFL?}
+    H -->|No| E
+    H -->|Yes| I[I_ManufacturingOrderOperation]
+    I --> J{YBP1 + not deleted + master data complete?}
+    J -->|No| E
+    J -->|Yes| K[OperationStandardTextCode -> MaCongDoan]
+    K --> L[I_WorkCenter -> Plant/WorkCenter + Qty/UoM]
+    L --> M[Work Context + worker/password + balance + idempotency]
+    M --> N[Managed RAP domain action]
+    N --> O[Update ZTB_PP_EMP_ALLOC]
+    N --> P[Append POSTED ZTB_PP_ALLOC_TXN]
+    O --> Q[Same RAP LUW]
+    P --> Q
+    Q --> R[Facade reads receipt from RAP transactional buffer]
+    R --> S[Return SUCCESS]
 
-    D --> E{Account + Credential hợp lệ?}
-    E -- Không --> F[Failed login counter]
-    F --> G{5 lần sai trong 1 phút?}
-    G -- Có --> H[Khóa 10 phút]
-    G -- Không --> D
-    H --> D
-
-    E -- Có --> I[Load effective Roles]
-    I --> J[Load effective Functions]
-    I --> K[Load effective Work Contexts]
-    J --> L[Menu / Overview]
-    K --> L
-
-    L --> M[Giao việc]
-    L --> N[Điều chuyển]
-    L --> O[Thu hồi]
-    L --> P[Xác nhận sản lượng]
-    L --> Q[Lịch sử]
-
-    M --> R[Đọc Operation]
-    N --> R
-    O --> R
-
-    R --> S{Plant + WorkCenter thuộc scope?}
-    S -- Không --> T[WORK_CONTEXT_NOT_ALLOWED]
-    S -- Có --> U[Chọn / xác minh Worker]
-    U --> V[Validate quantity + UoM + idempotency]
-    V --> W[Update balance + transaction ledger]
-
-    P --> X[Worker verification]
-    X --> Y[Sync Inbox]
-    Y --> Z[Background worker]
-    Z --> AA[SAP Production Confirmation]
-    AA --> AB{SAP success?}
-    AB -- Có --> AC[Completed balance + POSTED ledger]
-    AB -- Không --> AD[FAILED / retry / DEAD]
-
-    Q --> AE[TEAM / SELF theo RBAC]
-    AE --> AF[D / W / M / Custom range]
+    S -. HTTP response lost .-> T[UNKNOWN / PENDING_CONFIRMATION]
+    T --> U[getSyncStatus same SyncItemUUID]
+    U -->|SUCCESS| V[Mark SYNCED]
+    U -->|NOT_FOUND| W[Commit not proven]
+    W --> X[Retry same command + same SyncItemUUID]
 ```
 
-### Các invariant bắt buộc
+### RAP transactional-buffer rule
 
-1. **Username không phải UserUUID.** Sau khi resolve account, credential/session/RBAC/audit đều dùng `UserUUID`.
-2. **Actor không đến từ payload.** `ActorUserUUID` được suy ra từ access token/session.
-3. **Permission client chỉ dùng để render UI.** Backend luôn re-read RBAC trước thao tác cần bảo vệ.
-4. **Work Context là authorization scope.** Mobile không được tự mở Plant/Work Center ngoài Role được cấp.
-5. **Worker phải được xác minh tại thời điểm mutation.**
-6. **Quantity và UoM phải nhất quán.** Không được âm, vượt balance hoặc cộng chéo đơn vị.
-7. **SyncItemUUID phải idempotent.** Duplicate/race không được chọn ngẫu nhiên một record để tiếp tục.
-8. **Confirm/Reverse chỉ được success khi SAP thực sự success.**
+Sau internal action, ledger child vừa tạo có thể mới tồn tại trong **RAP transactional buffer**, chưa phải committed database state. Vì vậy facade đọc receipt bằng EML:
 
----
+```abap
+READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+  ENTITY OperationAllocation BY \_Transactions
+  ...
+```
 
-## 2. Trạng thái triển khai theo flow
+không dùng Open SQL để cố đọc row vừa tạo trước save sequence.
 
-| Khối nghiệp vụ | Trạng thái |
+## 2. Mobile API surface
+
+### Authentication service
+
+Service Definition: `ZUI_MOB_AUTH`
+
+Phục vụ lifecycle authentication/session như login, refresh, logout và change password theo contract hiện có.
+
+### Production service
+
+Service Definition: `ZUI_PP_OPALLOC`
+
+Mobile không CRUD trực tiếp `ZTB_PP_EMP_ALLOC` hoặc `ZTB_PP_ALLOC_TXN`. Projection chỉ expose command/status/history facade:
+
+| Action | Mục đích |
 | --- | --- |
-| User / Credential / Session | ✅ Implemented |
-| Login / Refresh / Logout / Change Password | ✅ Implemented |
-| Failed login: 5 lần / 1 phút → lock 10 phút | ✅ Implemented |
-| Function / Role / UserRole | ✅ Implemented |
-| Work Context / RoleWork | ✅ Implemented |
-| Fiori User Administration | ✅ Backend RAP + OData V4 binding |
-| Fiori RBAC & Work Administration | ✅ Backend RAP + OData V4 binding |
-| Login trả Permissions + Work Contexts | ✅ Implemented |
-| Server-side Plant + WorkCenter scope | ✅ Implemented |
-| `initialAssign` | ✅ Internal domain logic |
-| `transfer` | ✅ Internal domain logic |
-| `recall` | ✅ Internal domain logic |
-| `getWorkHistory` | ✅ Mobile read API |
-| `submitSync` accept-only API | ⏳ Chưa hoàn thiện |
-| Background sync worker | ⏳ Chưa hoàn thiện |
-| SAP Production Confirmation adapter | ⏳ Chưa có adapter đã verify trên tenant |
-| `confirm` | 🔒 Fail-closed |
-| `reverse` | 🔒 Fail-closed |
-| Rule đổi người khi ca còn ≥ 60 phút | ⏳ Chưa có authoritative shift source |
+| `submitInitialAssign` | Giao sản lượng ban đầu |
+| `submitTransfer` | Điều chuyển sản lượng giữa nhân công |
+| `submitRecall` | Thu hồi phần sản lượng còn lại hợp lệ |
+| `submitConfirm` | Ghi nhận sản lượng hoàn thành CASLA |
+| `submitReverse` | Đảo một CONFIRM hợp lệ bằng compensating transaction |
+| `getSyncStatus` | Đối chiếu request sau timeout/response loss |
+| `getWorkHistory` | Lịch sử/summary theo scope được phép |
 
-> **Quan trọng:** “internal domain logic đã implement” không có nghĩa mobile được gọi trực tiếp. Mutation surface vẫn phải đi qua sync/security boundary khi pipeline đó hoàn thiện.
+Mobile gửi `ProductionOrder + Operation`; backend tự resolve `OperationUUID` và live operation state. `ActorUserUUID` không nhận từ payload mà được derive từ authenticated session.
 
----
+## 3. Live Production Order / Operation guard
 
-## 3. Mô hình Identity, RBAC và Work Context
+`ZCL_PP_OPERATION_GUARD` kiểm tra dữ liệu live trước mutation.
 
-```text
-ZTB_MOB_USER
-    |
-    +-- ZTB_MOB_USR_ROL
-            |
-            +-- ZTB_MOB_ROLE
-                    |
-                    +-- ZTB_MOB_ROL_FNC --> ZTB_MOB_FUNC
-                    |
-                    +-- ZTB_MOB_ROL_WRK --> ZTB_MOB_WORK
-```
+### `I_ManufacturingOrderStatus`
 
-### Ý nghĩa
+Chỉ xét active SAP **system status**:
 
-- **User → Role**: một tài khoản có thể có nhiều chức danh/quyền nghiệp vụ.
-- **Role → Function**: quyết định các chức năng mobile được phép dùng.
-- **Role → Work Context**: quyết định Plant + Work Center mà actor được phép thao tác.
-- Role `Status = 'I'` mất hiệu lực ngay mà không cần xóa mapping.
-- Work `IsActive = 'I'` mất hiệu lực runtime ngay mà không cần xóa RoleWork.
+- phải có `REL` (`I0002`);
+- chặn `TECO` (`I0045`);
+- chặn `CLSD` (`I0046`);
+- chặn `DLFL` (`I0076`).
 
-### Function master – `ZTB_MOB_FUNC`
+Terminal/deletion status thắng kể cả khi REL vẫn còn active.
 
-| Field | Ý nghĩa |
-| --- | --- |
-| `FUNC_ID` | ID chức năng ổn định dùng cho RBAC |
-| `FUNC_NAME` | Tên chức năng |
-| `APP_MODULE` | Module/menu nghiệp vụ trên ứng dụng |
+### `I_ManufacturingOrderOperation`
 
-CDS/RAP field tương ứng là **`AppModule`**. Không sử dụng `MODULE` vì đây là reserved word trong ABAP DDL.
-
-`FuncID` là business key và không được đổi sau create. Backend validate `FuncID`/`FuncName` trước save. Hard delete Function bị deny để tránh orphan permission contract.
-
-### Role master – `ZTB_MOB_ROLE`
-
-Role có:
-
-- `RoleID`
-- `RoleName`
-- `Status = 'A' | 'I'`
-
-`RoleID` không được đổi sau create. Backend validate Role ID/name/status. Hard delete Role bị deny; ngừng sử dụng bằng `Status = 'I'`.
-
-### Work master – `ZTB_MOB_WORK`
-
-| Field | Ý nghĩa |
-| --- | --- |
-| `WORK_ID` | ID phạm vi/vị trí làm việc |
-| `WORK_NAME` | Tên vị trí |
-| `PLANT` | Nhà máy |
-| `WORKCENTER` | Work Center / tổ |
-| `BO_PHAN` | Bộ phận |
-| `LOCATION` | Mô tả vị trí |
-| `IS_ACTIVE` | `A` active / `I` inactive |
-
-`WorkID` không được đổi sau create. Backend bắt buộc WorkID, WorkName, Plant, WorkCenter và trạng thái hợp lệ. Hard delete Work bị deny; dùng `IsActive = 'I'` khi retire.
-
-### Các mapping N:M
+Lookup theo:
 
 ```text
-ZTB_MOB_USR_ROL  = UserUUID + RoleID
-ZTB_MOB_ROL_FNC  = RoleID  + FuncID
-ZTB_MOB_ROL_WRK  = RoleID  + WorkID
+ManufacturingOrder          = ProductionOrder
+ManufacturingOrderOperation_2 = Operation
 ```
 
-Đây là **assignment records**, nên nghiệp vụ đúng là:
+Validation/snapshot:
+
+- `OperationControlProfile = 'YBP1'`;
+- `OperationIsToBeDeleted` phải initial;
+- `OperationStandardTextCode` bắt buộc;
+- planned quantity > 0;
+- Operation UoM, Plant và WorkCenterInternalID bắt buộc.
+
+Mapping nghiệp vụ:
 
 ```text
-add assignment    = CREATE
-remove assignment = DELETE
+OperationStandardTextCode -> MaCongDoan
 ```
 
-Không expose `UPDATE` để “đổi key” một mapping. Muốn đổi Role/Function/Work thì xóa assignment cũ và tạo assignment mới.
+### `I_WorkCenter`
 
-Backend validation:
-
-- UserRole chỉ nhận Role tồn tại và đang active;
-- RoleFunction chỉ nhận Function thực sự tồn tại;
-- RoleWork chỉ nhận Work Context tồn tại và đang active.
-
-Value help chỉ hỗ trợ UX; direct OData/EML request vẫn bị backend validate.
-
----
-
-## 4. Hai Fiori Elements admin apps
-
-Thiết kế cố ý chỉ có **2 admin apps**, không tạo app riêng cho từng mapping table.
-
-### 4.1 User Administration
-
-- Service Definition: `ZUI_MOB_USER_ADM`
-- OData V4 Binding: `ZUI_MOB_USER_ADM_O4`
-- Main Entity Set: `SupervisorAccounts`
-- UI pattern: **List Report + Object Page**
-
-#### Tạo User
-
-Action `createUser` nhận:
-
-- Username
-- Password
-- FullName
-- Email
-- WorkerID
-- **RoleID ban đầu**
-
-Backend validate Role active rồi deep-create trong **một RAP LUW**:
+Resolve Work Center code bằng:
 
 ```text
-User
- + Credential
- + Initial UserRole
+Plant + WorkCenterInternalID
 ```
 
-Không tạo User trước rồi yêu cầu admin sang app khác gán Role.
+Kết quả live được snapshot vào `ZTB_PP_OP_ALLOC`. `MaCongDoan` phục vụ enrichment/reporting/payroll về sau; nó không thay thế live order/operation validation.
 
-#### User Object Page
+> Exact released status và field availability của các SAP CDS interface phải được verify bằng ADT/View Browser trên **đúng target Public Cloud tenant/release** khi activate.
 
-Có hai phần chính:
+## 4. Production persistence
 
-1. **Thông tin tài khoản**
-2. **Chức danh** (`_Roles`)
+### `ZTB_PP_OP_ALLOC` — operation snapshot
 
-Tại `_Roles`, admin có thể add/remove Role ngay trên cùng Object Page.
-
-### 4.2 RBAC & Work Administration
-
-- Service Definition: `ZUI_MOB_RBAC_ADM`
-- OData V4 Binding: `ZUI_MOB_RBAC_ADM_O4`
-- Main Entity Set: `Roles`
-- UI pattern: **List Report + Object Page**
-
-#### Role Object Page
-
-Có ba phần:
-
-1. **Thông tin chức danh**
-2. **Quyền chức năng** (`_Functions`)
-3. **Vị trí làm việc** (`_WorkAssignments`)
-
-`_Functions` hiển thị:
-
-- FuncID
-- FuncName
-- **AppModule**
-
-`_WorkAssignments` hiển thị:
-
-- WorkID
-- WorkName
-- Plant
-- WorkCenter
-- Bộ phận
-- Location
-
-#### Function và Work master
-
-Cùng service `ZUI_MOB_RBAC_ADM` expose:
-
-- `Functions`
-- `WorkContexts`
-
-Chúng là master-data pages/secondary routes trong **cùng RBAC & Work app**, không tạo thêm Launchpad tile chỉ để maintain Function hoặc Work.
-
-Chi tiết triển khai frontend: [`docs/FIORI_ELEMENTS_ADMIN.md`](docs/FIORI_ELEMENTS_ADMIN.md).
-
-> Repository này là ABAP backend. UI5 app shell, semantic object, catalog, space/page, destination và runtime OData URL phải được generate/publish trên tenant thật; không hard-code endpoint giả vào Git.
-
----
-
-## 5. Login, lockout và effective context
-
-Mobile authentication đi qua `ZUI_MOB_AUTH`.
-
-### Login flow
-
-1. Normalize username.
-2. Resolve duy nhất User + Credential active.
-3. Verify password bằng KDF dùng chung.
-4. Nếu sai:
-   - failure ngoài cửa sổ cũ → counter reset về 1;
-   - failure trong cùng cửa sổ 1 phút → increment;
-   - đủ 5 lần → `LockedUntil = now + 10 phút`.
-5. Nếu đúng:
-   - reset failed-login state;
-   - revoke session cũ cùng device;
-   - enforce active-session limit;
-   - phát access token + refresh token;
-   - trả `_Permissions`;
-   - trả `_WorkContexts`.
-
-Persistence liên quan:
+Các field nghiệp vụ chính:
 
 ```text
-ZTB_MOB_USER
-ZTB_MOB_CRED
-ZTB_MOB_SESSION
+OPERATION_UUID
+PRODUCTION_ORDER
+OPERATION_NO
+MA_CONGDOAN
+PLANT
+WORK_CENTER
+OPERATION_QTY
+UOM
+OPERATION_STATUS
 ```
 
-Plaintext token không được lưu DB; chỉ lưu token hash. Refresh token được rotate. Đổi password revoke active sessions để buộc login lại.
-
-### Permissions trả về mobile
-
-`_Permissions` được resolve từ:
+Business uniqueness cần enforce/test trên target tenant:
 
 ```text
-UserRole
- -> active Role
- -> RoleFunction
- -> Function
+CLIENT + PRODUCTION_ORDER + OPERATION_NO
 ```
 
-Mỗi permission có:
+Điều này đặc biệt quan trọng cho race condition của **first snapshot creation**, trước khi một RAP active instance đã tồn tại để lock.
 
-- FuncID
-- FuncName
-- AppModule
+### `ZTB_PP_EMP_ALLOC` — current balance
 
-Danh sách này dùng để dựng menu/UI, nhưng **không thay thế server authorization**.
-
-### Work Contexts trả về mobile
-
-`_WorkContexts` được resolve từ:
-
-```text
-UserRole
- -> active Role
- -> RoleWork
- -> active Work
-```
-
-Nếu nhiều Role cùng cấp một WorkID, kết quả được deduplicate.
-
----
-
-## 6. Work Context authorization tại runtime
-
-`ZCL_MOB_TOKEN_VALIDATOR` là source dùng chung cho:
-
-- access-token/session validation;
-- effective permission lookup;
-- effective Work Context lookup;
-- Function check;
-- Plant + WorkCenter scope check;
-- worker-password verification utilities.
-
-Các mutation đã implement nội bộ đều re-check operation scope:
-
-```text
-Authenticated actor
-        ↓
-Operation.Plant + Operation.WorkCenter
-        ↓
-UserRole -> active Role -> RoleWork -> active Work
-        ↓
-allowed ? continue : WORK_CONTEXT_NOT_ALLOWED
-```
-
-Client không được gửi một WorkID rồi yêu cầu backend tin WorkID đó là authorized.
-
-Hiện scope check áp dụng cho:
-
-- `initialAssign`
-- `transfer`
-- `recall`
-
----
-
-## 7. Production allocation domain
-
-Persistence chính:
-
-| Table | Vai trò |
-| --- | --- |
-| `ZTB_PP_OP_ALLOC` | Operation allocation header/snapshot |
-| `ZTB_PP_EMP_ALLOC` | Current balance theo Operation + Worker |
-| `ZTB_PP_ALLOC_TXN` | Transaction ledger, audit và lineage |
-| `ZTB_PP_SYNC_H` | Sync Inbox header |
-| `ZTB_PP_SYNC_I` | Sync Inbox item |
-
-### Balance invariant
+Balance theo Operation + Worker:
 
 ```text
 Remaining
@@ -402,379 +214,336 @@ Remaining
 - Completed
 ```
 
-Không được save balance âm hoặc balance không khớp ledger transition.
+`validateBalance` reject nếu Remaining âm hoặc invariant không khớp.
 
-### 7.1 Initial Assignment
+### `ZTB_PP_ALLOC_TXN` — immutable audit/reconciliation ledger
 
-Backend kiểm tra tối thiểu:
+Transaction types hiện dùng:
 
-1. access token + device;
-2. operation tồn tại;
-3. authenticated actor có Work Context chứa Plant + WorkCenter của operation;
-4. quantity/UoM hợp lệ;
-5. worker hợp lệ tại ngày thực hiện;
-6. worker password đúng;
-7. `SyncItemUUID` chưa được xử lý hoặc là idempotent replay hợp lệ;
-8. tổng assignment không vượt operation quantity;
-9. worker balance không bị duplicate.
+- `INITIAL_ASSIGN`
+- `TRANSFER`
+- `RECALL`
+- `CONFIRM`
+- `REVERSE`
+- `CORRECTION`
 
-### 7.2 Transfer
+Ledger lưu các nhóm dữ liệu:
 
-Actor được derive từ token, không nhận `ActorUserUUID` từ client.
+- `TransactionUUID`;
+- `OriginalTransactionUUID` / original type cho lineage;
+- `SyncItemUUID` cho mobile idempotency/reconciliation;
+- actor/session/device;
+- verified worker + verification evidence;
+- worker/from/to worker;
+- quantity/UoM/execution date;
+- reason/source channel/status;
+- audit timestamps.
 
-Transfer kiểm tra:
+Các field legacy `SAP_CONFIRMATION_*` / `SAP_ERROR_*` có thể còn tồn tại để tránh migration phá vỡ không cần thiết, nhưng **không đại diện cho standard SAP Production Confirmation integration** và không thuộc flow hiện hành.
 
-- source/target balance;
-- quantity/UoM;
-- idempotency;
-- worker verification;
-- Work Context của actor;
-- transaction lineage/audit.
+## 5. Domain commands
 
-### 7.3 Recall
+### Initial Assign
 
-Recall áp cùng security/balance pattern:
+- session/device guard;
+- SAP live operation guard;
+- Work Context `Plant + WorkCenter`;
+- worker active + password verification;
+- UoM/quantity validation;
+- không vượt operation quantity;
+- idempotency theo `SyncItemUUID`;
+- create/update worker balance;
+- append `INITIAL_ASSIGN`.
 
-- actor từ token;
-- Work Context server-side;
-- worker verification;
-- original transaction lookup;
-- quantity/UoM;
-- idempotency;
-- fail-closed nếu balance/lineage không nhất quán.
+### Transfer
 
-### Audit worker verification
+- source/target worker validation;
+- source remaining phải đủ;
+- worker nhận việc được verify;
+- decrement source, increment/create target;
+- append `TRANSFER`.
 
-Transaction ledger lưu:
+Assignment không phụ thuộc ca làm việc và có thể kéo dài nhiều ngày/tuần.
 
-- `ActorUserUUID`
-- `VerifiedWorkerUserUUID`
-- `WorkerVerifiedAt`
-- `InitiatorSessionID`
-- `DeviceID`
-- `VerificationMethod`
+### Recall
 
----
+- chỉ thu hồi lineage hợp lệ từ giao việc/điều chuyển;
+- không vượt remaining balance;
+- append `RECALL`;
+- không sửa transaction gốc.
 
-## 8. Mobile mutation boundary và Sync Inbox
+### Confirm
 
-Dù `initialAssign`, `transfer`, `recall` đã có domain implementation, chúng vẫn **không được mở trực tiếp cho mobile**.
-
-Target boundary:
-
-```text
-Mobile
-   ↓
-submitSync
-   ↓
-ZTB_PP_SYNC_H / ZTB_PP_SYNC_I = QUEUED
-   ↓
-Background worker
-   ↓
-Auth + Permission + WorkScope + Worker + Idempotency
-   ↓
-Internal EML vào domain BO
-   ↓
-SAP confirmation khi operation type yêu cầu
-   ↓
-SUCCESS / PARTIAL / FAILED / DEAD
-```
-
-### Sync status contract
-
-Header:
-
-- `QUEUED`
-- `IN_PROCESS`
-- `SUCCESS`
-- `PARTIAL`
-- `FAILED`
-- `DEAD`
-
-Item:
-
-- `QUEUED`
-- `SUCCESS`
-- `FAILED`
-- `DEAD`
-
-Transient infrastructure error có thể retry. Permanent business-validation error phải fail ngay. Hết retry budget thì chuyển `DEAD`.
-
-`submitSync` và background worker hiện **chưa hoàn thiện**, vì vậy mobile mutation surface vẫn đóng.
-
----
-
-## 9. Confirm và Reverse
-
-`confirm` và `reverse` hiện **fail-closed có chủ đích**.
-
-Lý do: repository chưa có SAP Production Confirmation / reversal adapter đã được xác minh trên target tenant.
-
-Không được làm theo kiểu:
+`CONFIRM` là CASLA business transaction trên custom Z tables:
 
 ```text
-local CompletedQuantity += x
-local ledger = POSTED
-SAP chưa success
+Completed += Quantity
+Remaining -= Quantity
+append CONFIRM POSTED
 ```
 
-vì như vậy sẽ tạo hai nguồn sự thật khác nhau giữa mobile backend và SAP.
+Không gọi standard SAP Production Confirmation API.
 
-Flow đúng phải là:
+### Reverse
+
+`REVERSE` là compensating transaction:
+
+- original phải là POSTED `CONFIRM` hợp lệ;
+- không sửa/xóa original;
+- không cho reverse lần hai;
+- tính effective quantity sau các `CORRECTION`;
+- restore `Completed/Remaining`;
+- append `REVERSE` linked bằng `OriginalTransactionUUID`.
+
+## 6. Idempotency, timeout và request chưa xác nhận
+
+SAP không còn `ZTB_PP_SYNC_H/I` và không có server-side mobile queue.
+
+Mobile tạo `SyncItemUUID` **trước khi gửi mutation**.
+
+### Normal success
 
 ```text
-Validate local request
-    ↓
-Call released SAP confirmation API
-    ↓
-SAP success
-    ↓
-Persist local completed balance + POSTED ledger
+mobile sends command
+        ↓
+SAP validates + mutates balance + appends ledger
+        ↓
+RAP save succeeds
+        ↓
+mobile receives SUCCESS
+        ↓
+SYNCED
 ```
 
-Reverse cũng phải tuân cùng nguyên tắc.
+### HTTP response lost
 
----
+```text
+SAP may already have committed
+        ↓
+response lost / timeout
+        ↓
+mobile must NOT mark FAILED
+        ↓
+UNKNOWN / PENDING_CONFIRMATION
+        ↓
+getSyncStatus(AccessToken, DeviceID, SyncItemUUID)
+```
 
-## 10. Rule ca còn ít nhất 60 phút
+Status semantics:
 
-Flow nghiệp vụ có rule: chỉ được đổi/ngắt người nhận việc khi thời gian còn lại của ca đạt ngưỡng yêu cầu, hiện được hiểu là **≥ 60 phút**.
-
-Rule này **chưa implement** vì repository chưa có authoritative source cho:
-
-- shift ID;
-- shift start/end time;
-- lịch làm việc theo Plant/Work Center/ngày.
-
-Không hard-code giờ ca vào behavior implementation. Cần xác định nguồn ca chuẩn trước khi bật rule này.
-
----
-
-## 11. Work History
-
-`getWorkHistory` được expose qua `ZUI_PP_OPALLOC` dưới dạng read-only, token-scoped action.
-
-### Scope RBAC
-
-| Function | Scope |
+| Status | Ý nghĩa |
 | --- | --- |
-| `PP_HIST_TEAM` | Supervisor assignment roots + valid transaction descendants |
-| `PP_HIST_SELF` | Các row liên quan authenticated worker |
+| `SUCCESS` | Backend chứng minh được đúng một POSTED ledger receipt của authenticated actor |
+| `NOT_FOUND` | Backend chưa chứng minh commit; **không phải business failure** |
+| duplicate/data-integrity case | Backend fail-closed thay vì chọn tùy ý một row |
 
-### Time range
+Retry phải dùng **cùng command + cùng `SyncItemUUID` + cùng logical payload**. Same ID nhưng payload nghiệp vụ khác bị reject `IDEMPOTENCY_KEY_REUSED`.
 
-| RangeCode | Ý nghĩa |
-| --- | --- |
-| `D` | Hôm nay |
-| `W` | 7 ngày gần nhất |
-| `M` | 30 ngày gần nhất |
-| `C` | Custom range, tối đa 92 ngày/request |
+## 7. Fiori Production Allocation Correction & Audit
 
-Nguồn số liệu là `POSTED` transaction ledger trong `ZTB_PP_ALLOC_TXN` kết hợp operation header.
+Service Definition: `ZUI_PP_ALLOC_ADM`  
+OData V4 Binding: `ZUI_PP_ALLOC_ADM_O4`
 
-`ZTB_KB_NHANCONG` chỉ enrich thông tin worker; không quyết định ownership lịch sử.
+Entity sets:
 
----
+- `OperationAllocations` — operation snapshot + controlled action `correctConfirm`;
+- `AllocationTransactions` — read-only ledger/audit.
 
-## 12. External Worker Master
+Không expose generic update cho `ZTB_PP_EMP_ALLOC` và không update/delete `ZTB_PP_ALLOC_TXN`.
 
-Repository phụ thuộc external master:
-
-| Object | Ownership | Rule |
-| --- | --- | --- |
-| `ZTB_KB_NHANCONG` | Package/hệ thống đối tác | Read-only từ repo này |
-
-Access nghiệp vụ đi qua `ZI_PP_WorkerRef`.
-
-Worker validation xét các yếu tố phù hợp với flow như:
-
-- WorkerID;
-- Plant;
-- Work Center;
-- ValidFrom / ValidTo;
-- ExecutionDate.
-
-Không tự ý thay structure/index của external master từ repository này.
-
----
-
-## 13. Service boundaries
-
-| Service | Audience | Surface |
-| --- | --- | --- |
-| `ZUI_MOB_AUTH` | Mobile | login / refresh / logout / changePassword |
-| `ZUI_PP_OPALLOC` | Mobile | operation read + `getWorkHistory`; mutation projection vẫn đóng |
-| `ZUI_MOB_USER_ADM` | Fiori Admin | User + UserRole administration |
-| `ZUI_MOB_RBAC_ADM` | Fiori Admin | Role + Function + Work Context administration |
-
-Admin OData V4 bindings:
+Correction flow:
 
 ```text
-ZUI_MOB_USER_ADM_O4 -> ZUI_MOB_USER_ADM
-ZUI_MOB_RBAC_ADM_O4 -> ZUI_MOB_RBAC_ADM
+Find original CONFIRM
+        ↓
+correctConfirm(
+  TransactionUUID,
+  NewQuantity,
+  UnitOfMeasure,
+  ReasonCode,
+  ReasonText
+)
+        ↓
+validate effective quantity + current balance
+        ↓
+update Completed / Remaining
+        +
+append CORRECTION signed delta
 ```
 
-Hai admin bindings không được đưa vào mobile communication scenario.
-
----
-
-## 14. RAP/Fiori composition model
+Ví dụ:
 
 ```text
-ZI_MOB_User
-  +-- _Roles -> ZI_MOB_UsrRol
-
-ZI_MOB_Role
-  +-- _Functions       -> ZI_MOB_RolFunc
-  +-- _WorkAssignments -> ZI_MOB_RolWork
-
-ZI_MOB_Func
-ZI_MOB_Work
+CONFIRM      +100
+CORRECTION    -20   -> effective 80
+CORRECTION    +10   -> effective 90
 ```
 
-Projection admin:
+Original CONFIRM giữ nguyên. Nếu đã REVERSE thì correction bị reject.
+
+Fiori dùng SAP IAM/business-user context; mobile custom token không được nhét vào Fiori correction contract.
+
+## 8. Master Công đoạn
+
+Persistence: `ZTB_MD_CONGDOAN`
+
+Versioned business key:
 
 ```text
-ZC_MOB_User_Adm
-  +-- _Roles -> ZC_MOB_UsrRol_Adm
-
-ZC_MOB_Role_Adm
-  +-- _Functions       -> ZC_MOB_RolFunc_Adm
-  +-- _WorkAssignments -> ZC_MOB_RolWork_Adm
+CLIENT + MA_CONGDOAN + VALID_FROM
 ```
 
-Các child projection dùng `redirected to parent` **không khai báo** `provider contract transactional_query`. Provider contract nằm ở transactional root projection.
+Fields chính:
 
----
+```text
+MA_CONGDOAN
+TEN_CONGDOAN
+BO_PHAN
+DONGIA_XM
+DONGIA_GC
+VALID_FROM
+VALID_TO
+Created/Changed audit fields
+```
 
-## 15. CDS access-control convention
+`MA_CONGDOAN` tương ứng `OperationStandardTextCode` của operation SAP.
 
-| Layer | Authorization check | Ghi chú |
+Mục đích:
+
+- enrich tên/bộ phận;
+- lưu đơn giá XM/GC theo validity period;
+- chuẩn bị cho payroll/reporting/đối chiếu về sau.
+
+Master này **không tham gia quyết định Production Order/Operation có được thao tác hay không**.
+
+Validation:
+
+- mã/tên/ValidFrom bắt buộc;
+- `ValidTo >= ValidFrom`;
+- đơn giá không âm;
+- cùng `MaCongDoan` không overlap validity interval;
+- hard delete bị chặn.
+
+Service Definition: `ZUI_MD_CONGDOAN_ADM`  
+OData V4 Binding: `ZUI_MD_CONGDOAN_ADM_O4`
+
+## 9. Identity, RBAC và Work Context
+
+```text
+ZTB_MOB_USER
+  +-- ZTB_MOB_CRED
+  +-- ZTB_MOB_SESSION
+  +-- ZTB_MOB_USR_ROL --> ZTB_MOB_ROLE
+                            +-- ZTB_MOB_ROL_FNC --> ZTB_MOB_FUNC
+                            +-- ZTB_MOB_ROL_WRK --> ZTB_MOB_WORK
+```
+
+Work Context chứa Plant + WorkCenter và metadata nghiệp vụ liên quan. Backend kiểm tra Work Context tại protected production command thay vì tin permission list phía client.
+
+Login/refresh có thể trả permissions + Work Contexts để mobile render UX, nhưng quyền thực thi vẫn được validate server-side.
+
+Login lockout theo workflow:
+
+```text
+5 password failures trong 1 phút -> lock 10 phút
+```
+
+## 10. Fiori administration services
+
+| Service | Binding | Mục đích |
 | --- | --- | --- |
-| Interface root/child `ZI_*` | thường `#NOT_REQUIRED` | domain/internal layer |
-| Admin root projection `ZC_*_Adm` | `#MANDATORY` | IAM/Fiori boundary |
-| Admin composition child | `#NOT_REQUIRED` | đi qua root composition |
+| `ZUI_MOB_USER_ADM` | `ZUI_MOB_USER_ADM_O4` | User + initial/additional Roles |
+| `ZUI_MOB_RBAC_ADM` | `ZUI_MOB_RBAC_ADM_O4` | Roles + Functions + Work Context |
+| `ZUI_MD_CONGDOAN_ADM` | `ZUI_MD_CONGDOAN_ADM_O4` | Versioned Master Công đoạn / đơn giá |
+| `ZUI_PP_ALLOC_ADM` | `ZUI_PP_ALLOC_ADM_O4` | Controlled CONFIRM correction + audit ledger |
 
-Deliberate auth exception:
+Admin bindings phải được bảo vệ bằng IAM/business catalog trên tenant và **không** đưa vào mobile communication scenario.
 
-- mobile account data không được expose thành read surface cho communication user;
-- Fiori admin projection là đường quản trị riêng, được bảo vệ bằng IAM/business catalog.
+## 11. Concurrency và data-integrity
 
----
+Managed RAP root `OperationAllocation` dùng `lock master`; child balance/ledger lock dependent theo root. Điều này bảo vệ mutation trên operation instance đã tồn tại.
 
-## 16. Security checklist
+Các case vẫn phải stress-test trên target tenant:
 
-- Không lưu plaintext access/refresh token.
-- Không nhận authenticated actor UUID từ request.
-- Không tin permission list hoặc Work Context do client gửi lại.
-- Worker verification phải được audit.
-- Password change revoke active sessions.
-- Role/Function/Work IDs là stable business keys, không update sau create.
-- RoleFunction/UserRole/RoleWork là create/delete assignments.
-- Master-data hard delete bị hạn chế; ưu tiên deactivate để giữ reference/audit.
-- Duplicate balance/ledger lookup phải fail-closed.
-- Production confirmation không được local-success trước SAP success.
+1. hai request đầu tiên đồng thời cho cùng `ProductionOrder + Operation` khi snapshot chưa tồn tại;
+2. duplicate `SyncItemUUID` đồng thời;
+3. concurrent transfer/confirm trên cùng worker balance;
+4. lock conflict/retry behavior;
+5. HTTP timeout ngay sau server commit.
 
----
-
-## 17. Activation / deployment order
-
-Sau abapGit pull, nên activate theo dependency thay vì activate ngẫu nhiên:
-
-1. Persistence tables.
-2. Interface CDS (`ZI_*`).
-3. Interface BDEF + behavior pool.
-4. Projection CDS (`ZC_*`).
-5. Projection BDEF.
-6. Metadata extensions / DCL.
-7. Service Definitions.
-8. OData V4 Service Bindings.
-9. Preview/test service.
-10. Generate/publish đúng **2 Fiori Elements admin apps**.
-
-Đặc biệt kiểm tra:
-
-- `ZTB_MOB_WORK`
-- `ZTB_MOB_ROL_WRK`
-- Role/User/Function/Work RAP objects
-- `ZUI_MOB_USER_ADM_O4`
-- `ZUI_MOB_RBAC_ADM_O4`
-
----
-
-## 18. Validation hiện tại
-
-Latest post-merge audit:
+Target system phải enforce/verify uniqueness của:
 
 ```text
+CLIENT + PRODUCTION_ORDER + OPERATION_NO
+```
+
+Không tạo unique index mù trên `SyncItemUUID` cho mọi ledger row nếu chưa account semantics của Fiori/CORRECTION rows không phải mobile command.
+
+## 12. Data model diagram
+
+Draw.io source:
+
+[`docs/CASLA_DATA_MODEL.drawio`](docs/CASLA_DATA_MODEL.drawio)
+
+File có 2 page:
+
+1. **ERD** — Auth/Session/RBAC/Work + PP snapshot/balance/ledger + Master Công đoạn.
+2. **Mobile Flow** — direct command, RAP LUW, transactional-buffer receipt read, timeout reconciliation và Fiori correction.
+
+## 13. Repository layout
+
+```text
+serialized/                     abapGit deployable ABAP repository objects
+.github/workflows/abaplint.yml  ABAP Cloud static quality gate
+docs/
+  ABAP_RAP_MOBILE_SYNC_PLAN.md  current command/reconciliation architecture
+  FIORI_ELEMENTS_ADMIN.md       Fiori admin surface design
+  CASLA_DATA_MODEL.drawio       ERD + execution flow
+IMPLEMENTATION_STATUS.md        implementation/tenant activation status
+SECURITY_PERFORMANCE_REVIEW.md  security/concurrency review
+REVIEW_REMEDIATION_STATUS.md    consolidated remediation state
+```
+
+## 14. Validation và target deployment
+
+CI quality gate:
+
+```text
+.github/workflows/abaplint.yml
 @abaplint/cli 2.120.35
+Node.js 22
 ABAP language version: Cloud
-0 issue(s) found, 207 file(s) analyzed
 ```
 
-Audit bổ sung đã kiểm tra:
+Latest final-tree result:
 
-- không còn DDIC field reserved `MODULE`;
-- child projection có `redirected to parent` không còn `transactional_query` provider contract;
-- Role / Function / UserRole / RoleFunction validations tồn tại;
-- UserRole và RoleFunction không expose update cho composite-key assignment;
-- Work Context flow và service/value-help contracts vẫn còn nguyên.
+```text
+abaplint: 0 issue(s) found, 241 file(s) analyzed
+```
 
-`abaplint` **không thay thế** RAP Designtime compiler/ADT activation trên target system. Trước deploy vẫn phải:
+`abaplint` không thay thế SAP target validation. Trước production cần:
 
-- activate trong ADT;
-- chạy ATC/Cloud checks;
-- preview OData V4 bindings;
-- test Fiori create/add/remove flows;
-- test login/refresh context;
-- test PP mutation ngoài scope bị reject.
+1. import bằng abapGit;
+2. activate DDIC -> CDS -> BDEF -> behavior classes -> service definitions/bindings bằng ADT;
+3. chạy ATC/ABAP Cloud checks trên đúng tenant release;
+4. verify released status/fields của SAP CDS dùng trong `ZCL_PP_OPERATION_GUARD` bằng ADT/View Browser;
+5. publish OData V4 bindings;
+6. gán đúng IAM business catalogs/roles cho từng Fiori admin surface;
+7. enforce/test operation business-key uniqueness;
+8. stress-test concurrency + idempotency + timeout/reconciliation;
+9. smoke-test balance invariant + immutable reverse/correction lineage;
+10. xác nhận mobile communication role không truy cập được admin services.
 
----
+## 15. Definition of done trước production
 
-## 19. Test nghiệp vụ tối thiểu trước go-live
+Repository-side implementation được coi là hoàn chỉnh khi source/metadata đã import và activate thành công trên target tenant. Production rollout chỉ nên thực hiện sau khi tất cả mục sau pass:
 
-1. Tạo Function master.
-2. Tạo Role `A`.
-3. Gán Function cho Role.
-4. Tạo Work Context `A` với Plant + WorkCenter.
-5. Gán Work Context cho Role.
-6. Tạo User và chọn Role ban đầu ngay trong create dialog.
-7. Add/remove Role bổ sung trên User Object Page.
-8. Login và xác nhận `_Permissions` + `_WorkContexts` đúng.
-9. Deactivate Role → quyền/work scope phải mất hiệu lực ngay.
-10. Reactivate Role, deactivate Work → Work scope phải mất hiệu lực.
-11. `initialAssign` trong scope → được đi tiếp nếu các validation khác pass.
-12. `initialAssign` ngoài scope → `WORK_CONTEXT_NOT_ALLOWED`.
-13. Lặp lại scope test cho `transfer` và `recall`.
-14. Duplicate `SyncItemUUID` → idempotent/fail-closed đúng thiết kế.
-15. `confirm`/`reverse` vẫn phải từ chối cho tới khi SAP adapter thật được bật.
-
----
-
-## 20. Next implementation slice
-
-Theo đúng flow, thứ tự nên tiếp tục là:
-
-1. Xác định authoritative shift/end-time source để implement rule ≥60 phút.
-2. Hoàn thiện `submitSync` accept-only API.
-3. Hoàn thiện background worker + retry/dead-letter.
-4. Chốt canonical Function IDs cho các external mutation permissions, không tự đoán tên.
-5. Chọn released SAP Production Confirmation API phù hợp target tenant.
-6. Implement confirmation/reversal adapter.
-7. Thêm ABAP Unit/integration tests cho:
-   - UserRole/RoleFunction/RoleWork validation;
-   - permission/work-scope resolution;
-   - balance transition;
-   - duplicate sync;
-   - worker verification;
-   - SAP confirmation success/failure boundary.
-
----
-
-## Tài liệu liên quan
-
-- [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md) – trạng thái implementation chi tiết.
-- [`docs/FIORI_ELEMENTS_ADMIN.md`](docs/FIORI_ELEMENTS_ADMIN.md) – thiết kế 2 Fiori Elements admin apps.
-- [`AUTHORIZATION_SETUP.md`](AUTHORIZATION_SETUP.md) – authorization/IAM setup.
-
-README này mô tả **flow nghiệp vụ chuẩn và trạng thái repository hiện tại**. Nếu một bước trong flow chưa có authoritative dependency hoặc SAP adapter thật, repository phải tiếp tục **fail-closed** thay vì mô phỏng success.
+- ADT activation sạch;
+- ATC/ABAP Cloud sạch hoặc exception được review rõ ràng;
+- released SAP CDS dependencies được xác nhận trên đúng release;
+- OData metadata/action signatures đúng với mobile/Fiori clients;
+- concurrency tests không tạo duplicate snapshot/ledger/balance corruption;
+- response-loss reconciliation hoạt động với same `SyncItemUUID`;
+- Fiori correction tạo `CORRECTION` thay vì sửa original ledger;
+- raw ledger/balance CRUD không exposed;
+- IAM/communication scenario separation được kiểm chứng.

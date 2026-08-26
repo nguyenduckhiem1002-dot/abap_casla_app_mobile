@@ -1,0 +1,40 @@
+@Metadata.layer: #CORE
+@UI: {
+  headerInfo: {
+    typeName: 'Công đoạn',
+    typeNamePlural: 'Master Công đoạn',
+    title: { value: 'MaCongDoan' },
+    description: { value: 'TenCongDoan' }
+  }
+}
+annotate entity ZC_MD_CongDoan_Adm with
+{
+  @UI.facet: [ { id: 'General', type: #IDENTIFICATION_REFERENCE, label: 'Thông tin công đoạn', position: 10 } ]
+  @UI.lineItem: [ { position: 10, label: 'Mã công đoạn' } ]
+  @UI.identification: [ { position: 10, label: 'Mã công đoạn' } ]
+  MaCongDoan;
+
+  @UI.lineItem: [ { position: 20, label: 'Tên công đoạn' } ]
+  @UI.identification: [ { position: 20, label: 'Tên công đoạn' } ]
+  TenCongDoan;
+
+  @UI.lineItem: [ { position: 30, label: 'Bộ phận' } ]
+  @UI.identification: [ { position: 30, label: 'Bộ phận' } ]
+  BoPhan;
+
+  @UI.lineItem: [ { position: 40, label: 'Đơn giá XM' } ]
+  @UI.identification: [ { position: 40, label: 'Đơn giá XM' } ]
+  DonGiaXM;
+
+  @UI.lineItem: [ { position: 50, label: 'Đơn giá GC' } ]
+  @UI.identification: [ { position: 50, label: 'Đơn giá GC' } ]
+  DonGiaGC;
+
+  @UI.lineItem: [ { position: 60, label: 'Hiệu lực từ' } ]
+  @UI.identification: [ { position: 60, label: 'Hiệu lực từ' } ]
+  ValidFrom;
+
+  @UI.lineItem: [ { position: 70, label: 'Hiệu lực đến' } ]
+  @UI.identification: [ { position: 70, label: 'Hiệu lực đến' } ]
+  ValidTo;
+}

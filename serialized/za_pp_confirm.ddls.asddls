@@ -1,6 +1,8 @@
 @EndUserText.label: 'Tham số xác nhận sản lượng'
 define abstract entity ZA_PP_Confirm
 {
+  ProductionOrder : abap.char(12);
+  Operation : abap.char(4);
   WorkerID : abap.char(8);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   Quantity : abap.quan(15,3);

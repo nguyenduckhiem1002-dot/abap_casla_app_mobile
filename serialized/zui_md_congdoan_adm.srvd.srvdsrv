@@ -1,0 +1,4 @@
+@EndUserText.label: 'Dịch vụ Master Công đoạn'
+define service ZUI_MD_CONGDOAN_ADM {
+  expose ZC_MD_CongDoan_Adm as CongDoans;
+}

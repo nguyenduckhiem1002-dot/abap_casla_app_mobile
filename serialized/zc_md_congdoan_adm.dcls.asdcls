@@ -1,0 +1,5 @@
+@EndUserText.label: 'Đọc master công đoạn - bảo vệ bằng IAM'
+@MappingRole: true
+define role ZC_MD_CONGDOAN_ADM {
+  grant select on ZC_MD_CongDoan_Adm;
+}

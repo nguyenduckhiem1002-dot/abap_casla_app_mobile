@@ -11,7 +11,7 @@ etag master LocalLastChangedAt
   update;
 
   field ( numbering : managed, readonly ) OperationUUID;
-  field ( mandatory ) ProductionOrder, Operation, Plant, WorkCenter,
+  field ( mandatory ) ProductionOrder, Operation, MaCongDoan, Plant, WorkCenter,
                       OperationQuantity, UnitOfMeasure;
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy,
                      LocalLastChangedAt;
@@ -19,15 +19,36 @@ etag master LocalLastChangedAt
   association _Employees { create; }
   association _Transactions { create; }
 
+  "Internal domain commands. The mobile service exposes only the static
+  "facade actions below; these bound actions stay hidden from its projection.
   action initialAssign parameter ZA_PP_InitialAssign result [1] $self;
   action transfer parameter ZA_PP_Transfer result [1] $self;
   action recall parameter ZA_PP_Recall result [1] $self;
   action confirm parameter ZA_PP_Confirm result [1] $self;
   action reverse parameter ZA_PP_Reverse result [1] $self;
 
-  "Read-only, token scoped report. Rows are filtered in ABAP because the
-  "mobile service runs under one communication user, so CDS access
-  "control cannot tell the end users apart.
+  "IAM/Fiori-only controlled correction. It appends CORRECTION to the ledger;
+  "the mobile projection deliberately does not expose this action.
+  action correctConfirm parameter ZA_PP_CorrectConfirm result [1] $self;
+
+  "Direct mobile command facade. Every handler validates token/session/device,
+  "resolves the SAP operation live, then invokes the internal domain command.
+  static action submitInitialAssign parameter ZA_PP_InitialAssign
+    result [1] ZA_PP_CommandResult;
+  static action submitTransfer parameter ZA_PP_Transfer
+    result [1] ZA_PP_CommandResult;
+  static action submitRecall parameter ZA_PP_Recall
+    result [1] ZA_PP_CommandResult;
+  static action submitConfirm parameter ZA_PP_Confirm
+    result [1] ZA_PP_CommandResult;
+  static action submitReverse parameter ZA_PP_Reverse
+    result [1] ZA_PP_CommandResult;
+
+  "Receipt/reconciliation API for ambiguous HTTP outcomes. NOT_FOUND means
+  "the backend cannot prove a commit; it is not a business failure.
+  static action getSyncStatus parameter ZA_PP_SyncStatusQuery
+    result [1] ZA_PP_SyncStatusResult;
+
   static action getWorkHistory parameter ZA_PP_HistQuery
     result [1] ZA_PP_HistResult;
 
@@ -35,17 +56,18 @@ etag master LocalLastChangedAt
 
   mapping for ztb_pp_op_alloc
   {
-    OperationUUID     = operation_uuid;
-    ProductionOrder   = production_order;
-    Operation         = operation_no;
-    Plant             = plant;
-    WorkCenter        = work_center;
-    OperationQuantity = operation_qty;
-    UnitOfMeasure     = uom;
-    OperationStatus   = operation_status;
-    CreatedBy         = created_by;
-    CreatedAt         = created_at;
-    LastChangedBy     = last_changed_by;
+    OperationUUID      = operation_uuid;
+    ProductionOrder    = production_order;
+    Operation          = operation_no;
+    MaCongDoan         = ma_congdoan;
+    Plant              = plant;
+    WorkCenter         = work_center;
+    OperationQuantity  = operation_qty;
+    UnitOfMeasure      = uom;
+    OperationStatus    = operation_status;
+    CreatedBy          = created_by;
+    CreatedAt          = created_at;
+    LastChangedBy      = last_changed_by;
     LocalLastChangedAt = local_last_changed_at;
   }
 }
@@ -69,21 +91,21 @@ etag master LocalLastChangedAt
   mapping for ztb_pp_emp_alloc
   {
     EmployeeAllocationUUID = emp_alloc_uuid;
-    OperationUUID          = operation_uuid;
-    WorkerID               = worker_id;
+    OperationUUID           = operation_uuid;
+    WorkerID                = worker_id;
     InitialAssignedQuantity = initial_assigned_qty;
-    TransferredInQuantity  = transferred_in_qty;
-    TransferredOutQuantity = transferred_out_qty;
-    RecalledQuantity       = recalled_qty;
-    CompletedQuantity      = completed_qty;
-    RemainingQuantity      = remaining_qty;
-    UnitOfMeasure          = uom;
-    LastExecutionDate      = last_execution_date;
-    LastSyncAt             = last_sync_at;
-    CreatedBy              = created_by;
-    CreatedAt              = created_at;
-    LastChangedBy          = last_changed_by;
-    LocalLastChangedAt     = local_last_changed_at;
+    TransferredInQuantity   = transferred_in_qty;
+    TransferredOutQuantity  = transferred_out_qty;
+    RecalledQuantity        = recalled_qty;
+    CompletedQuantity       = completed_qty;
+    RemainingQuantity       = remaining_qty;
+    UnitOfMeasure           = uom;
+    LastExecutionDate       = last_execution_date;
+    LastSyncAt              = last_sync_at;
+    CreatedBy               = created_by;
+    CreatedAt               = created_at;
+    LastChangedBy           = last_changed_by;
+    LocalLastChangedAt      = local_last_changed_at;
   }
 }
 
@@ -100,41 +122,44 @@ authorization dependent by _Operation
                      TransactionType, OriginalTransactionType, FromWorkerID,
                      ToWorkerID, WorkerID, Quantity, UnitOfMeasure,
                      ExecutionDate, TransactionStatus,
+                     ReasonCode, ReasonText, SourceChannel,
                      SAPConfirmationGroup, SAPConfirmationCount,
                      SAPErrorCode, SAPErrorText, ReversalReason,
-                     CreatedBy, CreatedAt,
-                     LocalLastChangedAt;
+                     CreatedBy, CreatedAt, LocalLastChangedAt;
 
   association _Operation;
 
   mapping for ztb_pp_alloc_txn
   {
-    TransactionUUID        = transaction_uuid;
-    OperationUUID          = operation_uuid;
+    TransactionUUID         = transaction_uuid;
+    OperationUUID           = operation_uuid;
     OriginalTransactionUUID = original_transaction_uuid;
-    SyncItemUUID           = sync_item_uuid;
-    ActorUserUUID          = actor_user_uuid;
-    VerifiedWorkerUserUUID = verified_worker_user_uuid;
-    WorkerVerifiedAt       = worker_verified_at;
-    InitiatorSessionID     = initiator_session_id;
-    DeviceID               = device_id;
-    VerificationMethod     = verification_method;
-    TransactionType        = transaction_type;
+    SyncItemUUID            = sync_item_uuid;
+    ActorUserUUID           = actor_user_uuid;
+    VerifiedWorkerUserUUID  = verified_worker_user_uuid;
+    WorkerVerifiedAt        = worker_verified_at;
+    InitiatorSessionID      = initiator_session_id;
+    DeviceID                = device_id;
+    VerificationMethod      = verification_method;
+    TransactionType         = transaction_type;
     OriginalTransactionType = original_transaction_type;
-    FromWorkerID           = from_worker_id;
-    ToWorkerID             = to_worker_id;
-    WorkerID               = worker_id;
-    Quantity               = quantity;
-    UnitOfMeasure          = uom;
-    ExecutionDate          = execution_date;
-    TransactionStatus      = transaction_status;
-    SAPConfirmationGroup   = sap_confirmation_group;
-    SAPConfirmationCount   = sap_confirmation_count;
-    SAPErrorCode           = sap_error_code;
-    SAPErrorText           = sap_error_text;
-    ReversalReason         = reversal_reason;
-    CreatedBy              = created_by;
-    CreatedAt              = created_at;
-    LocalLastChangedAt     = local_last_changed_at;
+    FromWorkerID            = from_worker_id;
+    ToWorkerID              = to_worker_id;
+    WorkerID                = worker_id;
+    Quantity                = quantity;
+    UnitOfMeasure           = uom;
+    ExecutionDate           = execution_date;
+    TransactionStatus       = transaction_status;
+    ReasonCode              = reason_code;
+    ReasonText              = reason_text;
+    SourceChannel           = source_channel;
+    SAPConfirmationGroup    = sap_confirmation_group;
+    SAPConfirmationCount    = sap_confirmation_count;
+    SAPErrorCode            = sap_error_code;
+    SAPErrorText            = sap_error_text;
+    ReversalReason          = reversal_reason;
+    CreatedBy               = created_by;
+    CreatedAt               = created_at;
+    LocalLastChangedAt      = local_last_changed_at;
   }
 }

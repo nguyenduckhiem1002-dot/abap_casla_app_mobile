@@ -1,0 +1,56 @@
+@Metadata.layer: #CORE
+@UI: {
+  headerInfo: {
+    typeName: 'Giao dịch sản lượng',
+    typeNamePlural: 'Sổ giao dịch sản lượng',
+    title: { value: 'ProductionOrder' },
+    description: { value: 'TransactionType' }
+  }
+}
+annotate entity ZC_PP_AllocTxn_Adm with
+{
+  @UI.lineItem: [ { position: 10, label: 'Lệnh SX' } ]
+  ProductionOrder;
+
+  @UI.lineItem: [ { position: 20, label: 'Operation' } ]
+  Operation;
+
+  @UI.lineItem: [ { position: 30, label: 'Mã công đoạn' } ]
+  MaCongDoan;
+
+  @UI.lineItem: [ { position: 40, label: 'Loại giao dịch' } ]
+  TransactionType;
+
+  @UI.lineItem: [ { position: 50, label: 'Nhân công' } ]
+  WorkerID;
+
+  @UI.lineItem: [ { position: 60, label: 'Số lượng' } ]
+  Quantity;
+
+  @UI.lineItem: [ { position: 70, label: 'ĐVT' } ]
+  UnitOfMeasure;
+
+  @UI.lineItem: [ { position: 80, label: 'Ngày thực hiện' } ]
+  ExecutionDate;
+
+  @UI.lineItem: [ { position: 90, label: 'Trạng thái' } ]
+  TransactionStatus;
+
+  @UI.lineItem: [ { position: 100, label: 'Nguồn' } ]
+  SourceChannel;
+
+  @UI.lineItem: [ { position: 110, label: 'Lý do' } ]
+  ReasonText;
+
+  @UI.lineItem: [ { position: 120, label: 'Giao dịch gốc' } ]
+  OriginalTransactionUUID;
+
+  @UI.lineItem: [ { position: 130, label: 'Sync Item UUID' } ]
+  SyncItemUUID;
+
+  @UI.lineItem: [ { position: 140, label: 'Người ghi SAP' } ]
+  CreatedBy;
+
+  @UI.lineItem: [ { position: 150, label: 'Thời điểm ghi' } ]
+  CreatedAt;
+}

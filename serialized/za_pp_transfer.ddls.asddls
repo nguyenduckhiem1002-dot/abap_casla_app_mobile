@@ -1,6 +1,8 @@
 @EndUserText.label: 'Tham số chuyển phân bổ'
 define abstract entity ZA_PP_Transfer
 {
+  ProductionOrder : abap.char(12);
+  Operation : abap.char(4);
   FromWorkerID : abap.char(8);
   ToWorkerID : abap.char(8);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'

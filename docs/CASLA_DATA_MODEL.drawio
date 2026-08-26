@@ -1,0 +1,124 @@
+<mxfile host="app.diagrams.net" modified="2026-08-26T12:10:00.000Z" agent="ChatGPT" version="26.0.9" type="device">
+  <diagram id="casla-erd" name="ERD">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="CASLA Mobile Production Allocation — Custom Z-table Data Model" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="900" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="authNote" value="Identity / session / RBAC" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="470" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="user" value="ZTB_MOB_USER&#xa;USER_UUID (PK)&#xa;USERNAME / NORMALIZED_USERNAME&#xa;WORKER_ID / STATUS" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="140" width="220" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="cred" value="ZTB_MOB_CRED&#xa;USER_UUID&#xa;PASSWORD_HASH / SALT&#xa;CREDENTIAL_STATUS" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="300" y="140" width="210" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="session" value="ZTB_MOB_SESSION&#xa;SESSION_ID&#xa;USER_UUID&#xa;ACCESS/REFRESH TOKEN HASH&#xa;DEVICE_ID / STATUS / EXPIRY" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="300" y="290" width="210" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="usrrol" value="ZTB_MOB_USR_ROL&#xa;USER_UUID + ROLE_ID" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="310" width="220" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="role" value="ZTB_MOB_ROLE&#xa;ROLE_ID&#xa;ROLE_NAME / STATUS" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="440" width="220" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="rolfnc" value="ZTB_MOB_ROL_FNC&#xa;ROLE_ID + FUNC_ID" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="300" y="450" width="210" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="func" value="ZTB_MOB_FUNC&#xa;FUNC_ID&#xa;FUNC_NAME / APP_MODULE" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="300" y="570" width="210" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="rolwrk" value="ZTB_MOB_ROL_WRK&#xa;ROLE_ID + WORK_ID" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="580" width="220" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="work" value="ZTB_MOB_WORK&#xa;WORK_ID&#xa;PLANT + WORKCENTER&#xa;BO_PHAN / LOCATION / IS_ACTIVE" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="700" width="220" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ppNote" value="Production allocation domain" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="80" width="540" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="op" value="ZTB_PP_OP_ALLOC&#xa;OPERATION_UUID (PK)&#xa;PRODUCTION_ORDER + OPERATION_NO&#xa;MA_CONGDOAN / PLANT / WORK_CENTER&#xa;OPERATION_QTY / UOM / STATUS" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="610" y="150" width="260" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="emp" value="ZTB_PP_EMP_ALLOC&#xa;EMP_ALLOC_UUID (PK)&#xa;OPERATION_UUID + WORKER_ID&#xa;INITIAL / TRANSFER IN / OUT&#xa;RECALLED / COMPLETED / REMAINING&#xa;UOM / LAST_EXECUTION_DATE" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="610" y="360" width="260" height="160" as="geometry"/>
+        </mxCell>
+        <mxCell id="txn" value="ZTB_PP_ALLOC_TXN — immutable ledger&#xa;TRANSACTION_UUID (PK)&#xa;OPERATION_UUID / ORIGINAL_TRANSACTION_UUID&#xa;SYNC_ITEM_UUID / ACTOR_USER_UUID&#xa;VERIFIED_WORKER_USER_UUID / SESSION / DEVICE&#xa;TYPE / WORKER / FROM / TO / QTY / UOM / DATE&#xa;STATUS / REASON / SOURCE_CHANNEL" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="320" width="310" height="190" as="geometry"/>
+        </mxCell>
+        <mxCell id="master" value="ZTB_MD_CONGDOAN&#xa;MA_CONGDOAN + VALID_FROM (business version key)&#xa;TEN_CONGDOAN / BO_PHAN&#xa;DONGIA_XM / DONGIA_GC&#xa;VALID_TO" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="150" width="310" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="invariant" value="Balance invariant&#xa;Remaining = InitialAssigned + TransferredIn - TransferredOut - Recalled - Completed" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="580" width="630" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="legacy" value="Legacy SAP_CONFIRMATION_* / SAP_ERROR_* columns remain only for compatibility; they do not represent standard SAP Production Confirmation integration." style="rounded=1;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="700" width="630" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_user_cred" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="user" target="cred"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_user_session" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="user" target="session"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_user_usrrol" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="user" target="usrrol"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_usrrol_role" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="usrrol" target="role"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_role_rolfnc" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="role" target="rolfnc"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_rolfnc_func" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="rolfnc" target="func"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_role_rolwrk" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="role" target="rolwrk"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_rolwrk_work" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="rolwrk" target="work"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_op_emp" value="1 : n" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="op" target="emp"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_op_txn" value="1 : n" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="op" target="txn"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_user_txn" value="actor / verified worker" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;endArrow=block;" edge="1" parent="1" source="user" target="txn"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_master_op" value="MA_CONGDOAN enrichment" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;endArrow=open;" edge="1" parent="1" source="master" target="op"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_txn_lineage" value="ORIGINAL_TRANSACTION_UUID" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;endArrow=open;" edge="1" parent="1" source="txn" target="txn"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1280" y="430"/><mxPoint x="1280" y="540"/><mxPoint x="1080" y="540"/></Array></mxGeometry></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="mobile-flow" name="Mobile Flow">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="ftitle" value="CASLA Mobile Command, RAP LUW, Timeout Reconciliation &amp; Fiori Correction" style="text;html=1;fontSize=22;fontStyle=1;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="20" width="1050" height="40" as="geometry"/></mxCell>
+        <mxCell id="mobile" value="Mobile background queue&#xa;Stable SyncItemUUID created BEFORE send" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="40" y="120" width="240" height="90" as="geometry"/></mxCell>
+        <mxCell id="api" value="ZUI_PP_OPALLOC&#xa;submitInitialAssign / Transfer / Recall / Confirm / Reverse" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="340" y="110" width="280" height="110" as="geometry"/></mxCell>
+        <mxCell id="auth" value="CASLA token + active session + device&#xa;RBAC / Work Context&#xa;ActorUserUUID derived server-side" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="680" y="100" width="260" height="130" as="geometry"/></mxCell>
+        <mxCell id="guard" value="ZCL_PP_OPERATION_GUARD&#xa;Released SAP CDS read model&#xa;REL; block TECO / CLSD / DLFL&#xa;YBP1; resolve Plant / WorkCenter / Qty / UoM" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="1000" y="90" width="310" height="150" as="geometry"/></mxCell>
+        <mxCell id="domain" value="Internal managed RAP domain action&#xa;IN LOCAL MODE inside own behavior pool&#xa;validate worker/password/UoM/qty/idempotency" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="1000" y="310" width="310" height="130" as="geometry"/></mxCell>
+        <mxCell id="balance" value="ZTB_PP_EMP_ALLOC&#xa;Update current balance" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="700" y="340" width="220" height="90" as="geometry"/></mxCell>
+        <mxCell id="ledger" value="ZTB_PP_ALLOC_TXN&#xa;Append immutable POSTED ledger row&#xa;SyncItemUUID + actor/session/device + lineage" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="360" y="320" width="280" height="120" as="geometry"/></mxCell>
+        <mxCell id="rapread" value="Facade reads receipt from RAP transactional buffer&#xa;READ ENTITIES ... BY \\_Transactions IN LOCAL MODE&#xa;(not Open SQL before save)" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1"><mxGeometry x="40" y="320" width="270" height="120" as="geometry"/></mxCell>
+        <mxCell id="commit" value="Same RAP LUW&#xa;SUCCESS only when mutation path is valid" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="360" y="500" width="280" height="80" as="geometry"/></mxCell>
+        <mxCell id="response" value="HTTP response" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="510" width="200" height="60" as="geometry"/></mxCell>
+        <mxCell id="synced" value="Received SUCCESS&#xa;Mobile -> SYNCED" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="640" width="200" height="70" as="geometry"/></mxCell>
+        <mxCell id="unknown" value="Timeout / response lost&#xa;Mobile -> UNKNOWN / PENDING_CONFIRMATION&#xa;Never mark business FAILED from network timeout" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="300" y="630" width="300" height="100" as="geometry"/></mxCell>
+        <mxCell id="status" value="getSyncStatus(AccessToken, DeviceID, SyncItemUUID)&#xa;Read committed POSTED ledger receipt for authenticated actor" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="660" y="630" width="320" height="100" as="geometry"/></mxCell>
+        <mxCell id="statusOk" value="SUCCESS&#xa;Commit proven -> SYNCED" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="1040" y="610" width="220" height="70" as="geometry"/></mxCell>
+        <mxCell id="notFound" value="NOT_FOUND&#xa;Commit not proven; not business failure&#xa;Reconcile / retry SAME command + SAME SyncItemUUID" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="1040" y="720" width="270" height="100" as="geometry"/></mxCell>
+        <mxCell id="noSap" value="Architecture boundary&#xa;NO standard SAP Production Confirmation API&#xa;NO SAP-side background queue / worker" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;dashed=1;" vertex="1" parent="1"><mxGeometry x="40" y="800" width="430" height="100" as="geometry"/></mxCell>
+        <mxCell id="fiori" value="Fiori IAM — ZUI_PP_ALLOC_ADM&#xa;correctConfirm only; ledger read-only" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="570" y="820" width="280" height="80" as="geometry"/></mxCell>
+        <mxCell id="correction" value="Update effective Completed / Remaining&#xa;+ append CORRECTION delta with reason&#xa;Original CONFIRM remains immutable" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="920" y="820" width="330" height="90" as="geometry"/></mxCell>
+
+        <mxCell id="fe1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="mobile" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="api" target="auth"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="auth" target="guard"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="guard" target="domain"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe5" value="same transaction buffer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="domain" target="balance"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe6" value="append" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="domain" target="ledger"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="ledger" target="rapread"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="rapread" target="commit"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="commit" target="response"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe10" value="received" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="response" target="synced"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe11" value="lost / timeout" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="response" target="unknown"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="unknown" target="status"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe13" value="exactly one receipt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="status" target="statusOk"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe14" value="no receipt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="status" target="notFound"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe15" value="retry same idempotency identity" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=open;" edge="1" parent="1" source="notFound" target="mobile"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1370" y="770"/><mxPoint x="1370" y="260"/><mxPoint x="160" y="260"/></Array></mxGeometry></mxCell>
+        <mxCell id="fe16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="fiori" target="correction"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="fe17" value="append audit lineage" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=open;" edge="1" parent="1" source="correction" target="ledger"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
