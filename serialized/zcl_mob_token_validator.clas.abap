@@ -16,7 +16,7 @@ CLASS zcl_mob_token_validator DEFINITION
     TYPES: BEGIN OF permission,
              func_id   TYPE ztb_mob_func-func_id,
              func_name TYPE ztb_mob_func-func_name,
-             module    TYPE ztb_mob_func-module,
+             app_module TYPE ztb_mob_func-app_module,
            END OF permission,
            permissions TYPE SORTED TABLE OF permission WITH UNIQUE KEY func_id.
     TYPES: BEGIN OF work_context,
@@ -118,7 +118,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
         ON role_func~role_id = assignment~role_id
       INNER JOIN ztb_mob_func AS func
         ON func~func_id = role_func~func_id
-      FIELDS DISTINCT func~func_id, func~func_name, func~module
+      FIELDS DISTINCT func~func_id, func~func_name, func~app_module
       WHERE assignment~user_uuid = @user_uuid
         AND role_hdr~status = 'A'
       ORDER BY func~func_id

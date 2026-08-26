@@ -5,5 +5,5 @@ define view entity ZI_MOB_Func_VH
 {
   key func_id   as FuncID,
       func_name as FuncName,
-      module    as Module
+      app_module as AppModule
 }

@@ -24,5 +24,5 @@ annotate entity ZC_MOB_Func_Adm with
   @UI.selectionField: [{ position: 30 }]
   @UI.lineItem: [{ position: 30 }]
   @UI.identification: [{ position: 30 }]
-  Module;
+  AppModule;
 }

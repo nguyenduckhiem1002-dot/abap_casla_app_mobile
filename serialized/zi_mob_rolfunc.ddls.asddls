@@ -10,7 +10,7 @@ define view entity ZI_MOB_RolFunc
   key role_id        as RoleID,
   key func_id        as FuncID,
       _Func.FuncName as FuncName,
-      _Func.Module   as Module,
+      _Func.AppModule as AppModule,
       _Role,
       _Func
 }
