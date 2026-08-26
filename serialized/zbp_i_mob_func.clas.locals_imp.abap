@@ -9,6 +9,8 @@ CLASS lhc_mobilefunc IMPLEMENTATION.
     "Protected by IAM app/business catalog of the admin service.
     result-%create = if_abap_behv=>auth-allowed.
     result-%update = if_abap_behv=>auth-allowed.
-    result-%delete = if_abap_behv=>auth-allowed.
+    "Function identifiers are stable authorization contracts. Removing one
+    "would leave assignments and clients with an ambiguous permission state.
+    result-%delete = if_abap_behv=>auth-unauthorized.
   ENDMETHOD.
 ENDCLASS.

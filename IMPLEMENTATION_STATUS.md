@@ -221,6 +221,11 @@ Consequences that must stay true:
 1. Confirm all built-in types and released objects in the tenant release.
 2. Generate/adjust behavior-pool method signatures using ADT quick fixes.
 3. Create database secondary indexes on tables owned by this repository:
+   - `ZTB_MOB_USER`: `MANDT + NORMALIZED_USERNAME` unique.
+   - `ZTB_MOB_SESSION`: `MANDT + ACCESS_TOKEN_HASH` unique.
+   - `ZTB_MOB_SESSION`: `MANDT + REFRESH_TOKEN_HASH` unique.
+   - `ZTB_MOB_SESSION`: `MANDT + USER_UUID + STATUS + LOGIN_AT` for session
+     cap, revoke and cleanup queries.
    - `ZTB_PP_SYNC_H`: `MANDT + DEVICE_ID + EXTERNAL_ID` unique.
    - `ZTB_PP_SYNC_I`: `MANDT + SYNC_UUID + EXTERNAL_ITEM_ID` unique.
    - `ZTB_PP_OP_ALLOC`: `MANDT + PRODUCTION_ORDER + OPERATION_NO` unique.

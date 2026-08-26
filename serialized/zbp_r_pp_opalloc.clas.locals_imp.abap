@@ -133,11 +133,27 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD initialAssign.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
+      DATA(cid) = CONV string( <key>-%cid ).
+      TRY.
+          DATA(auth) = zcl_mob_token_validator=>validate_token(
+            token = CONV string( input-AccessToken )
+            device_id = input-DeviceID
+            required_func = 'PP_INITIAL_ASSIGN' ).
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu'
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+      ENDTRY.
+      IF auth-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation ALL FIELDS
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
       IF operations IS INITIAL OR input-Quantity <= 0
-         OR input-ToWorkerID IS INITIAL OR input-ActorUserUUID IS INITIAL
+         OR input-ToWorkerID IS INITIAL
          OR input-SyncItemUUID IS INITIAL OR input-ExecutionDate IS INITIAL.
         APPEND VALUE #( %tky = <key>-%tky ) TO failed-operationallocation.
         APPEND VALUE #( %tky = <key>-%tky %msg = new_message_with_text(
@@ -160,7 +176,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       TRY.
-          DATA(worker_auth) = zcl_mob_password_service=>verify_worker(
+          DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-ToWorkerID
             password = CONV string( input-WorkerPassword ) ).
         CATCH cx_abap_message_digest zcx_mob_config INTO DATA(auth_error).
@@ -229,7 +245,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             Quantity UnitOfMeasure ExecutionDate TransactionStatus )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |TXN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
-            ActorUserUUID = input-ActorUserUUID
+            ActorUserUUID = auth-user_uuid
             TransactionType = zcl_pp_txn_type=>initial_assign
             WorkerID = input-ToWorkerID ToWorkerID = input-ToWorkerID
             Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure

@@ -11,12 +11,12 @@ etag master LocalLastChangedAt
   update;
   delete;
   field ( numbering : managed, readonly ) UserUUID;
-  "Identity and worker mapping are fixed at creation time. Account changes
-  "are restricted to the Fiori administration projection.
-  field ( readonly ) Username, NormalizedUsername, WorkerID,
-                     FailedLoginCount, LockedUntil,
+  "Username identifies the login account; WorkerID links authorization and
+  "ledger history to the worker master. Both stay immutable after creation.
+  field ( readonly ) Username, NormalizedUsername, FailedLoginCount, LockedUntil,
                      FirstLoginAt, LastLoginAt, CreatedBy, CreatedAt,
                      LastChangedBy, LastChangedAt, LocalLastChangedAt;
+  field ( readonly : update ) WorkerID;
   association _Credential { create; }
   association _Sessions { create; }
   association _Roles { create; }
@@ -29,9 +29,9 @@ etag master LocalLastChangedAt
     UserUUID = user_uuid;
     Username = username;
     NormalizedUsername = normalized_username;
-    WorkerID = worker_id;
     FullName = full_name;
     Email = email;
+    WorkerID = worker_id;
     Status = status;
     FailedLoginCount = failed_login_count;
     LockedUntil = locked_until;

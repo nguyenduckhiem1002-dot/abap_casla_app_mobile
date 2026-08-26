@@ -7,7 +7,8 @@ define abstract entity ZA_PP_Confirm
   UnitOfMeasure : abap.unit(3);
   ExecutionDate : abap.dats;
   OriginalTransactionUUID : sysuuid_x16;
+  AccessToken : abap.char(128);
+  DeviceID : abap.char(120);
   WorkerPassword : abap.char(255);
-  ActorUserUUID : sysuuid_x16;
   SyncItemUUID : sysuuid_x16;
 }

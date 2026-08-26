@@ -5,5 +5,4 @@ define behavior for ZC_MOB_Func_Adm alias MobileFunc
 {
   use create;
   use update;
-  use delete;
 }

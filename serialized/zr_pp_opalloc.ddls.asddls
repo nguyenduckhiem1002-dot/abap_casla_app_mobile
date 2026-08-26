@@ -1,4 +1,4 @@
-@AccessControl.authorizationCheck: #NOT_REQUIRED
+@AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: 'Phân bổ sản lượng công đoạn'
 define root view entity ZR_PP_OpAlloc
   as select from ztb_pp_op_alloc

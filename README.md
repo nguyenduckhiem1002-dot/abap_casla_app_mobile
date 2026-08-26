@@ -3,6 +3,9 @@
 Source bundle for the ABAP RAP backend described in
 [`ABAP_RAP_MOBILE_SYNC_PLAN.md`](docs/ABAP_RAP_MOBILE_SYNC_PLAN.md).
 
+Kết quả rà soát gần nhất và checklist hardening tenant:
+[`SECURITY_PERFORMANCE_REVIEW.md`](SECURITY_PERFORMANCE_REVIEW.md).
+
 ## Target
 
 - SAP S/4HANA Cloud Public Edition

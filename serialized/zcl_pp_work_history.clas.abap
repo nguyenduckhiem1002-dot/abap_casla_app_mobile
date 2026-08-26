@@ -58,8 +58,6 @@ CLASS zcl_pp_work_history DEFINITION
              plant              TYPE ztb_pp_op_alloc-plant,
              work_center        TYPE ztb_pp_op_alloc-work_center,
              transaction_type   TYPE ztb_pp_alloc_txn-transaction_type,
-             original_transaction_type
-               TYPE ztb_pp_alloc_txn-original_transaction_type,
              quantity           TYPE ztb_pp_alloc_txn-quantity,
              uom                TYPE ztb_pp_alloc_txn-uom,
              transaction_status TYPE ztb_pp_alloc_txn-transaction_status,
@@ -89,7 +87,7 @@ CLASS zcl_pp_work_history DEFINITION
                 worker_id       TYPE ztb_pp_alloc_txn-worker_id OPTIONAL
                 include_entries TYPE abap_bool DEFAULT abap_true
       RETURNING VALUE(result)   TYPE history
-      RAISING   cx_abap_message_digest.
+      RAISING   cx_abap_message_digest zcx_mob_config.
 
   PRIVATE SECTION.
     TYPES: BEGIN OF ledger_row,
@@ -118,7 +116,8 @@ CLASS zcl_pp_work_history DEFINITION
              valid_from  TYPE zi_pp_workerref-validfrom,
              valid_to    TYPE zi_pp_workerref-validto,
            END OF master_row,
-           master_rows TYPE STANDARD TABLE OF master_row WITH EMPTY KEY.
+           master_rows TYPE SORTED TABLE OF master_row
+                       WITH NON-UNIQUE KEY worker_id valid_from.
 
     CLASS-METHODS resolve_range
       IMPORTING range_code     TYPE range_selection
@@ -284,6 +283,10 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD worker_of_account.
+    "The account carries the worker id in its own field, the same one
+    "verify_worker_password looks accounts up by. It is wider there than in
+    "the ledger, so an id that does not fit is refused instead of truncated:
+    "a truncated id would quietly point at somebody else's rows.
     SELECT FROM ztb_mob_user
       FIELDS worker_id
       WHERE user_uuid = @user_uuid
@@ -292,7 +295,15 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     IF accounts IS INITIAL.
       RETURN.
     ENDIF.
-    result = accounts[ 1 ]-worker_id.
+    DATA(candidate) = to_upper(
+      condense( CONV string( accounts[ 1 ]-worker_id ) ) ).
+    IF candidate IS INITIAL.
+      RETURN.
+    ENDIF.
+    result = CONV #( candidate ).
+    IF CONV string( result ) <> candidate.
+      CLEAR result.
+    ENDIF.
   ENDMETHOD.
 
   METHOD select_self.
@@ -302,7 +313,6 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
              txn~execution_date, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
-             txn~original_transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~plant, op~work_center
       WHERE txn~execution_date BETWEEN @date_from AND @date_to
@@ -388,7 +398,6 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
              txn~execution_date, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
-             txn~original_transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~plant, op~work_center
       FOR ALL ENTRIES IN @scope
@@ -467,33 +476,14 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
                                   uom = <row>-uom
                                   completed = <row>-quantity
                         CHANGING summaries = result ).
-        WHEN zcl_pp_txn_type=>recall.
+        WHEN zcl_pp_txn_type=>reverse.
           IF <row>-worker_id <> <row>-report_worker_id.
             CONTINUE.
           ENDIF.
           add_quantity( EXPORTING worker = <row>-report_worker_id
                                   uom = <row>-uom
-                                  assigned = <row>-quantity * -1
+                                  completed = <row>-quantity * -1
                         CHANGING summaries = result ).
-        WHEN zcl_pp_txn_type=>reverse.
-          CASE <row>-original_transaction_type.
-            WHEN zcl_pp_txn_type=>confirm.
-              add_quantity( EXPORTING worker = <row>-report_worker_id
-                                      uom = <row>-uom
-                                      completed = <row>-quantity * -1
-                            CHANGING summaries = result ).
-            WHEN zcl_pp_txn_type=>initial_assign
-              OR zcl_pp_txn_type=>transfer.
-              add_quantity( EXPORTING worker = <row>-report_worker_id
-                                      uom = <row>-uom
-                                      assigned = <row>-quantity * -1
-                            CHANGING summaries = result ).
-            WHEN zcl_pp_txn_type=>recall.
-              add_quantity( EXPORTING worker = <row>-report_worker_id
-                                      uom = <row>-uom
-                                      assigned = <row>-quantity
-                            CHANGING summaries = result ).
-          ENDCASE.
         WHEN OTHERS.
           "An unknown type is counted but not booked, so adding a
           "transaction type later cannot silently distort the figures.
@@ -520,9 +510,6 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     <summary>-assigned = <summary>-assigned + assigned.
     <summary>-completed = <summary>-completed + completed.
     <summary>-txn_count = <summary>-txn_count + 1.
-    IF <summary>-uom IS INITIAL.
-      <summary>-uom = uom.
-    ENDIF.
   ENDMETHOD.
 
   METHOD build_entries.
