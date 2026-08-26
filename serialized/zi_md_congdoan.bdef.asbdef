@@ -1,0 +1,34 @@
+managed implementation in class zbp_i_md_congdoan unique;
+strict ( 2 );
+
+define behavior for ZI_MD_CongDoan alias CongDoan
+persistent table ztb_md_congdoan
+lock master
+authorization master ( global )
+etag master LocalLastChangedAt
+{
+  create;
+  update;
+  delete;
+
+  field ( readonly : update ) MaCongDoan, ValidFrom;
+  field ( mandatory ) MaCongDoan, ValidFrom, TenCongDoan, ValidTo;
+  field ( readonly ) CreatedBy, CreatedAt, LastChangedBy, LocalLastChangedAt;
+
+  validation validateMaster on save { create; update; field MaCongDoan, ValidFrom, ValidTo, TenCongDoan, DonGiaXM, DonGiaGC; }
+
+  mapping for ztb_md_congdoan
+  {
+    MaCongDoan        = ma_congdoan;
+    ValidFrom         = valid_from;
+    TenCongDoan       = ten_congdoan;
+    BoPhan            = bo_phan;
+    DonGiaXM          = dongia_xm;
+    DonGiaGC          = dongia_gc;
+    ValidTo           = valid_to;
+    CreatedBy         = created_by;
+    CreatedAt         = created_at;
+    LastChangedBy     = last_changed_by;
+    LocalLastChangedAt = local_last_changed_at;
+  }
+}

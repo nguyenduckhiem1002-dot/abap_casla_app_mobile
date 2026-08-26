@@ -1,6 +1,8 @@
 @EndUserText.label: 'Tham số thu hồi phân bổ'
 define abstract entity ZA_PP_Recall
 {
+  ProductionOrder : abap.char(12);
+  Operation : abap.char(4);
   WorkerID : abap.char(8);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   Quantity : abap.quan(15,3);

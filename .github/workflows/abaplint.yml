@@ -1,0 +1,24 @@
+name: ABAP lint
+
+on:
+  push:
+    branches:
+      - main
+      - 'chatgpt/**'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  abaplint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run abaplint
+        run: npx --yes @abaplint/cli@2.120.35
