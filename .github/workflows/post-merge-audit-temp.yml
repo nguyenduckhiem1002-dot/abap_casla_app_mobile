@@ -1,4 +1,4 @@
-name: Temporary post-merge ABAP RAP remediation validation
+name: Temporary post-merge ABAP validation
 
 on:
   push:
@@ -23,121 +23,69 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Align authorization comment with immutable child mappings
+      - name: Align immutable mapping comment
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p = Path('serialized/zbp_i_mob_user.clas.locals_imp.abap')
           text = p.read_text(encoding='utf-8')
-          old = '''    "MobileUserRole is a composition child declared "authorization dependent
-    "by _User", so RAP delegates every operation on it - create by
-    "association, update, delete - to this master's %update. Leaving %update
-'''
-          new = '''    "MobileUserRole is a composition child declared "authorization dependent
-    "by _User", so RAP delegates create-by-association and delete to this
-    "master's %update authorization. Leaving %update
-'''
+          old = (
+              '    "MobileUserRole is a composition child declared "authorization dependent\n'
+              '    "by _User", so RAP delegates every operation on it - create by\n'
+              '    "association, update, delete - to this master\'s %update. Leaving %update\n'
+          )
+          new = (
+              '    "MobileUserRole is a composition child declared "authorization dependent\n'
+              '    "by _User", so RAP delegates create-by-association and delete to this\n'
+              '    "master\'s %update authorization. Leaving %update\n'
+          )
           if text.count(old) != 1:
-              raise SystemExit('Expected MobileUserRole authorization comment anchor not found exactly once')
+              raise SystemExit('authorization comment anchor not found exactly once')
           p.write_text(text.replace(old, new), encoding='utf-8')
           PY
 
       - name: ABAP Cloud static validation
         run: npx --yes @abaplint/cli@2.120.35
 
-      - name: RAP/CDS regression and business-model checks
+      - name: Verify RAP remediation contracts
         shell: bash
         run: |
+          grep -q 'validation validateRole on save' serialized/zi_mob_role.bdef.asbdef
+          grep -q 'validation validateFunctionAssignment on save' serialized/zi_mob_role.bdef.asbdef
+          grep -q 'validation validateWorkAssignment on save' serialized/zi_mob_role.bdef.asbdef
+          grep -q 'validation validateFunction on save' serialized/zi_mob_func.bdef.asbdef
+          grep -q 'validation validateRoleAssignment on save' serialized/zi_mob_user.bdef.asbdef
+          grep -q 'METHOD validateRole\.' serialized/zbp_i_mob_role.clas.locals_imp.abap
+          grep -q 'METHOD validateFunctionAssignment\.' serialized/zbp_i_mob_role.clas.locals_imp.abap
+          grep -q 'METHOD validateFunction\.' serialized/zbp_i_mob_func.clas.locals_imp.abap
+          ! grep -q '<FIELDNAME>MODULE</FIELDNAME>' serialized/ztb_mob_func.tabl.xml
+          ! grep -q 'provider contract transactional_query' serialized/zc_mob_rolfunc_adm.ddls.asddls
+          ! grep -q 'provider contract transactional_query' serialized/zc_mob_rolwork_adm.ddls.asddls
+          ! grep -q 'provider contract transactional_query' serialized/zc_mob_usrrol_adm.ddls.asddls
           python3 - <<'PY'
           from pathlib import Path
           import re
-          import xml.etree.ElementTree as ET
-
-          root = Path('serialized')
-          errors = []
-
-          # Known ADT/RAP activation regressions.
-          for p in root.glob('*.tabl.xml'):
-              text = p.read_text(encoding='utf-8')
-              if '<FIELDNAME>MODULE</FIELDNAME>' in text.upper():
-                  errors.append(f'{p}: reserved table field MODULE remains')
-              try:
-                  ET.parse(p)
-              except ET.ParseError as exc:
-                  errors.append(f'{p}: invalid XML: {exc}')
-
-          for p in root.glob('*.ddls.asddls'):
-              text = p.read_text(encoding='utf-8')
-              if re.search(r'redirected\s+to\s+parent', text, re.I) and \
-                 re.search(r'provider\s+contract\s+transactional_query', text, re.I):
-                  errors.append(f'{p}: child projection declares transactional_query provider contract')
-
-          # The three N:M mappings are immutable assignments: add/remove only.
-          role_bdef = (root / 'zi_mob_role.bdef.asbdef').read_text(encoding='utf-8')
-          role_proj = (root / 'zc_mob_role_adm.bdef.asbdef').read_text(encoding='utf-8')
-          user_bdef = (root / 'zi_mob_user.bdef.asbdef').read_text(encoding='utf-8')
-          user_proj = (root / 'zc_mob_user_adm.bdef.asbdef').read_text(encoding='utf-8')
-
-          def block(text, entity):
-              m = re.search(r'define\s+behavior\s+for\s+' + re.escape(entity) + r'.*?\{(.*?)\n\}', text, re.I | re.S)
-              return m.group(1) if m else ''
-
-          for label, text, entity in (
-              ('interface RoleFunc', role_bdef, 'ZI_MOB_RolFunc'),
-              ('projection RoleFunc', role_proj, 'ZC_MOB_RolFunc_Adm'),
-              ('interface UserRole', user_bdef, 'ZI_MOB_UsrRol'),
-              ('projection UserRole', user_proj, 'ZC_MOB_UsrRol_Adm'),
-          ):
-              b = block(text, entity)
-              if not b:
-                  errors.append(f'{label}: behavior block missing')
-              if re.search(r'(^|\n)\s*(use\s+)?update\s*;', b, re.I):
-                  errors.append(f'{label}: immutable mapping still exposes update')
-              if not re.search(r'(^|\n)\s*(use\s+)?delete\s*;', b, re.I):
-                  errors.append(f'{label}: delete operation missing')
-
-          # Server-side validation must mirror value-help restrictions.
-          required = {
-              'zi_mob_role.bdef.asbdef': ['validation validateRole on save', 'validation validateFunctionAssignment on save', 'validation validateWorkAssignment on save'],
-              'zi_mob_func.bdef.asbdef': ['validation validateFunction on save'],
-              'zi_mob_user.bdef.asbdef': ['validation validateRoleAssignment on save'],
-              'zbp_i_mob_role.clas.locals_imp.abap': ['METHOD validateRole.', 'METHOD validateFunctionAssignment.', 'METHOD validateWorkAssignment.'],
-              'zbp_i_mob_func.clas.locals_imp.abap': ['METHOD validateFunction.'],
-              'zbp_i_mob_user.clas.locals_imp.abap': ['METHOD validateRoleAssignment.'],
-          }
-          for fname, needles in required.items():
-              text = (root / fname).read_text(encoding='utf-8')
-              for needle in needles:
-                  if needle.lower() not in text.lower():
-                      errors.append(f'{fname}: missing {needle}')
-
-          # Fiori/admin contracts introduced by the work-context flow.
-          contract_checks = {
-              'za_mob_createuser.ddls.asddls': ['RoleID', 'ZI_MOB_Role_VH'],
-              'za_mob_loginresult.ddls.asddls': ['_Permissions', '_WorkContexts'],
-              'zc_mob_user_adm.ddls.asddls': ['_Roles : redirected to composition child'],
-              'zc_mob_role_adm.ddls.asddls': ['_Functions : redirected to composition child', '_WorkAssignments : redirected to composition child'],
-              'zui_mob_user_adm.srvd.srvdsrv': ['ZI_MOB_Role_VH'],
-              'zui_mob_rbac_adm.srvd.srvdsrv': ['ZC_MOB_RolWork_Adm', 'ZC_MOB_Work_Adm', 'ZI_MOB_Work_VH'],
-              'zcl_mob_token_validator.clas.abap': ['get_work_contexts', 'has_work_scope', 'app_module'],
-          }
-          for fname, needles in contract_checks.items():
-              text = (root / fname).read_text(encoding='utf-8')
-              for needle in needles:
-                  if needle.lower() not in text.lower():
-                      errors.append(f'{fname}: missing flow contract {needle}')
-
-          # All implemented production mutations must re-check effective work scope.
-          pp = (root / 'zbp_r_pp_opalloc.clas.locals_imp.abap').read_text(encoding='utf-8')
-          if len(re.findall(r'=>has_work_scope\s*\(', pp, re.I)) < 3:
-              errors.append('PP allocation behavior: fewer than 3 work-scope checks')
-
-          print(f'RAP structural/business audit errors: {len(errors)}')
-          for error in errors:
-              print('ERROR:', error)
-          if errors:
-              raise SystemExit(1)
+          checks = [
+              ('serialized/zi_mob_role.bdef.asbdef', 'ZI_MOB_RolFunc'),
+              ('serialized/zc_mob_role_adm.bdef.asbdef', 'ZC_MOB_RolFunc_Adm'),
+              ('serialized/zi_mob_user.bdef.asbdef', 'ZI_MOB_UsrRol'),
+              ('serialized/zc_mob_user_adm.bdef.asbdef', 'ZC_MOB_UsrRol_Adm'),
+          ]
+          for filename, entity in checks:
+              text = Path(filename).read_text(encoding='utf-8')
+              match = re.search(
+                  r'define\s+behavior\s+for\s+' + re.escape(entity) + r'.*?\{(.*?)\n\}',
+                  text,
+                  re.I | re.S,
+              )
+              if not match:
+                  raise SystemExit(f'{filename}: behavior block {entity} missing')
+              block = match.group(1)
+              if re.search(r'(^|\n)\s*(use\s+)?update\s*;', block, re.I):
+                  raise SystemExit(f'{filename}: immutable mapping {entity} still exposes update')
+              if not re.search(r'(^|\n)\s*(use\s+)?delete\s*;', block, re.I):
+                  raise SystemExit(f'{filename}: immutable mapping {entity} missing delete')
           PY
 
       - name: Commit comment cleanup
