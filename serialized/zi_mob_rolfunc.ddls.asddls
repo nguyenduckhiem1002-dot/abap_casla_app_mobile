@@ -7,8 +7,10 @@ define view entity ZI_MOB_RolFunc
   association [1..1] to ZI_MOB_Func as _Func
     on $projection.FuncID = _Func.FuncID
 {
-  key role_id as RoleID,
-  key func_id as FuncID,
+  key role_id        as RoleID,
+  key func_id        as FuncID,
+      _Func.FuncName as FuncName,
+      _Func.Module   as Module,
       _Role,
       _Func
 }

@@ -19,6 +19,15 @@ CLASS zcl_mob_token_validator DEFINITION
              module    TYPE ztb_mob_func-module,
            END OF permission,
            permissions TYPE SORTED TABLE OF permission WITH UNIQUE KEY func_id.
+    TYPES: BEGIN OF work_context,
+             work_id    TYPE ztb_mob_work-work_id,
+             work_name  TYPE ztb_mob_work-work_name,
+             plant      TYPE ztb_mob_work-plant,
+             workcenter TYPE ztb_mob_work-workcenter,
+             bo_phan    TYPE ztb_mob_work-bo_phan,
+             location   TYPE ztb_mob_work-location,
+           END OF work_context,
+           work_contexts TYPE SORTED TABLE OF work_context WITH UNIQUE KEY work_id.
     "Single source of truth for token hashing. Every entry point that
     "accepts a mobile token must hash it here instead of inline, otherwise
     "the implementations drift and a change to the hashing silently
@@ -50,6 +59,14 @@ CLASS zcl_mob_token_validator DEFINITION
     CLASS-METHODS get_permissions
       IMPORTING user_uuid TYPE sysuuid_x16
       RETURNING VALUE(result) TYPE permissions.
+    CLASS-METHODS get_work_contexts
+      IMPORTING user_uuid TYPE sysuuid_x16
+      RETURNING VALUE(result) TYPE work_contexts.
+    CLASS-METHODS has_work_scope
+      IMPORTING user_uuid TYPE sysuuid_x16
+                plant TYPE ztb_mob_work-plant
+                work_center TYPE ztb_mob_work-workcenter
+      RETURNING VALUE(result) TYPE abap_bool.
     CLASS-METHODS has_function
       IMPORTING user_uuid TYPE sysuuid_x16
                 func_id TYPE ztb_mob_func-func_id
@@ -106,6 +123,42 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
         AND role_hdr~status = 'A'
       ORDER BY func~func_id
       INTO CORRESPONDING FIELDS OF TABLE @result.
+  ENDMETHOD.
+
+  METHOD get_work_contexts.
+    SELECT FROM ztb_mob_usr_rol AS assignment
+      INNER JOIN ztb_mob_role AS role_hdr
+        ON role_hdr~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_wrk AS role_work
+        ON role_work~role_id = assignment~role_id
+      INNER JOIN ztb_mob_work AS work
+        ON work~work_id = role_work~work_id
+      FIELDS DISTINCT work~work_id, work~work_name, work~plant,
+                      work~workcenter, work~bo_phan, work~location
+      WHERE assignment~user_uuid = @user_uuid
+        AND role_hdr~status = 'A'
+        AND work~is_active = 'A'
+      ORDER BY work~work_id
+      INTO CORRESPONDING FIELDS OF TABLE @result.
+  ENDMETHOD.
+
+  METHOD has_work_scope.
+    SELECT FROM ztb_mob_usr_rol AS assignment
+      INNER JOIN ztb_mob_role AS role_hdr
+        ON role_hdr~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_wrk AS role_work
+        ON role_work~role_id = assignment~role_id
+      INNER JOIN ztb_mob_work AS work
+        ON work~work_id = role_work~work_id
+      FIELDS work~work_id
+      WHERE assignment~user_uuid = @user_uuid
+        AND role_hdr~status = 'A'
+        AND work~is_active = 'A'
+        AND work~plant = @plant
+        AND work~workcenter = @work_center
+      INTO TABLE @DATA(scopes)
+      UP TO 1 ROWS.
+    result = xsdbool( scopes IS NOT INITIAL ).
   ENDMETHOD.
 
   METHOD has_function.

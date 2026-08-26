@@ -13,6 +13,7 @@ etag master LocalLastChangedAt
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy, LastChangedAt,
                      LocalLastChangedAt;
   association _Functions { create; }
+  association _WorkAssignments { create; }
   mapping for ztb_mob_role {
     RoleID = role_id;
     RoleName = role_name;
@@ -32,10 +33,26 @@ authorization dependent by _Role
 {
   update;
   delete;
-  field ( readonly ) RoleID;
+  field ( readonly ) RoleID, FuncName, Module;
   association _Role;
   mapping for ztb_mob_rol_fnc {
     RoleID = role_id;
     FuncID = func_id;
+  }
+}
+
+define behavior for ZI_MOB_RolWork alias MobileRoleWork
+persistent table ztb_mob_rol_wrk
+lock dependent by _Role
+authorization dependent by _Role
+{
+  delete;
+  field ( readonly ) RoleID, WorkName, Plant, WorkCenter, BoPhan, Location;
+  association _Role;
+  association _Work;
+  validation validateWorkAssignment on save { create; field WorkID; }
+  mapping for ztb_mob_rol_wrk {
+    RoleID = role_id;
+    WorkID = work_id;
   }
 }

@@ -163,6 +163,14 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       DATA(operation) = operations[ 1 ].
+      IF zcl_mob_token_validator=>has_work_scope(
+           user_uuid = auth-user_uuid
+           plant = operation-Plant
+           work_center = operation-WorkCenter ) = abap_false.
+        report_failure( EXPORTING cid = cid text = 'WORK_CONTEXT_NOT_ALLOWED'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       IF input-UnitOfMeasure <> operation-UnitOfMeasure
          OR zcl_pp_worker_validator=>is_worker_active(
            worker_id = input-ToWorkerID plant = operation-Plant
@@ -310,6 +318,14 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       DATA(operation) = operations[ 1 ].
+      IF zcl_mob_token_validator=>has_work_scope(
+           user_uuid = auth-user_uuid
+           plant = operation-Plant
+           work_center = operation-WorkCenter ) = abap_false.
+        report_failure( EXPORTING cid = cid text = 'WORK_CONTEXT_NOT_ALLOWED'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       TRY.
           DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-ToWorkerID
@@ -448,6 +464,14 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       DATA(operation) = operations[ 1 ].
+      IF zcl_mob_token_validator=>has_work_scope(
+           user_uuid = auth-user_uuid
+           plant = operation-Plant
+           work_center = operation-WorkCenter ) = abap_false.
+        report_failure( EXPORTING cid = cid text = 'WORK_CONTEXT_NOT_ALLOWED'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       TRY.
           DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-WorkerID

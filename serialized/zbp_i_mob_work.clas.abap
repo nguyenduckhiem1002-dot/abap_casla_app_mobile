@@ -1,0 +1,9 @@
+CLASS zbp_i_mob_work DEFINITION
+  PUBLIC
+  ABSTRACT
+  FINAL
+  FOR BEHAVIOR OF zi_mob_work.
+ENDCLASS.
+
+CLASS zbp_i_mob_work IMPLEMENTATION.
+ENDCLASS.

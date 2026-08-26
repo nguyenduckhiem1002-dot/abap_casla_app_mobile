@@ -7,8 +7,10 @@ define view entity ZI_MOB_UsrRol
   association [1..1] to ZI_MOB_Role as _Role
     on $projection.RoleID = _Role.RoleID
 {
-  key user_uuid as UserUUID,
-  key role_id   as RoleID,
+  key user_uuid      as UserUUID,
+  key role_id        as RoleID,
+      _Role.RoleName as RoleName,
+      _Role.Status   as RoleStatus,
       _User,
       _Role
 }

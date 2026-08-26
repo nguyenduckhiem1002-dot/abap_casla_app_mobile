@@ -117,9 +117,10 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
     DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     DATA(normalized) = to_lower( condense( CONV string( input-Username ) ) ).
-    IF normalized IS INITIAL OR input-Password IS INITIAL.
+    IF normalized IS INITIAL OR input-Password IS INITIAL
+       OR input-RoleID IS INITIAL.
       report_error( EXPORTING cid = cid
-                              text = 'Tên đăng nhập và mật khẩu là bắt buộc'
+                              text = 'Tên đăng nhập, mật khẩu và chức danh ban đầu là bắt buộc'
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
@@ -137,6 +138,19 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       UP TO 1 ROWS.
     IF existing_users IS NOT INITIAL.
       report_error( EXPORTING cid = cid text = 'Tên đăng nhập đã tồn tại'
+                    CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    DATA(role_id) = CONV ztb_mob_role-role_id( input-RoleID ).
+    SELECT FROM ztb_mob_role
+      FIELDS role_id
+      WHERE role_id = @role_id
+        AND status = 'A'
+      INTO TABLE @DATA(active_roles)
+      UP TO 1 ROWS.
+    IF active_roles IS INITIAL.
+      report_error( EXPORTING cid = cid
+                              text = 'Chức danh không tồn tại hoặc không còn hiệu lực'
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
@@ -201,6 +215,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
           PasswordSalt = salt HashAlgorithm = 'SHA256-ITER'
           HashIterations = c_iterations PasswordChangedAt = now
           CredentialStatus = 'A' ) ) ) )
+      ENTITY MobileUser CREATE BY \_Roles FIELDS ( RoleID )
+      WITH VALUE #( ( %cid_ref = 'USR'
+        %target = VALUE #( ( %cid = 'ROL' RoleID = role_id ) ) ) )
       MAPPED DATA(mapped_create) FAILED DATA(failed_create)
       REPORTED DATA(reported_create).
     IF failed_create IS NOT INITIAL.
@@ -394,6 +411,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     "server side through zcl_mob_token_validator, which never reads this.
     DATA(permissions) = zcl_mob_token_validator=>get_permissions(
       user-user_uuid ).
+    DATA(work_contexts) = zcl_mob_token_validator=>get_work_contexts(
+      user-user_uuid ).
     result = VALUE #( ( %cid = cid %param = VALUE #(
       UserUUID = user-user_uuid
       SessionID = session_id
@@ -406,7 +425,14 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       _Permissions = VALUE #( FOR permission IN permissions
         ( FuncID = permission-func_id
           FuncName = permission-func_name
-          Module = permission-module ) ) ) ) ).
+          Module = permission-module ) )
+      _WorkContexts = VALUE #( FOR work_context IN work_contexts
+        ( WorkID = work_context-work_id
+          WorkName = work_context-work_name
+          Plant = work_context-plant
+          WorkCenter = work_context-workcenter
+          BoPhan = work_context-bo_phan
+          Location = work_context-location ) ) ) ) ).
   ENDMETHOD.
 
   METHOD logout.
@@ -527,6 +553,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     "while the session was open reaches the device at the next rotation.
     DATA(permissions) = zcl_mob_token_validator=>get_permissions(
       session-user_uuid ).
+    DATA(work_contexts) = zcl_mob_token_validator=>get_work_contexts(
+      session-user_uuid ).
     result = VALUE #( ( %cid = cid %param = VALUE #(
       UserUUID = session-user_uuid
       SessionID = session-session_id
@@ -539,7 +567,14 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       _Permissions = VALUE #( FOR permission IN permissions
         ( FuncID = permission-func_id
           FuncName = permission-func_name
-          Module = permission-module ) ) ) ) ).
+          Module = permission-module ) )
+      _WorkContexts = VALUE #( FOR work_context IN work_contexts
+        ( WorkID = work_context-work_id
+          WorkName = work_context-work_name
+          Plant = work_context-plant
+          WorkCenter = work_context-workcenter
+          BoPhan = work_context-bo_phan
+          Location = work_context-location ) ) ) ) ).
   ENDMETHOD.
 
   METHOD changepassword.
@@ -660,4 +695,40 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+ENDCLASS.
+
+
+CLASS lhc_mobileuserrole DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS validateRoleAssignment FOR VALIDATE ON SAVE
+      IMPORTING keys FOR MobileUserRole~validateRoleAssignment.
+ENDCLASS.
+
+CLASS lhc_mobileuserrole IMPLEMENTATION.
+  METHOD validateRoleAssignment.
+    READ ENTITIES OF zi_mob_user IN LOCAL MODE
+      ENTITY MobileUserRole
+      FIELDS ( RoleID )
+      WITH CORRESPONDING #( keys )
+      RESULT DATA(assignments).
+
+    LOOP AT assignments ASSIGNING FIELD-SYMBOL(<assignment>).
+      SELECT FROM ztb_mob_role
+        FIELDS role_id
+        WHERE role_id = @<assignment>-RoleID
+          AND status = 'A'
+        INTO TABLE @DATA(active_roles)
+        UP TO 1 ROWS.
+      IF active_roles IS INITIAL.
+        APPEND VALUE #( %tky = <assignment>-%tky ) TO failed-mobileuserrole.
+        APPEND VALUE #(
+          %tky = <assignment>-%tky
+          %element-RoleID = if_abap_behv=>mk-on
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = 'Chức danh không tồn tại hoặc không còn hiệu lực' ) )
+          TO reported-mobileuserrole.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
 ENDCLASS.
