@@ -49,8 +49,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     result-%create = if_abap_behv=>auth-unauthorized.
     result-%delete = if_abap_behv=>auth-unauthorized.
     "MobileUserRole is a composition child declared "authorization dependent
-    "by _User", so RAP delegates every operation on it - create by
-    "association, update, delete - to this master's %update. Leaving %update
+    "by _User", so RAP delegates create-by-association and delete to this
+    "master's %update authorization. Leaving %update
     "unauthorized would reject role assignment from the admin app at runtime.
     "The external write surface stays closed at the projection layer:
     "ZC_MOB_User_Adm exposes only createUser plus the _Roles composition, and

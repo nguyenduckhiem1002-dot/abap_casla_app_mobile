@@ -13,7 +13,6 @@ define behavior for ZC_MOB_Role_Adm alias MobileRole
 
 define behavior for ZC_MOB_RolFunc_Adm alias MobileRoleFunc
 {
-  use update;
   use delete;
   use association _Role;
 }

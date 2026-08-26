@@ -10,10 +10,12 @@ etag master LocalLastChangedAt
   create;
   update;
   delete;
+  field ( readonly : update ) RoleID;
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy, LastChangedAt,
                      LocalLastChangedAt;
   association _Functions { create; }
   association _WorkAssignments { create; }
+  validation validateRole on save { create; update; field RoleID, RoleName, Status; }
   mapping for ztb_mob_role {
     RoleID = role_id;
     RoleName = role_name;
@@ -31,10 +33,10 @@ persistent table ztb_mob_rol_fnc
 lock dependent by _Role
 authorization dependent by _Role
 {
-  update;
   delete;
   field ( readonly ) RoleID, FuncName, AppModule;
   association _Role;
+  validation validateFunctionAssignment on save { create; field FuncID; }
   mapping for ztb_mob_rol_fnc {
     RoleID = role_id;
     FuncID = func_id;
