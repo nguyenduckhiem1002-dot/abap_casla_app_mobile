@@ -11,8 +11,8 @@ etag master LocalLastChangedAt
   update;
   delete;
   field ( numbering : managed, readonly ) UserUUID;
-  "Username identifies the login account; WorkerID links authorization and
-  "ledger history to the worker master. Both stay immutable after creation.
+  // Username định danh tài khoản đăng nhập; WorkerID liên kết phân quyền và lịch sử
+  // ledger với master nhân công. Cả hai không được thay đổi sau khi tạo.
   field ( readonly ) Username, NormalizedUsername, FailedLoginCount,
                      LastFailedLoginAt, LockedUntil, FirstLoginAt, LastLoginAt,
                      CreatedBy, CreatedAt, LastChangedBy, LastChangedAt,
