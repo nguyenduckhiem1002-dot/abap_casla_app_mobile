@@ -5,14 +5,15 @@
   typeNamePlural: 'Tài khoản giám sát',
   title: { value: 'Username' }
 }
-@UI.facet: [
-  { id: 'General', purpose: #STANDARD, type: #IDENTIFICATION_REFERENCE,
-    label: 'Thông tin tài khoản', position: 10 },
-  { id: 'Roles', purpose: #STANDARD, type: #LINEITEM_REFERENCE,
-    label: 'Chức danh', position: 20, targetElement: '_Roles' }
-]
 annotate entity ZC_MOB_User_Adm with
 {
+  @UI.facet: [
+    { id: 'General', purpose: #STANDARD, type: #IDENTIFICATION_REFERENCE,
+      label: 'Thông tin tài khoản', position: 10 },
+    { id: 'Roles', purpose: #STANDARD, type: #LINEITEM_REFERENCE,
+      label: 'Chức danh', position: 20, targetElement: '_Roles' }
+  ]
+
   @UI.hidden: true
   UserUUID;
 
