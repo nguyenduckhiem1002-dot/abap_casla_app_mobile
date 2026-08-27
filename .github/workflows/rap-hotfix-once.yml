@@ -1,0 +1,125 @@
+name: RAP hotfix once
+
+on:
+  push:
+    branches:
+      - chatgpt/fix-comment-syntax-vi
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sửa RAP bound action và aggregate scalar
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('serialized/zbp_r_pp_opalloc.clas.locals_imp.abap')
+          text = path.read_text(encoding='utf-8')
+
+          old_decl = """    METHODS report_failure
+                IMPORTING cid TYPE string text TYPE string
+                CHANGING failed TYPE failed_response reported TYPE reported_response.
+          """
+          new_decl = """    METHODS report_instance_failure
+                IMPORTING operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
+                          text TYPE string
+                CHANGING failed TYPE failed_response reported TYPE reported_response.
+
+              METHODS report_failure
+                IMPORTING cid TYPE string text TYPE string
+                CHANGING failed TYPE failed_response reported TYPE reported_response.
+          """
+          if text.count(old_decl) != 1:
+              raise SystemExit('Không tìm thấy đúng một khai báo report_failure để chèn helper bound action')
+          text = text.replace(old_decl, new_decl, 1)
+
+          old_impl = """  METHOD report_failure.
+              APPEND VALUE #( %cid = cid ) TO failed-operationallocation.
+              APPEND VALUE #( %cid = cid
+                %msg = new_message_with_text(
+                  severity = if_abap_behv_message=>severity-error text = text ) )
+                TO reported-operationallocation.
+            ENDMETHOD.
+          """
+          new_impl = """  METHOD report_instance_failure.
+              APPEND VALUE #(
+                %tky = VALUE #( OperationUUID = operation_uuid ) )
+                TO failed-operationallocation.
+              APPEND VALUE #(
+                %tky = VALUE #( OperationUUID = operation_uuid )
+                %msg = new_message_with_text(
+                  severity = if_abap_behv_message=>severity-error text = text ) )
+                TO reported-operationallocation.
+            ENDMETHOD.
+
+            METHOD report_failure.
+              APPEND VALUE #( %cid = cid ) TO failed-operationallocation.
+              APPEND VALUE #( %cid = cid
+                %msg = new_message_with_text(
+                  severity = if_abap_behv_message=>severity-error text = text ) )
+                TO reported-operationallocation.
+            ENDMETHOD.
+          """
+          if text.count(old_impl) != 1:
+              raise SystemExit('Không tìm thấy đúng một implementation report_failure')
+          text = text.replace(old_impl, new_impl, 1)
+
+          bound_methods = (
+              'initialAssign', 'transfer', 'recall',
+              'confirm', 'reverse', 'correctConfirm'
+          )
+          for method in bound_methods:
+              marker = f'  METHOD {method}.'
+              start = text.index(marker)
+              end = text.index('  ENDMETHOD.', start) + len('  ENDMETHOD.')
+              block = text[start:end]
+
+              cid_line = '      DATA(cid) = CONV string( <key>-%cid ).\n'
+              if block.count(cid_line) != 1:
+                  raise SystemExit(f'{method}: không tìm thấy đúng một DATA(cid) bound action')
+              block = block.replace(cid_line, '', 1)
+
+              old_call = 'report_failure( EXPORTING cid = cid'
+              call_count = block.count(old_call)
+              if call_count == 0:
+                  raise SystemExit(f'{method}: không tìm thấy report_failure bound action')
+              block = block.replace(
+                  old_call,
+                  'report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID'
+              )
+
+              if '<key>-%cid' in block or old_call in block:
+                  raise SystemExit(f'{method}: vẫn còn %cid/report_failure không hợp lệ')
+              text = text[:start] + block + text[end:]
+
+          if text.count('corrections-correction_qty') != 2:
+              raise SystemExit('Số vị trí aggregate scalar không đúng như dự kiến')
+          text = text.replace('corrections-correction_qty', 'corrections')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          git diff --check
+
+      - name: Commit hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'Không có thay đổi cần commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add serialized/zbp_r_pp_opalloc.clas.locals_imp.abap
+          git commit -m 'Fix RAP bound action response typing'
+          git push
