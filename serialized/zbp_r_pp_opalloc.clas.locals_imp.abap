@@ -117,9 +117,9 @@ ENDCLASS.
 
 CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD get_global_authorizations.
-    "Raw CRUD is never part of the mobile API. Domain actions themselves
-    "validate the CASLA token when they are mobile-originated. Static facade
-    "actions are the only actions projected to the mobile service.
+    "API mobile không expose raw CRUD. Các domain action tự xác thực CASLA token
+    "khi request xuất phát từ mobile; projection mobile chỉ expose các static
+    "facade action có kiểm soát.
     result-%create = if_abap_behv=>auth-unauthorized.
     result-%update = if_abap_behv=>auth-unauthorized.
     result-%action-initialAssign = if_abap_behv=>auth-allowed.
