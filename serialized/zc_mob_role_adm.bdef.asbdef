@@ -1,8 +1,8 @@
 projection;
 strict ( 2 );
 
-"Role, function and work-scope maintenance share one administrative object page.
-"They are exposed only through ZUI_MOB_RBAC_ADM, never through the mobile API.
+// Chức danh, chức năng và phạm vi công việc được quản trị trên cùng Object Page.
+// Chúng chỉ được expose qua ZUI_MOB_RBAC_ADM, không expose qua API mobile.
 define behavior for ZC_MOB_Role_Adm alias MobileRole
 {
   use create;
