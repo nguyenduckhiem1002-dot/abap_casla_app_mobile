@@ -32,6 +32,17 @@ jobs:
             exit 1
           fi
 
+      - name: Liệt kê comment để rà ngôn ngữ
+        shell: bash
+        run: |
+          grep -RInE '^[[:space:]]*("|//)' serialized \
+            --include='*.abap' \
+            --include='*.asbdef' \
+            --include='*.asddls' \
+            --include='*.asdcls' \
+            --include='*.asddlxs' \
+            --include='*.srvdsrv' || true
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
