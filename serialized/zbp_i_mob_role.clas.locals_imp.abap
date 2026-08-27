@@ -8,11 +8,11 @@ ENDCLASS.
 
 CLASS lhc_mobilerole IMPLEMENTATION.
   METHOD get_global_authorizations.
-    "Protected by IAM app/business catalog of the admin service.
+    "Được bảo vệ bằng IAM app/business catalog của service quản trị.
     result-%create = if_abap_behv=>auth-allowed.
     result-%update = if_abap_behv=>auth-allowed.
-    "Disable the role through Status instead of deleting it. A hard delete
-    "can orphan historical authorization assignments and audit references.
+    "Hãy vô hiệu hóa chức danh qua Status thay vì hard-delete. Hard-delete có thể
+    "làm mất liên kết lịch sử phân quyền và các tham chiếu phục vụ audit.
     result-%delete = if_abap_behv=>auth-unauthorized.
   ENDMETHOD.
 
