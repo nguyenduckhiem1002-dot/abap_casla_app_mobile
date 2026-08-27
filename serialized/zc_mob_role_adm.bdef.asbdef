@@ -1,25 +1,32 @@
+
 projection;
 strict ( 2 );
+use draft;
 
-// Chức danh, chức năng và phạm vi công việc được quản trị trên cùng Object Page.
-// Chúng chỉ được expose qua ZUI_MOB_RBAC_ADM, không expose qua API mobile.
 define behavior for ZC_MOB_Role_Adm alias MobileRole
+use etag
 {
   use create;
   use update;
-  use association _Functions { create; }
-  use association _WorkAssignments { create; }
+  use action Edit;
+  use action Activate;
+  use action Discard;
+  use action Resume;
+  use action Prepare;
+  use association _Functions { create; with draft; }
+  use association _WorkAssignments { create; with draft; }
 }
 
 define behavior for ZC_MOB_RolFunc_Adm alias MobileRoleFunc
+use etag
 {
   use delete;
-  use association _Role;
+  use association _Role { with draft; }
 }
 
 define behavior for ZC_MOB_RolWork_Adm alias MobileRoleWork
+use etag
 {
   use delete;
-  use association _Role;
-  use association _Work;
+  use association _Role { with draft; }
 }

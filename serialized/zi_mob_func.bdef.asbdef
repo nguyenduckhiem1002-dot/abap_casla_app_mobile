@@ -1,19 +1,32 @@
+
 managed implementation in class zbp_i_mob_func unique;
 strict ( 2 );
+with draft;
 
 define behavior for ZI_MOB_Func alias MobileFunc
 persistent table ztb_mob_func
+draft table ztd_mob_func
 lock master
+total etag LastChangedAt
 authorization master ( global )
+etag master LocalLastChangedAt
 {
   create;
   update;
   delete;
-  field ( readonly : update ) FuncID;
+  field ( mandatory : create, readonly : update ) FuncID;
+  field ( readonly ) LastChangedAt, LocalLastChangedAt;
   validation validateFunction on save { create; update; field FuncID, FuncName; }
+  draft action Edit;
+  draft action Activate optimized;
+  draft action Discard;
+  draft action Resume;
+  draft determine action Prepare { validation validateFunction; }
   mapping for ztb_mob_func {
     FuncID = func_id;
     FuncName = func_name;
     AppModule = app_module;
+    LastChangedAt = last_changed_at;
+    LocalLastChangedAt = local_last_changed_at;
   }
 }

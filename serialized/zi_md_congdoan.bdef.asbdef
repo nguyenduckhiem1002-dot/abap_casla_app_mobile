@@ -1,9 +1,13 @@
+
 managed implementation in class zbp_i_md_congdoan unique;
 strict ( 2 );
+with draft;
 
 define behavior for ZI_MD_CongDoan alias CongDoan
 persistent table ztb_md_congdoan
+draft table ztd_md_congdoan
 lock master
+total etag LastChangedAt
 authorization master ( global )
 etag master LocalLastChangedAt
 {
@@ -13,22 +17,31 @@ etag master LocalLastChangedAt
 
   field ( mandatory : create, readonly : update ) MaCongDoan, ValidFrom;
   field ( mandatory ) TenCongDoan, ValidTo;
-  field ( readonly ) CreatedBy, CreatedAt, LastChangedBy, LocalLastChangedAt;
+  field ( readonly ) CreatedBy, CreatedAt, LastChangedBy,
+                     LastChangedAt, LocalLastChangedAt;
 
-  validation validateMaster on save { create; update; field MaCongDoan, ValidFrom, ValidTo, TenCongDoan, DonGiaXM, DonGiaGC; }
+  validation validateMaster on save
+    { create; update; field MaCongDoan, ValidFrom, ValidTo, TenCongDoan, DonGiaXM, DonGiaGC; }
+
+  draft action Edit;
+  draft action Activate optimized;
+  draft action Discard;
+  draft action Resume;
+  draft determine action Prepare { validation validateMaster; }
 
   mapping for ztb_md_congdoan
   {
-    MaCongDoan        = ma_congdoan;
-    ValidFrom         = valid_from;
-    TenCongDoan       = ten_congdoan;
-    BoPhan            = bo_phan;
-    DonGiaXM          = dongia_xm;
-    DonGiaGC          = dongia_gc;
-    ValidTo           = valid_to;
-    CreatedBy         = created_by;
-    CreatedAt         = created_at;
-    LastChangedBy     = last_changed_by;
+    MaCongDoan         = ma_congdoan;
+    ValidFrom          = valid_from;
+    TenCongDoan        = ten_congdoan;
+    BoPhan             = bo_phan;
+    DonGiaXM           = dongia_xm;
+    DonGiaGC           = dongia_gc;
+    ValidTo            = valid_to;
+    CreatedBy          = created_by;
+    CreatedAt          = created_at;
+    LastChangedBy      = last_changed_by;
+    LastChangedAt      = last_changed_at;
     LocalLastChangedAt = local_last_changed_at;
   }
 }

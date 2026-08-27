@@ -1,3 +1,4 @@
+
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'Vị trí làm việc của chức danh'
 define view entity ZI_MOB_RolWork
@@ -7,13 +8,9 @@ define view entity ZI_MOB_RolWork
   association [1..1] to ZI_MOB_Work as _Work
     on $projection.WorkID = _Work.WorkID
 {
-  key role_id        as RoleID,
-  key work_id        as WorkID,
-      _Work.WorkName as WorkName,
-      _Work.Plant    as Plant,
-      _Work.WorkCenter as WorkCenter,
-      _Work.BoPhan   as BoPhan,
-      _Work.Location as Location,
+  key role_id as RoleID,
+      @ObjectModel.text.association: '_Work'
+  key work_id as WorkID,
       _Role,
       _Work
 }

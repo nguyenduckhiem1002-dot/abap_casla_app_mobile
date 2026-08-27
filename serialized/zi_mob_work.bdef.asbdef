@@ -1,16 +1,28 @@
+
 managed implementation in class zbp_i_mob_work unique;
 strict ( 2 );
+with draft;
 
 define behavior for ZI_MOB_Work alias MobileWork
 persistent table ztb_mob_work
+draft table ztd_mob_work
 lock master
+total etag LastChangedAt
 authorization master ( global )
+etag master LocalLastChangedAt
 {
   create;
   update;
   delete;
-  field ( readonly : update ) WorkID;
-  validation validateWork on save { create; update; field WorkID, WorkName, Plant, WorkCenter, IsActive; }
+  field ( mandatory : create, readonly : update ) WorkID;
+  field ( readonly ) LastChangedAt, LocalLastChangedAt;
+  validation validateWork on save
+    { create; update; field WorkID, WorkName, Plant, WorkCenter, IsActive; }
+  draft action Edit;
+  draft action Activate optimized;
+  draft action Discard;
+  draft action Resume;
+  draft determine action Prepare { validation validateWork; }
   mapping for ztb_mob_work {
     WorkID = work_id;
     WorkName = work_name;
@@ -19,5 +31,7 @@ authorization master ( global )
     BoPhan = bo_phan;
     Location = location;
     IsActive = is_active;
+    LastChangedAt = last_changed_at;
+    LocalLastChangedAt = local_last_changed_at;
   }
 }

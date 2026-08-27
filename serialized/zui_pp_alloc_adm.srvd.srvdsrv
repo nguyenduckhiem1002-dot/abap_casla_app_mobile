@@ -1,3 +1,4 @@
+
 @EndUserText.label: 'Quản trị điều chỉnh sản lượng'
 define service ZUI_PP_ALLOC_ADM {
   expose ZC_PP_OpAlloc_Adm as OperationAllocations;
