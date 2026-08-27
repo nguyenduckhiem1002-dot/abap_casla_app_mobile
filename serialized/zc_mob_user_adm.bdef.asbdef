@@ -1,9 +1,9 @@
 projection;
 strict ( 2 );
 
-"Administrative surface, reachable only through the IAM app of
-"ZUI_MOB_USER_ADM. Account creation and role assignment live here and are
-"deliberately absent from ZC_MOB_User, the device-facing projection.
+// Bề mặt quản trị, chỉ được truy cập qua ứng dụng IAM của ZUI_MOB_USER_ADM.
+// Tạo tài khoản và gán chức danh được thực hiện tại đây và cố ý không expose
+// qua ZC_MOB_User, là projection dành cho thiết bị mobile.
 define behavior for ZC_MOB_User_Adm alias MobileUser
 {
   use action createUser;
