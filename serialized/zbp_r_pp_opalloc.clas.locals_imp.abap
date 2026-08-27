@@ -71,6 +71,11 @@ CLASS lhc_operationallocation DEFINITION
         operation_no     TYPE ztb_pp_op_alloc-operation_no
       RETURNING VALUE(value) TYPE operation_context.
 
+    METHODS report_instance_failure
+      IMPORTING operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
+                text TYPE string
+      CHANGING failed TYPE failed_response reported TYPE reported_response.
+
     METHODS report_failure
       IMPORTING cid TYPE string text TYPE string
       CHANGING failed TYPE failed_response reported TYPE reported_response.
@@ -248,19 +253,18 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD initialAssign.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken )
             device_id = input-DeviceID
             required_func = 'PP_INITIAL_ASSIGN' ).
         CATCH cx_abap_message_digest zcx_mob_config.
-          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'Không thể xác thực yêu cầu'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
       IF auth-is_valid = abap_false.
-        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = CONV string( auth-error_code )
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -271,7 +275,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       IF operations IS INITIAL OR input-Quantity <= 0
          OR input-ToWorkerID IS INITIAL OR input-SyncItemUUID IS INITIAL
          OR input-ExecutionDate IS INITIAL.
-        report_failure( EXPORTING cid = cid text = 'Thiếu dữ liệu giao việc bắt buộc'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'Thiếu dữ liệu giao việc bắt buộc'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -279,7 +283,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       IF zcl_mob_token_validator=>has_work_scope(
            user_uuid = auth-user_uuid plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORK_CONTEXT_NOT_ALLOWED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORK_CONTEXT_NOT_ALLOWED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -288,7 +292,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
            worker_id = input-ToWorkerID plant = operation-Plant
            work_center = operation-WorkCenter
            execution_date = input-ExecutionDate ) = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORKER_NOT_ALLOWED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_NOT_ALLOWED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -297,12 +301,12 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             worker_id = input-ToWorkerID
             password = CONV string( input-WorkerPassword ) ).
         CATCH cx_abap_message_digest zcx_mob_config.
-          report_failure( EXPORTING cid = cid text = 'WORKER_AUTH_FAILED'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_AUTH_FAILED'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
       IF worker_auth-is_valid = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORKER_AUTH_FAILED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_AUTH_FAILED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -314,7 +318,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         INTO TABLE @DATA(existing_txns)
         UP TO 2 ROWS.
       IF lines( existing_txns ) > 1.
-        report_failure( EXPORTING cid = cid text = 'SYNC_RECEIPT_DUPLICATE'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'SYNC_RECEIPT_DUPLICATE'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -328,7 +332,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
            AND existing_txn-execution_date = input-ExecutionDate.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
-          report_failure( EXPORTING cid = cid text = 'IDEMPOTENCY_KEY_REUSED'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'IDEMPOTENCY_KEY_REUSED'
                           CHANGING failed = failed reported = reported ).
         ENDIF.
         CONTINUE.
@@ -341,7 +345,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         INTO @DATA(operation_balance).
       IF operation_balance-remaining + operation_balance-completed + input-Quantity
          > operation-OperationQuantity.
-        report_failure( EXPORTING cid = cid text = 'OPERATION_QUANTITY_EXCEEDED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'OPERATION_QUANTITY_EXCEEDED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -353,7 +357,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         INTO TABLE @DATA(worker_balances)
         UP TO 2 ROWS.
       IF lines( worker_balances ) > 1.
-        report_failure( EXPORTING cid = cid text = 'WORKER_BALANCE_DUPLICATE'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_BALANCE_DUPLICATE'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -405,17 +409,16 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD transfer.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID ).
         CATCH cx_abap_message_digest zcx_mob_config.
-          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu điều chuyển'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'Không thể xác thực yêu cầu điều chuyển'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
       IF auth-is_valid = abap_false.
-        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = CONV string( auth-error_code )
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -425,7 +428,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
          OR input-FromWorkerID IS INITIAL OR input-ToWorkerID IS INITIAL
          OR input-FromWorkerID = input-ToWorkerID OR input-SyncItemUUID IS INITIAL
          OR input-ExecutionDate IS INITIAL.
-        report_failure( EXPORTING cid = cid text = 'Thiếu hoặc sai dữ liệu điều chuyển'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'Thiếu hoặc sai dữ liệu điều chuyển'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -433,7 +436,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       IF zcl_mob_token_validator=>has_work_scope(
            user_uuid = auth-user_uuid plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORK_CONTEXT_NOT_ALLOWED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORK_CONTEXT_NOT_ALLOWED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -441,7 +444,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-ToWorkerID password = CONV string( input-WorkerPassword ) ).
         CATCH cx_abap_message_digest zcx_mob_config.
-          report_failure( EXPORTING cid = cid text = 'WORKER_AUTH_FAILED'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_AUTH_FAILED'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
@@ -450,7 +453,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
            worker_id = input-ToWorkerID plant = operation-Plant
            work_center = operation-WorkCenter
            execution_date = input-ExecutionDate ) = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORKER_AUTH_FAILED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_AUTH_FAILED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -461,7 +464,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         WHERE sync_item_uuid = @input-SyncItemUUID
         INTO TABLE @DATA(existing_txns) UP TO 2 ROWS.
       IF lines( existing_txns ) > 1.
-        report_failure( EXPORTING cid = cid text = 'SYNC_RECEIPT_DUPLICATE'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'SYNC_RECEIPT_DUPLICATE'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -476,7 +479,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
            AND existing_txn-execution_date = input-ExecutionDate.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
-          report_failure( EXPORTING cid = cid text = 'IDEMPOTENCY_KEY_REUSED'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'IDEMPOTENCY_KEY_REUSED'
                           CHANGING failed = failed reported = reported ).
         ENDIF.
         CONTINUE.
@@ -492,7 +495,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       DATA(target) = VALUE #( balances[ worker_id = input-ToWorkerID ] OPTIONAL ).
       IF source IS INITIAL OR source-uom <> input-UnitOfMeasure
          OR source-remaining_qty < input-Quantity.
-        report_failure( EXPORTING cid = cid text = 'SOURCE_BALANCE_INSUFFICIENT'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'SOURCE_BALANCE_INSUFFICIENT'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -546,17 +549,16 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD recall.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID ).
         CATCH cx_abap_message_digest zcx_mob_config.
-          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu thu hồi'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'Không thể xác thực yêu cầu thu hồi'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
       IF auth-is_valid = abap_false.
-        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = CONV string( auth-error_code )
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -565,7 +567,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       IF operations IS INITIAL OR input-Quantity <= 0 OR input-WorkerID IS INITIAL
          OR input-SyncItemUUID IS INITIAL OR input-OriginalTransactionUUID IS INITIAL
          OR input-ExecutionDate IS INITIAL.
-        report_failure( EXPORTING cid = cid text = 'Thiếu dữ liệu thu hồi bắt buộc'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'Thiếu dữ liệu thu hồi bắt buộc'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -573,7 +575,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       IF zcl_mob_token_validator=>has_work_scope(
            user_uuid = auth-user_uuid plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORK_CONTEXT_NOT_ALLOWED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORK_CONTEXT_NOT_ALLOWED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -581,12 +583,12 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-WorkerID password = CONV string( input-WorkerPassword ) ).
         CATCH cx_abap_message_digest zcx_mob_config.
-          report_failure( EXPORTING cid = cid text = 'WORKER_AUTH_FAILED'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_AUTH_FAILED'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
       IF worker_auth-is_valid = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORKER_AUTH_FAILED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_AUTH_FAILED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -597,7 +599,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         WHERE sync_item_uuid = @input-SyncItemUUID
         INTO TABLE @DATA(existing_txns) UP TO 2 ROWS.
       IF lines( existing_txns ) > 1.
-        report_failure( EXPORTING cid = cid text = 'SYNC_RECEIPT_DUPLICATE'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'SYNC_RECEIPT_DUPLICATE'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -612,7 +614,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
            AND existing_txn-execution_date = input-ExecutionDate.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
-          report_failure( EXPORTING cid = cid text = 'IDEMPOTENCY_KEY_REUSED'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'IDEMPOTENCY_KEY_REUSED'
                           CHANGING failed = failed reported = reported ).
         ENDIF.
         CONTINUE.
@@ -631,7 +633,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND worker_id = @input-WorkerID
         INTO TABLE @DATA(worker_balances) UP TO 2 ROWS.
       IF lines( worker_balances ) > 1.
-        report_failure( EXPORTING cid = cid text = 'WORKER_BALANCE_DUPLICATE'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_BALANCE_DUPLICATE'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -640,7 +642,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
            AND root_type <> zcl_pp_txn_type=>transfer )
          OR balance IS INITIAL OR balance-uom <> input-UnitOfMeasure
          OR balance-remaining_qty < input-Quantity.
-        report_failure( EXPORTING cid = cid text = 'RECALL_NOT_ALLOWED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'RECALL_NOT_ALLOWED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -676,17 +678,16 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD confirm.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID ).
         CATCH cx_abap_message_digest zcx_mob_config.
-          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu xác nhận'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'Không thể xác thực yêu cầu xác nhận'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
       IF auth-is_valid = abap_false.
-        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = CONV string( auth-error_code )
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -694,7 +695,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
       IF operations IS INITIAL OR input-Quantity <= 0 OR input-WorkerID IS INITIAL
          OR input-ExecutionDate IS INITIAL OR input-SyncItemUUID IS INITIAL.
-        report_failure( EXPORTING cid = cid text = 'CONFIRM_INPUT_INVALID'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'CONFIRM_INPUT_INVALID'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -702,7 +703,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       IF zcl_mob_token_validator=>has_work_scope(
            user_uuid = auth-user_uuid plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORK_CONTEXT_NOT_ALLOWED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORK_CONTEXT_NOT_ALLOWED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -710,7 +711,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
          OR zcl_pp_worker_validator=>is_worker_active(
            worker_id = input-WorkerID plant = operation-Plant
            work_center = operation-WorkCenter execution_date = input-ExecutionDate ) = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORKER_NOT_ALLOWED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_NOT_ALLOWED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -718,12 +719,12 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-WorkerID password = CONV string( input-WorkerPassword ) ).
         CATCH cx_abap_message_digest zcx_mob_config.
-          report_failure( EXPORTING cid = cid text = 'WORKER_AUTH_FAILED'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_AUTH_FAILED'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
       IF worker_auth-is_valid = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORKER_AUTH_FAILED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_AUTH_FAILED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -734,7 +735,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         WHERE sync_item_uuid = @input-SyncItemUUID
         INTO TABLE @DATA(existing_txns) UP TO 2 ROWS.
       IF lines( existing_txns ) > 1.
-        report_failure( EXPORTING cid = cid text = 'SYNC_RECEIPT_DUPLICATE'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'SYNC_RECEIPT_DUPLICATE'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -749,7 +750,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
            AND existing_txn-original_transaction_uuid = input-OriginalTransactionUUID.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
-          report_failure( EXPORTING cid = cid text = 'IDEMPOTENCY_KEY_REUSED'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'IDEMPOTENCY_KEY_REUSED'
                           CHANGING failed = failed reported = reported ).
         ENDIF.
         CONTINUE.
@@ -761,14 +762,14 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND worker_id = @input-WorkerID
         INTO TABLE @DATA(worker_balances) UP TO 2 ROWS.
       IF lines( worker_balances ) > 1.
-        report_failure( EXPORTING cid = cid text = 'WORKER_BALANCE_DUPLICATE'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_BALANCE_DUPLICATE'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
       DATA(balance) = VALUE #( worker_balances[ 1 ] OPTIONAL ).
       IF balance IS INITIAL OR balance-uom <> input-UnitOfMeasure
          OR balance-remaining_qty < input-Quantity.
-        report_failure( EXPORTING cid = cid text = 'CONFIRM_QUANTITY_EXCEEDED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'CONFIRM_QUANTITY_EXCEEDED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -785,7 +786,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         IF original_transaction IS INITIAL
            OR original_transaction-OperationUUID <> operation-OperationUUID
            OR original_transaction-TransactionStatus <> zcl_pp_txn_type=>posted.
-          report_failure( EXPORTING cid = cid text = 'ORIGINAL_TRANSACTION_NOT_FOUND'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'ORIGINAL_TRANSACTION_NOT_FOUND'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
         ENDIF.
@@ -822,17 +823,16 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD reverse.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID ).
         CATCH cx_abap_message_digest zcx_mob_config.
-          report_failure( EXPORTING cid = cid text = 'Không thể xác thực yêu cầu đảo xác nhận'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'Không thể xác thực yêu cầu đảo xác nhận'
                           CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
       IF auth-is_valid = abap_false.
-        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = CONV string( auth-error_code )
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -840,7 +840,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
       IF operations IS INITIAL OR input-TransactionUUID IS INITIAL
          OR input-SyncItemUUID IS INITIAL OR input-Reason IS INITIAL.
-        report_failure( EXPORTING cid = cid text = 'REVERSE_INPUT_INVALID'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'REVERSE_INPUT_INVALID'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -848,7 +848,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       IF zcl_mob_token_validator=>has_work_scope(
            user_uuid = auth-user_uuid plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
-        report_failure( EXPORTING cid = cid text = 'WORK_CONTEXT_NOT_ALLOWED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORK_CONTEXT_NOT_ALLOWED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -859,7 +859,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         WHERE sync_item_uuid = @input-SyncItemUUID
         INTO TABLE @DATA(existing_receipts) UP TO 2 ROWS.
       IF lines( existing_receipts ) > 1.
-        report_failure( EXPORTING cid = cid text = 'SYNC_RECEIPT_DUPLICATE'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'SYNC_RECEIPT_DUPLICATE'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -870,7 +870,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
            AND existing_receipt-original_transaction_uuid = input-TransactionUUID.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
-          report_failure( EXPORTING cid = cid text = 'IDEMPOTENCY_KEY_REUSED'
+          report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'IDEMPOTENCY_KEY_REUSED'
                           CHANGING failed = failed reported = reported ).
         ENDIF.
         CONTINUE.
@@ -884,7 +884,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND transaction_status = @zcl_pp_txn_type=>posted
         INTO TABLE @DATA(originals) UP TO 2 ROWS.
       IF lines( originals ) <> 1.
-        report_failure( EXPORTING cid = cid text = 'CONFIRM_TRANSACTION_NOT_FOUND'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'CONFIRM_TRANSACTION_NOT_FOUND'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -897,7 +897,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND transaction_status = @zcl_pp_txn_type=>posted
         INTO TABLE @DATA(reversals) UP TO 1 ROWS.
       IF reversals IS NOT INITIAL.
-        report_failure( EXPORTING cid = cid text = 'TRANSACTION_ALREADY_REVERSED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'TRANSACTION_ALREADY_REVERSED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -908,9 +908,9 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND transaction_type = @zcl_pp_txn_type=>correction
           AND transaction_status = @zcl_pp_txn_type=>posted
         INTO @DATA(corrections).
-      DATA(effective_qty) = original-quantity + corrections-correction_qty.
+      DATA(effective_qty) = original-quantity + corrections.
       IF effective_qty <= 0.
-        report_failure( EXPORTING cid = cid text = 'NOTHING_TO_REVERSE'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'NOTHING_TO_REVERSE'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -921,13 +921,13 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND worker_id = @original-worker_id
         INTO TABLE @DATA(worker_balances) UP TO 2 ROWS.
       IF lines( worker_balances ) <> 1.
-        report_failure( EXPORTING cid = cid text = 'WORKER_BALANCE_NOT_FOUND'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_BALANCE_NOT_FOUND'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
       DATA(balance) = worker_balances[ 1 ].
       IF balance-uom <> original-uom OR balance-completed_qty < effective_qty.
-        report_failure( EXPORTING cid = cid text = 'REVERSE_BALANCE_INCONSISTENT'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'REVERSE_BALANCE_INCONSISTENT'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -964,13 +964,12 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD correctConfirm.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
       READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE ENTITY OperationAllocation ALL FIELDS
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
       IF operations IS INITIAL OR input-TransactionUUID IS INITIAL
          OR input-NewQuantity < 0 OR input-ReasonCode IS INITIAL
          OR input-ReasonText IS INITIAL.
-        report_failure( EXPORTING cid = cid text = 'CORRECTION_INPUT_INVALID'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'CORRECTION_INPUT_INVALID'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -983,13 +982,13 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND transaction_status = @zcl_pp_txn_type=>posted
         INTO TABLE @DATA(originals) UP TO 2 ROWS.
       IF lines( originals ) <> 1.
-        report_failure( EXPORTING cid = cid text = 'CONFIRM_TRANSACTION_NOT_FOUND'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'CONFIRM_TRANSACTION_NOT_FOUND'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
       DATA(original) = originals[ 1 ].
       IF input-UnitOfMeasure <> original-uom.
-        report_failure( EXPORTING cid = cid text = 'UOM_MISMATCH'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'UOM_MISMATCH'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -999,7 +998,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND transaction_status = @zcl_pp_txn_type=>posted
         INTO TABLE @DATA(reversals) UP TO 1 ROWS.
       IF reversals IS NOT INITIAL.
-        report_failure( EXPORTING cid = cid text = 'TRANSACTION_ALREADY_REVERSED'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'TRANSACTION_ALREADY_REVERSED'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1008,7 +1007,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND transaction_type = @zcl_pp_txn_type=>correction
           AND transaction_status = @zcl_pp_txn_type=>posted
         INTO @DATA(corrections).
-      DATA(current_qty) = original-quantity + corrections-correction_qty.
+      DATA(current_qty) = original-quantity + corrections.
       DATA(delta) = input-NewQuantity - current_qty.
       IF delta = 0.
         APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
@@ -1020,7 +1019,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND worker_id = @original-worker_id
         INTO TABLE @DATA(worker_balances) UP TO 2 ROWS.
       IF lines( worker_balances ) <> 1.
-        report_failure( EXPORTING cid = cid text = 'WORKER_BALANCE_NOT_FOUND'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'WORKER_BALANCE_NOT_FOUND'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1028,7 +1027,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       IF balance-uom <> original-uom
          OR ( delta > 0 AND balance-remaining_qty < delta )
          OR balance-completed_qty + delta < 0.
-        report_failure( EXPORTING cid = cid text = 'CORRECTION_BALANCE_INVALID'
+        report_instance_failure( EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'CORRECTION_BALANCE_INVALID'
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1419,6 +1418,17 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         UnitOfMeasure = receipt-uom ExecutionDate = receipt-execution_date
         Message = 'Request đã được commit vào ledger CASLA' ) ) ).
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD report_instance_failure.
+    APPEND VALUE #(
+      %tky = VALUE #( OperationUUID = operation_uuid ) )
+      TO failed-operationallocation.
+    APPEND VALUE #(
+      %tky = VALUE #( OperationUUID = operation_uuid )
+      %msg = new_message_with_text(
+        severity = if_abap_behv_message=>severity-error text = text ) )
+      TO reported-operationallocation.
   ENDMETHOD.
 
   METHOD report_failure.
