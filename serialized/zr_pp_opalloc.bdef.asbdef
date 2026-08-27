@@ -50,7 +50,7 @@ etag master LocalLastChangedAt
     result [1] ZA_PP_SyncStatusResult;
 
   static action getWorkHistory parameter ZA_PP_HistQuery
-    result [1] ZA_PP_HistResult;
+    deep result [1] ZA_PP_HistResult;
 
   validation validateOperation on save { create; update; }
 
