@@ -40,7 +40,7 @@ ENDCLASS.
 
 CLASS lhc_mobileuser IMPLEMENTATION.
   METHOD get_global_authorizations.
-    "The Fiori admin service is protected by its IAM app/business catalog.
+    "Service quản trị Fiori được bảo vệ bằng IAM app/business catalog.
     result-%action-createUser = if_abap_behv=>auth-allowed.
     result-%action-login = if_abap_behv=>auth-allowed.
     result-%action-refresh = if_abap_behv=>auth-allowed.
@@ -48,19 +48,18 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     result-%action-changePassword = if_abap_behv=>auth-allowed.
     result-%create = if_abap_behv=>auth-unauthorized.
     result-%delete = if_abap_behv=>auth-unauthorized.
-    "MobileUserRole is a composition child declared "authorization dependent
-    "by _User", so RAP delegates create-by-association and delete to this
-    "master's %update authorization. Leaving %update
-    "unauthorized would reject role assignment from the admin app at runtime.
-    "The external write surface stays closed at the projection layer:
-    "ZC_MOB_User_Adm exposes only createUser plus the _Roles composition, and
-    "ZC_MOB_User only the auth actions - neither declares "use update".
+    "MobileUserRole là composition child khai báo authorization dependent by _User,
+    "vì vậy RAP dùng quyền %update của master cho create-by-association và delete.
+    "Nếu %update bị unauthorized thì thao tác gán chức danh từ app quản trị sẽ
+    "bị chặn ở runtime. Bề mặt ghi bên ngoài vẫn được đóng ở projection layer:
+    "ZC_MOB_User_Adm chỉ expose createUser và composition _Roles, còn
+    "ZC_MOB_User chỉ expose các action xác thực; cả hai đều không expose update.
     result-%update = if_abap_behv=>auth-allowed.
   ENDMETHOD.
 
   METHOD hash_password.
-    "Delegates so the password KDF has exactly one implementation, shared
-    "with worker password verification in the PP actions.
+    "Ủy quyền cho implementation KDF dùng chung để việc hash mật khẩu chỉ có một
+    "nguồn logic, đồng thời được dùng cho xác thực mật khẩu nhân công ở PP action.
     hash = zcl_mob_token_validator=>hash_password(
       password = password
       salt = salt
@@ -68,8 +67,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD hash_token.
-    "Delegates so token hashing has exactly one implementation, shared with
-    "every other entry point that has to accept a mobile token.
+    "Ủy quyền cho implementation hash token dùng chung để mọi entry point nhận
+    "mobile token đều sử dụng cùng một thuật toán và cấu hình.
     hash = zcl_mob_token_validator=>hash_token( token ).
   ENDMETHOD.
 
@@ -229,9 +228,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       mapped_create-mobileuser[ %cid = 'USR' ]-UserUUID OPTIONAL ).
     READ ENTITIES OF zi_mob_user IN LOCAL MODE ENTITY MobileUser
       ALL FIELDS WITH VALUE #( ( UserUUID = user_uuid ) ) RESULT DATA(users).
-    "Static action: the result row only has %cid and %param (no %tky,
-    "there is no bound instance). %param is the plain entity structure,
-    "so strip the %-components from the read result via CORRESPONDING.
+    "Với static action, result row chỉ có %cid và %param, không có %tky vì
+    "không có bound instance. %param là cấu trúc entity thuần nên dùng
+    "CORRESPONDING để loại các %-component khỏi kết quả READ.
     result = VALUE #( FOR user IN users
       ( %cid = cid %param = CORRESPONDING #( user ) ) ).
   ENDMETHOD.
@@ -254,9 +253,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       result = VALUE #( ( %cid = cid %param-Status = 'F' ) ).
       RETURN.
     ENDIF.
-    "Only a usable user/credential pair is returned. Invalid username,
-    "inactive or locked account, and missing/inactive credentials therefore
-    "share the same timing path and public response.
+    "Chỉ trả về một cặp user/credential sử dụng được. Username sai, account
+    "inactive/bị khóa hoặc credential thiếu/inactive đều đi qua cùng timing path
+    "và nhận cùng public response để giảm rò rỉ thông tin.
     SELECT FROM ztb_mob_user AS user
       INNER JOIN ztb_mob_cred AS credential
         ON credential~user_uuid = user~user_uuid
@@ -296,9 +295,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     IF zcl_mob_hasher=>equals_constant_time(
          value_1 = CONV string( input_hash )
          value_2 = CONV string( credential-password_hash ) ) = abap_false.
-      "The WF rule counts a burst of failures, not failures accumulated over
-      "the lifetime of the account: 5 wrong passwords inside 1 minute lock
-      "the account for 10 minutes. A failure outside the window starts at 1.
+      "Rule workflow đếm một đợt lỗi liên tiếp, không cộng dồn suốt vòng đời account:
+      "sai 5 lần trong 1 phút thì khóa 10 phút; lỗi ngoài cửa sổ bắt đầu lại từ 1.
       DATA(failure_window_end) = COND utclong(
         WHEN user-last_fail_at IS INITIAL THEN VALUE utclong( )
         ELSE utclong_add(
@@ -326,9 +324,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       result = VALUE #( ( %cid = cid %param-Status = 'F' ) ).
       RETURN.
     ENDIF.
-    "Keep one active session per device and cap the account total. Without
-    "this, repeated logins grow the session table indefinitely and leave a
-    "large set of valid bearer tokens behind.
+    "Mỗi device chỉ giữ một active session và tổng session active của account có
+    "giới hạn; nếu không, login lặp lại sẽ làm session table tăng vô hạn và để
+    "lại quá nhiều bearer token còn hiệu lực.
     SELECT FROM ztb_mob_session
       FIELDS session_id, device_id
       WHERE user_uuid = @user-user_uuid
@@ -400,15 +398,15 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       FAILED DATA(failed_login_update)
       REPORTED DATA(reported_login_update).
     IF failed_login_update IS NOT INITIAL.
-      "FAILED rejects the whole LUW, so the session created above is
-      "discarded together with this update - no compensation needed.
+      "FAILED làm reject toàn bộ LUW nên session vừa tạo ở trên cũng bị loại cùng
+      "update này; không cần một bước compensation riêng.
       failed = CORRESPONDING #( failed_login_update ).
       reported = CORRESPONDING #( reported_login_update ).
       RETURN.
     ENDIF.
-    "Handed to the device so it can render its menu without a second round
-    "trip. Display only: every protected operation re-checks the function
-    "server side through zcl_mob_token_validator, which never reads this.
+    "Danh sách quyền được trả cho device để render menu mà không cần round trip
+    "thứ hai. Đây chỉ là dữ liệu hiển thị; mọi protected operation đều kiểm tra
+    "lại quyền server-side qua zcl_mob_token_validator và không đọc danh sách này.
     DATA(permissions) = zcl_mob_token_validator=>get_permissions(
       user-user_uuid ).
     DATA(work_contexts) = zcl_mob_token_validator=>get_work_contexts(
@@ -549,8 +547,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       reported = CORRESPONDING #( reported_update ).
       RETURN.
     ENDIF.
-    "Refreshing also refreshes the permission list, so an assignment made
-    "while the session was open reaches the device at the next rotation.
+    "Refresh token đồng thời refresh danh sách quyền để assignment mới được thay đổi
+    "trong lúc session đang mở sẽ tới device ở lần rotation tiếp theo.
     DATA(permissions) = zcl_mob_token_validator=>get_permissions(
       session-user_uuid ).
     DATA(work_contexts) = zcl_mob_token_validator=>get_work_contexts(
@@ -669,9 +667,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    "Every token was issued under the old credential. Revoking the current
-    "session as well forces a clean login and is especially important after
-    "the first-use temporary password is replaced.
+    "Mọi token hiện tại đều được phát hành dưới credential cũ. Revoke cả session
+    "hiện tại để buộc đăng nhập sạch, đặc biệt quan trọng sau khi thay mật khẩu
+    "tạm thời ở lần sử dụng đầu tiên.
     SELECT FROM ztb_mob_session
       FIELDS session_id
       WHERE user_uuid = @auth-user_uuid

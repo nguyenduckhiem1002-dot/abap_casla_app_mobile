@@ -30,8 +30,8 @@ CLASS zcl_pp_operation_guard IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    "Only active SAP system statuses are relevant. REL is mandatory and
-    "terminal/deletion statuses always win even when REL remains active.
+    "Chỉ xét các system status SAP đang active. REL là bắt buộc; các trạng thái
+    "kết thúc/xóa luôn có ưu tiên chặn kể cả khi REL vẫn còn active.
     SELECT FROM I_ManufacturingOrderStatus
       FIELDS StatusCode
       WHERE ManufacturingOrder = @production_order

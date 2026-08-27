@@ -1,8 +1,8 @@
 @EndUserText.label: 'Quản trị điều chỉnh sản lượng'
 define service ZUI_PP_ALLOC_ADM {
-  // IAM-protected Fiori service. Operations expose only the controlled
-  // correctConfirm action; the ledger entity is read-only for audit and
-  // reconciliation. No generic balance or ledger CRUD is exposed.
+  // Service Fiori được bảo vệ bằng IAM. Operation chỉ expose action
+  // correctConfirm có kiểm soát; ledger chỉ đọc để audit và đối chiếu.
+  // Không expose CRUD tổng quát cho balance hoặc ledger.
   expose ZC_PP_OpAlloc_Adm as OperationAllocations;
   expose ZC_PP_AllocTxn_Adm as AllocationTransactions;
 }

@@ -30,7 +30,7 @@ CLASS zcl_mob_hasher IMPLEMENTATION.
       IMPORTING ef_hashstring = rv_hash ).
   ENDMETHOD.
   METHOD equals_constant_time.
-    "Length is not secret here: both operands are fixed-length hex digests.
+    "Độ dài không phải dữ liệu bí mật ở đây vì cả hai giá trị đều là digest hex có độ dài cố định.
     DATA(length) = strlen( value_1 ).
     IF length <> strlen( value_2 ).
       result = abap_false.

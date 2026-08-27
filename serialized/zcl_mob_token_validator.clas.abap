@@ -28,16 +28,15 @@ CLASS zcl_mob_token_validator DEFINITION
              location   TYPE ztb_mob_work-location,
            END OF work_context,
            work_contexts TYPE SORTED TABLE OF work_context WITH UNIQUE KEY work_id.
-    "Single source of truth for token hashing. Every entry point that
-    "accepts a mobile token must hash it here instead of inline, otherwise
-    "the implementations drift and a change to the hashing silently
-    "invalidates sessions in one path while the other keeps accepting them.
+    "Đây là nguồn logic duy nhất để hash token. Mọi entry point nhận mobile token
+    "phải gọi method này thay vì tự hash inline để tránh lệch implementation và
+    "tránh việc đổi thuật toán làm một flow vô hiệu session còn flow khác vẫn nhận.
     CLASS-METHODS hash_token
       IMPORTING token TYPE string
       RETURNING VALUE(hash) TYPE ztb_mob_session-access_token_hash
       RAISING cx_abap_message_digest zcx_mob_config.
-    "Preferred entry point for callers holding the plain token. Pass
-    "required_func to reject a caller that lacks the function.
+    "Entry point ưu tiên cho caller đang giữ token dạng plain text. Truyền
+    "required_func nếu muốn reject caller không có function tương ứng.
     CLASS-METHODS validate_token
       IMPORTING token TYPE string
                 device_id TYPE ztb_mob_session-device_id
@@ -45,17 +44,16 @@ CLASS zcl_mob_token_validator DEFINITION
                 required_func TYPE ztb_mob_func-func_id OPTIONAL
       RETURNING VALUE(result) TYPE validation_result
       RAISING cx_abap_message_digest zcx_mob_config.
-    "For callers that already hold the hash and must not hash twice.
+    "Dùng cho caller đã có token hash để tránh hash lặp lần thứ hai.
     CLASS-METHODS validate_hash
       IMPORTING token_hash TYPE ztb_mob_session-access_token_hash
                 device_id TYPE ztb_mob_session-device_id
                 allow_password_change TYPE abap_bool DEFAULT abap_false
                 required_func TYPE ztb_mob_func-func_id OPTIONAL
       RETURNING VALUE(result) TYPE validation_result.
-    "Effective functions of a user: every function granted by an active
-    "role assigned to that user. Also the list handed to the device at
-    "login, so what the app renders and what the backend enforces are
-    "derived from the same query.
+    "Danh sách function hiệu lực của user gồm mọi function được cấp bởi các
+    "role active đang gán cho user. Đây cũng là danh sách trả cho device lúc
+    "login để UI và backend cùng được suy ra từ một nguồn query.
     CLASS-METHODS get_permissions
       IMPORTING user_uuid TYPE sysuuid_x16
       RETURNING VALUE(result) TYPE permissions.
@@ -71,10 +69,9 @@ CLASS zcl_mob_token_validator DEFINITION
       IMPORTING user_uuid TYPE sysuuid_x16
                 func_id TYPE ztb_mob_func-func_id
       RETURNING VALUE(result) TYPE abap_bool.
-    "The password KDF, in one place. It used to live privately in
-    "lhc_mobileuser and was copied into verify_worker_password; the copies
-    "would drift on any change to salting or iterations, and a worker would
-    "then authenticate on one path and be rejected on the other.
+    "Password KDF được gom về một chỗ. Trước đây logic nằm riêng trong
+    "lhc_mobileuser và bị copy sang verify_worker_password; hai bản copy có thể
+    "lệch nhau khi đổi salt/iterations và gây kết quả xác thực không nhất quán.
     CLASS-METHODS hash_password
       IMPORTING password   TYPE string
                 salt       TYPE string
@@ -108,9 +105,9 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_permissions.
-    "DISTINCT because two roles may grant the same function. Inactive roles
-    "are excluded here rather than on assignment, so deactivating a role
-    "revokes its functions at once without touching the assignment rows.
+    "Dùng DISTINCT vì nhiều role có thể cấp cùng một function. Role inactive
+    "bị loại ở lúc đọc thay vì lúc gán để việc vô hiệu hóa role thu hồi quyền
+    "ngay lập tức mà không cần sửa các dòng assignment.
     SELECT FROM ztb_mob_usr_rol AS assignment
       INNER JOIN ztb_mob_role AS role_hdr
         ON role_hdr~role_id = assignment~role_id
@@ -162,9 +159,9 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD has_function.
-    "Authorization checks ask the database for one grant only. Building the
-    "complete menu on every protected call used four joins plus DISTINCT and
-    "materialized rows the caller did not ask for.
+    "Khi kiểm tra quyền chỉ query tối đa một grant cần thiết. Không dựng toàn bộ
+    "menu cho mỗi protected call vì cách đó cần nhiều join + DISTINCT và tạo
+    "các row mà caller không yêu cầu.
     SELECT FROM ztb_mob_usr_rol AS assignment
       INNER JOIN ztb_mob_role AS role_hdr
         ON role_hdr~role_id = assignment~role_id
@@ -183,8 +180,8 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
 
   METHOD validate_hash.
     DATA(now) = utclong_current( ).
-    "Session and account state are checked in one round trip. The inner join
-    "also fails closed if referential data is damaged.
+    "Kiểm tra session và trạng thái account trong một round trip. INNER JOIN
+    "đồng thời fail-closed nếu dữ liệu tham chiếu bị hỏng.
     SELECT FROM ztb_mob_session AS session
       INNER JOIN ztb_mob_user AS user
         ON user~user_uuid = session~user_uuid
@@ -227,8 +224,8 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
 
   METHOD hash_password.
     IF iterations < 10000 OR iterations > 100000 OR salt IS INITIAL.
-      "A corrupt iteration value must not turn password verification into a
-      "zero-round bypass or an unbounded CPU denial of service.
+      "Giá trị iterations bị hỏng không được phép biến xác thực mật khẩu thành
+      "bypass 0 vòng hoặc gây denial-of-service CPU không giới hạn.
       RAISE EXCEPTION NEW zcx_mob_config(
         config_key = 'INVALID_PASSWORD_KDF' ).
     ENDIF.

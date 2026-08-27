@@ -3,8 +3,8 @@ strict ( 2 );
 
 define behavior for ZC_PP_OpAlloc_Adm alias OperationAllocation
 {
-  // IAM-protected Fiori surface. No generic create/update is exposed; users
-  // can change confirmed quantity only through correctConfirm so every
-  // change appends an auditable CORRECTION ledger row.
+  // Bề mặt Fiori được bảo vệ bằng IAM. Không expose create/update tổng quát;
+  // người dùng chỉ được sửa số lượng đã xác nhận qua correctConfirm để mỗi
+  // thay đổi luôn append một dòng CORRECTION có thể audit vào ledger.
   use action correctConfirm;
 }

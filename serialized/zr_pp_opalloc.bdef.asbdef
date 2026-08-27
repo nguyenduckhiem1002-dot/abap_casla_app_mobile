@@ -19,20 +19,20 @@ etag master LocalLastChangedAt
   association _Employees { create; }
   association _Transactions { create; }
 
-  "Internal domain commands. The mobile service exposes only the static
-  "facade actions below; these bound actions stay hidden from its projection.
+  // Các command nghiệp vụ nội bộ. Mobile service chỉ expose các static facade
+  // ở bên dưới; các bound action này không được expose qua projection mobile.
   action initialAssign parameter ZA_PP_InitialAssign result [1] $self;
   action transfer parameter ZA_PP_Transfer result [1] $self;
   action recall parameter ZA_PP_Recall result [1] $self;
   action confirm parameter ZA_PP_Confirm result [1] $self;
   action reverse parameter ZA_PP_Reverse result [1] $self;
 
-  "IAM/Fiori-only controlled correction. It appends CORRECTION to the ledger;
-  "the mobile projection deliberately does not expose this action.
+  // Action điều chỉnh có kiểm soát chỉ dành cho IAM/Fiori. Mỗi lần điều chỉnh
+  // sẽ append CORRECTION vào ledger; projection mobile không expose action này.
   action correctConfirm parameter ZA_PP_CorrectConfirm result [1] $self;
 
-  "Direct mobile command facade. Every handler validates token/session/device,
-  "resolves the SAP operation live, then invokes the internal domain command.
+  // Static facade dành cho mobile. Mỗi handler xác thực token/session/device,
+  // resolve công đoạn SAP live rồi mới gọi command nghiệp vụ nội bộ.
   static action submitInitialAssign parameter ZA_PP_InitialAssign
     result [1] ZA_PP_CommandResult;
   static action submitTransfer parameter ZA_PP_Transfer
@@ -44,13 +44,13 @@ etag master LocalLastChangedAt
   static action submitReverse parameter ZA_PP_Reverse
     result [1] ZA_PP_CommandResult;
 
-  "Receipt/reconciliation API for ambiguous HTTP outcomes. NOT_FOUND means
-  "the backend cannot prove a commit; it is not a business failure.
+  // API đối chiếu receipt khi kết quả HTTP không chắc chắn. NOT_FOUND chỉ có
+  // nghĩa backend chưa chứng minh được commit, không phải business failure.
   static action getSyncStatus parameter ZA_PP_SyncStatusQuery
     result [1] ZA_PP_SyncStatusResult;
 
   static action getWorkHistory parameter ZA_PP_HistQuery
-    result [1] ZA_PP_HistResult;
+    deep result [1] ZA_PP_HistResult;
 
   validation validateOperation on save { create; update; }
 

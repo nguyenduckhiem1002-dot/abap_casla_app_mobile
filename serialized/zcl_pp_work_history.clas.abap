@@ -1,15 +1,15 @@
-"Read model for the work assignment / completion history shown in the
-"mobile app. Everything reported here comes from transaction data
-"(ZTB_PP_ALLOC_TXN joined to its operation). ZI_PP_WorkerRef - the wrapper
-"over the partner table ZTB_KB_NHANCONG - supplies worker names only and is
-"never used to decide who may see a row: a worker who moves to another work
-"center must not make past rows appear or disappear.
+"Read model cho lịch sử giao việc/hoàn thành hiển thị trên mobile app.
+"Toàn bộ số liệu báo cáo lấy từ transaction data trong ZTB_PP_ALLOC_TXN
+"kết hợp với operation tương ứng. ZI_PP_WorkerRef, wrapper của bảng đối tác
+"ZTB_KB_NHANCONG, chỉ cung cấp tên nhân công và không dùng để quyết định quyền
+"xem row; việc nhân công chuyển Work Center không được làm lịch sử cũ xuất hiện
+"hoặc biến mất.
 CLASS zcl_pp_work_history DEFINITION
   PUBLIC FINAL CREATE PRIVATE.
 
   PUBLIC SECTION.
-    "Method parameters cannot carry a LENGTH addition, so the short codes
-    "get named types that the signatures below can reuse.
+    "Parameter của method không khai báo được LENGTH trực tiếp, nên các mã ngắn
+    "được đặt thành named type để tái sử dụng trong signature bên dưới.
     TYPES range_selection TYPE c LENGTH 1.
     TYPES scope_selection TYPE c LENGTH 1.
     TYPES failure_code TYPE c LENGTH 40.
@@ -20,19 +20,19 @@ CLASS zcl_pp_work_history DEFINITION
       range_month  TYPE range_selection VALUE 'M',
       range_custom TYPE range_selection VALUE 'C'.
     CONSTANTS:
-      "Scope actually applied, echoed back so the app can label the screen.
+      "Scope thực tế đã áp dụng được trả lại để app hiển thị đúng nhãn màn hình.
       scope_team TYPE scope_selection VALUE 'T',
       scope_self TYPE scope_selection VALUE 'S'.
     CONSTANTS:
-      "RBAC functions that decide which scope a caller gets.
+      "Các RBAC function quyết định caller được dùng scope nào.
       func_team TYPE ztb_mob_func-func_id VALUE 'PP_HIST_TEAM',
       func_self TYPE ztb_mob_func-func_id VALUE 'PP_HIST_SELF'.
     CONSTANTS:
-      "Default window for every role. A custom range may reach further back
-      "but never covers a wider span than max_custom_days.
+      "Cửa sổ mặc định cho mọi role. Custom range có thể lùi xa hơn nhưng độ dài
+      "mỗi lần query không được vượt max_custom_days.
       default_days    TYPE i VALUE 30,
       max_custom_days TYPE i VALUE 92,
-      "Safety caps. Hitting the scan cap sets is_truncated on the result.
+      "Giới hạn an toàn; chạm scan cap thì result-is_truncated được bật.
       max_scan_rows   TYPE i VALUE 20000,
       max_entry_rows  TYPE i VALUE 1000.
 
@@ -177,9 +177,9 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    "Scope comes from the RBAC functions of the caller, never from anything
-    "the device sent. A supervisor sees the assignments they booked;
-    "everybody else may only look at their own rows.
+    "Scope luôn được suy ra từ RBAC function của caller, không lấy từ dữ liệu
+    "device gửi. Supervisor thấy các assignment do mình ghi nhận; người dùng
+    "khác chỉ được xem row của chính mình.
     DATA(worker_filter) = worker_id.
     DATA(permissions) = zcl_mob_token_validator=>get_permissions(
       auth-user_uuid ).
@@ -187,7 +187,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       result-scope_code = scope_team.
     ELSEIF line_exists( permissions[ func_id = func_self ] ).
       result-scope_code = scope_self.
-      "A self view ignores whichever worker the caller asked for.
+      "Self view bỏ qua worker filter mà caller gửi lên.
       worker_filter = worker_of_account( auth-user_uuid ).
       IF worker_filter IS INITIAL.
         result-error_code = 'WORKER_NOT_MAPPED'.
@@ -243,8 +243,8 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
 
   METHOD resolve_range.
     DATA(today) = cl_abap_context_info=>get_system_date( ).
-    "A client that sends nothing, or a code from a newer app version, gets
-    "the default month window rather than an unbounded query.
+    "Client không gửi range hoặc gửi code từ app version mới sẽ nhận cửa sổ
+    "mặc định theo tháng thay vì một query không giới hạn.
     DATA(selection) = COND range_selection(
       WHEN range_code = range_day
         OR range_code = range_week
@@ -262,8 +262,8 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
           RETURN.
         ENDIF.
         IF date_to - date_from >= max_custom_days.
-          "Older periods stay reachable; one call just may not span more
-          "days than this.
+          "Vẫn có thể xem kỳ cũ, nhưng một lần gọi không được trải rộng quá số
+          "ngày giới hạn này.
           error_code = 'RANGE_TOO_WIDE'.
           RETURN.
         ENDIF.
@@ -276,17 +276,16 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
         effective_from = today - 6.
         effective_to = today.
       WHEN OTHERS.
-        "range_month, and anything normalised into it above.
+        "Áp dụng cho range_month và các giá trị đã normalize về range_month ở trên.
         effective_from = today - ( default_days - 1 ).
         effective_to = today.
     ENDCASE.
   ENDMETHOD.
 
   METHOD worker_of_account.
-    "The account carries the worker id in its own field, the same one
-    "verify_worker_password looks accounts up by. It is wider there than in
-    "the ledger, so an id that does not fit is refused instead of truncated:
-    "a truncated id would quietly point at somebody else's rows.
+    "Account lưu WorkerID ở field riêng, cũng là field verify_worker_password dùng
+    "để lookup. Field phía account rộng hơn field ledger nên ID không vừa sẽ bị
+    "reject thay vì truncate; truncate có thể vô tình trỏ sang lịch sử người khác.
     SELECT FROM ztb_mob_user
       FIELDS worker_id
       WHERE user_uuid = @user_uuid
@@ -329,10 +328,10 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD select_team.
-    "Step 1 - what this supervisor booked. Scope is frozen in the ledger: a
-    "row is in scope because the supervisor booked the assignment, never
-    "because of any current work center in master data. A worker who moves
-    "to another team therefore keeps appearing in the old team's history.
+    "Bước 1: lấy các assignment supervisor này đã ghi nhận. Scope được đóng băng
+    "trong ledger: row thuộc scope vì supervisor đã book assignment, không phải
+    "vì Work Center hiện tại trong master data. Nhân công chuyển team vẫn còn
+    "xuất hiện trong lịch sử của team cũ.
     SELECT DISTINCT transaction_uuid, operation_uuid, worker_id,
                     from_worker_id, to_worker_id
       FROM ztb_pp_alloc_txn
@@ -389,9 +388,9 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    "Step 2 - every posted row for those operation/worker pairs, including
-    "the confirmations the worker posted later. Without those the progress
-    "columns would stay empty for a supervisor who only assigns.
+    "Bước 2: lấy mọi POSTED row của các cặp operation/worker trong scope, gồm cả
+    "CONFIRM do worker ghi sau đó. Nếu thiếu các row này thì cột progress sẽ trống
+    "đối với supervisor chỉ thực hiện assignment.
     SELECT FROM ztb_pp_alloc_txn AS txn
       INNER JOIN ztb_pp_op_alloc AS op
         ON op~operation_uuid = txn~operation_uuid
@@ -409,8 +408,8 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
         AND txn~transaction_status = @zcl_pp_txn_type=>posted
       INTO TABLE @DATA(candidates)
       UP TO @max_scan_rows ROWS.
-    "FOR ALL ENTRIES rules out ORDER BY here, so the newest-first order the
-    "app expects is applied after the read.
+    "FOR ALL ENTRIES không cho ORDER BY ở đây nên thứ tự newest-first mà app cần
+    "được áp dụng sau khi đọc dữ liệu.
     LOOP AT candidates ASSIGNING FIELD-SYMBOL(<candidate>).
       LOOP AT scope ASSIGNING FIELD-SYMBOL(<scope>)
         WHERE operation_uuid = <candidate>-operation_uuid.
@@ -425,9 +424,8 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
            AND NOT line_exists( roots[
              transaction_uuid = <candidate>-original_transaction_uuid
              worker_id = <scope>-worker_id ] ).
-          "Derived rows must point to the assignment/transfer root. This is
-          "what prevents another supervisor's booking on the same operation
-          "and worker from leaking into this supervisor's figures.
+          "Derived row phải trỏ về root assignment/transfer. Rule này ngăn booking
+          "của supervisor khác trên cùng operation/worker lọt vào số liệu hiện tại.
           CONTINUE.
         ENDIF.
         APPEND CORRESPONDING #( <candidate> ) TO result
@@ -485,8 +483,8 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
                                   completed = <row>-quantity * -1
                         CHANGING summaries = result ).
         WHEN OTHERS.
-          "An unknown type is counted but not booked, so adding a
-          "transaction type later cannot silently distort the figures.
+          "Transaction type chưa biết vẫn được tính số transaction nhưng không cộng
+          "quantity, để thêm type mới sau này không âm thầm làm sai số liệu.
           add_quantity( EXPORTING worker = <row>-report_worker_id
                                   uom = <row>-uom
                         CHANGING summaries = result ).
@@ -545,9 +543,9 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     SORT wanted BY low.
     DELETE ADJACENT DUPLICATES FROM wanted COMPARING low.
 
-    "Master data is read for display only and with no work center filter,
-    "so a worker who moved keeps their history. Rows also survive a worker
-    "disappearing from the partner table: the name is blank, never the row.
+    "Master data chỉ dùng để hiển thị và không filter theo Work Center để nhân công
+    "đã chuyển chỗ vẫn giữ lịch sử. Nếu nhân công biến mất khỏi bảng đối tác thì
+    "row lịch sử vẫn tồn tại, chỉ tên hiển thị bị trống.
     SELECT FROM zi_pp_workerref
       FIELDS workerid AS worker_id, workername AS worker_name,
              validfrom AS valid_from, validto AS valid_to
@@ -572,8 +570,8 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       ENDLOOP.
     ENDLOOP.
     LOOP AT history-entries ASSIGNING FIELD-SYMBOL(<entry>).
-      "Prefer the master record that was valid on the day of the booking, so
-      "a renamed worker still reads correctly in old rows.
+      "Ưu tiên master record có hiệu lực đúng ngày booking để tên cũ vẫn hiển thị
+      "chính xác trên các row lịch sử khi nhân công đã được đổi tên.
       <entry>-worker_name = VALUE #(
         master[ worker_id = <entry>-worker_id ]-worker_name OPTIONAL ).
       LOOP AT master ASSIGNING FIELD-SYMBOL(<dated>)
