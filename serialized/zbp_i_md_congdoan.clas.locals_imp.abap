@@ -8,8 +8,8 @@ ENDCLASS.
 
 CLASS lhc_congdoan IMPLEMENTATION.
   METHOD get_global_authorizations.
-    "The service is a Fiori/IAM administration boundary. Historical price
-    "versions are never hard-deleted; close their validity instead.
+    "Service này là ranh giới quản trị Fiori/IAM. Không hard-delete phiên bản
+    "đơn giá lịch sử; khi hết hiệu lực thì đóng khoảng validity bằng ValidTo.
     result-%create = if_abap_behv=>auth-allowed.
     result-%update = if_abap_behv=>auth-allowed.
     result-%delete = if_abap_behv=>auth-unauthorized.
