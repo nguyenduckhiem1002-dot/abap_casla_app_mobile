@@ -52,8 +52,8 @@ jobs:
               start = pp_impl.index(f'  METHOD {method}.')
               end = pp_impl.index('  ENDMETHOD.', start)
               block = pp_impl[start:end]
-              if '%cid' in block:
-                  raise SystemExit(f'{method}: bound action không được dùng %cid')
+              if '<key>-%cid' in block:
+                  raise SystemExit(f'{method}: input của bound action không có component %cid; phải dùng %tky')
 
           if 'corrections-correction_qty' in pp_impl:
               raise SystemExit('Aggregate một cột INTO @DATA(...) là scalar, không được dereference component')
