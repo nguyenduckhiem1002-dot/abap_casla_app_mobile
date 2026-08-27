@@ -3,20 +3,20 @@ strict ( 2 );
 
 define behavior for ZC_PP_OpAlloc alias OperationAllocation
 {
-  // Mobile commands are exposed only through these static facade actions.
-  // Each facade validates the CASLA access token/session/device before it
-  // resolves the SAP operation and delegates to the internal domain action.
+  // Mobile chỉ được gọi các command thông qua các static facade action này.
+  // Mỗi facade xác thực CASLA access token/session/device trước khi resolve
+  // công đoạn SAP và chuyển tiếp sang command nghiệp vụ nội bộ.
   use action submitInitialAssign;
   use action submitTransfer;
   use action submitRecall;
   use action submitConfirm;
   use action submitReverse;
 
-  // Used after an ambiguous HTTP timeout. SUCCESS proves a committed ledger
-  // receipt; NOT_FOUND means the backend cannot prove a commit and is not a
-  // business failure.
+  // Dùng sau HTTP timeout không rõ kết quả. SUCCESS chứng minh đã có ledger
+  // receipt được commit; NOT_FOUND chỉ có nghĩa backend chưa chứng minh được
+  // commit và không được coi là business failure.
   use action getSyncStatus;
 
-  // Token-scoped read-only report.
+  // Báo cáo chỉ đọc và luôn bị giới hạn theo token/session hiện tại.
   use action getWorkHistory;
 }
