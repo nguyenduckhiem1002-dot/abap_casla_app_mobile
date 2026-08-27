@@ -1,6 +1,7 @@
+
 @EndUserText.label: 'Chặn đọc trực tiếp ZC_MOB_User'
 @MappingRole: true
 define role ZC_MOB_USER {
   grant select on ZC_MOB_User
-    where inheriting conditions from entity ZI_MOB_User;
+    where UserUUID is null;
 }

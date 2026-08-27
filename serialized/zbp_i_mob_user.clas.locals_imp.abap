@@ -36,6 +36,9 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS consume_dummy_password_hash
       IMPORTING password TYPE string
       RAISING cx_abap_message_digest zcx_mob_config.
+    METHODS role_is_active
+      IMPORTING role_id TYPE ztb_mob_role-role_id
+      RETURNING VALUE(result) TYPE abap_bool.
 ENDCLASS.
 
 CLASS lhc_mobileuser IMPLEMENTATION.
@@ -100,6 +103,16 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       iterations = c_iterations ) ##NEEDED.
   ENDMETHOD.
 
+  METHOD role_is_active.
+    SELECT FROM ztb_mob_role
+      FIELDS role_id
+      WHERE role_id = @role_id
+        AND status = 'A'
+      INTO TABLE @DATA(active_roles)
+      UP TO 1 ROWS.
+    result = xsdbool( active_roles IS NOT INITIAL ).
+  ENDMETHOD.
+
   METHOD createuser.
     IF keys IS INITIAL.
       RETURN.
@@ -116,10 +129,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
     DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     DATA(normalized) = to_lower( condense( CONV string( input-Username ) ) ).
-    IF normalized IS INITIAL OR input-Password IS INITIAL
-       OR input-RoleID IS INITIAL.
+    IF normalized IS INITIAL OR input-Password IS INITIAL.
       report_error( EXPORTING cid = cid
-                              text = 'Tên đăng nhập, mật khẩu và chức danh ban đầu là bắt buộc'
+                              text = 'Tên đăng nhập và mật khẩu là bắt buộc'
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
@@ -141,13 +153,8 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       RETURN.
     ENDIF.
     DATA(role_id) = CONV ztb_mob_role-role_id( input-RoleID ).
-    SELECT FROM ztb_mob_role
-      FIELDS role_id
-      WHERE role_id = @role_id
-        AND status = 'A'
-      INTO TABLE @DATA(active_roles)
-      UP TO 1 ROWS.
-    IF active_roles IS INITIAL.
+    IF role_id IS NOT INITIAL
+       AND role_is_active( role_id ) = abap_false.
       report_error( EXPORTING cid = cid
                               text = 'Chức danh không tồn tại hoặc không còn hiệu lực'
                     CHANGING failed = failed reported = reported ).
@@ -197,6 +204,12 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         RETURN.
     ENDTRY.
     DATA(now) = utclong_current( ).
+    DATA role_assignments TYPE TABLE FOR CREATE zi_mob_user\_Roles.
+    IF role_id IS NOT INITIAL.
+      role_assignments = VALUE #( ( %cid_ref = 'USR'
+        %target = VALUE #( ( %cid = 'ROL' RoleID = role_id ) ) ) ).
+    ENDIF.
+
     MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
       ENTITY MobileUser CREATE FIELDS
         ( Username NormalizedUsername FullName Email WorkerID
@@ -215,8 +228,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
           HashIterations = c_iterations PasswordChangedAt = now
           CredentialStatus = 'A' ) ) ) )
       ENTITY MobileUser CREATE BY \_Roles FIELDS ( RoleID )
-      WITH VALUE #( ( %cid_ref = 'USR'
-        %target = VALUE #( ( %cid = 'ROL' RoleID = role_id ) ) ) )
+      WITH role_assignments
       MAPPED DATA(mapped_create) FAILED DATA(failed_create)
       REPORTED DATA(reported_create).
     IF failed_create IS NOT INITIAL.

@@ -99,7 +99,8 @@ CLASS lhc_employeeallocation IMPLEMENTATION.
       RESULT DATA(allocations).
 
     LOOP AT allocations ASSIGNING FIELD-SYMBOL(<allocation>).
-      DATA(expected_remaining) =
+      DATA expected_remaining TYPE ztb_pp_emp_alloc-remaining_qty.
+      expected_remaining =
         <allocation>-InitialAssignedQuantity
         + <allocation>-TransferredInQuantity
         - <allocation>-TransferredOutQuantity
@@ -1008,7 +1009,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND transaction_type = @zcl_pp_txn_type=>correction
           AND transaction_status = @zcl_pp_txn_type=>posted
         INTO @DATA(corrections).
-      DATA(effective_qty) = original-quantity + corrections.
+      DATA effective_qty TYPE ztb_pp_alloc_txn-quantity.
+      effective_qty = original-quantity + corrections.
       IF effective_qty <= 0.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -1121,8 +1123,10 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND transaction_type = @zcl_pp_txn_type=>correction
           AND transaction_status = @zcl_pp_txn_type=>posted
         INTO @DATA(corrections).
-      DATA(current_qty) = original-quantity + corrections.
-      DATA(delta) = input-NewQuantity - current_qty.
+      DATA current_qty TYPE ztb_pp_alloc_txn-quantity.
+      DATA delta TYPE ztb_pp_alloc_txn-quantity.
+      current_qty = original-quantity + corrections.
+      delta = input-NewQuantity - current_qty.
       IF delta = 0.
         APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         CONTINUE.
@@ -1178,7 +1182,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD submitInitialAssign.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
+      DATA(cid) = <key>-%cid.
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID ).
@@ -1242,7 +1246,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD submitTransfer.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
+      DATA(cid) = <key>-%cid.
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID ).
@@ -1304,7 +1308,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD submitRecall.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
+      DATA(cid) = <key>-%cid.
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID ).
@@ -1366,7 +1370,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD submitConfirm.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
+      DATA(cid) = <key>-%cid.
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID ).
@@ -1428,7 +1432,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD submitReverse.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
+      DATA(cid) = <key>-%cid.
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID ).
@@ -1490,7 +1494,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD getSyncStatus.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
-      DATA(cid) = CONV string( <key>-%cid ).
+      DATA(cid) = <key>-%cid.
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID ).

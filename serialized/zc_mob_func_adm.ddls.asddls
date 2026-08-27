@@ -1,3 +1,4 @@
+
 @AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: 'Quản trị chức năng'
 @Metadata.allowExtensions: true
@@ -7,5 +8,7 @@ define root view entity ZC_MOB_Func_Adm
 {
   key FuncID,
       FuncName,
-      AppModule
+      AppModule,
+      LastChangedAt,
+      LocalLastChangedAt
 }

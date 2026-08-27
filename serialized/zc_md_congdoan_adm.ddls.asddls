@@ -1,3 +1,4 @@
+
 @AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: 'Quản trị master công đoạn'
 @Metadata.allowExtensions: true
@@ -15,5 +16,6 @@ define root view entity ZC_MD_CongDoan_Adm
       CreatedBy,
       CreatedAt,
       LastChangedBy,
+      LastChangedAt,
       LocalLastChangedAt
 }

@@ -49,9 +49,9 @@ CLASS lhc_congdoan IMPLEMENTATION.
       ENDIF.
 
       IF invalid = abap_false.
-        LOOP AT records ASSIGNING FIELD-SYMBOL(<other>)
-          WHERE MaCongDoan = <record>-MaCongDoan.
-          IF <other>-ValidFrom = <record>-ValidFrom.
+        LOOP AT records ASSIGNING FIELD-SYMBOL(<other>).
+          IF <other>-MaCongDoan <> <record>-MaCongDoan
+             OR <other>-ValidFrom = <record>-ValidFrom.
             CONTINUE.
           ENDIF.
           IF <other>-ValidFrom <= <record>-ValidTo

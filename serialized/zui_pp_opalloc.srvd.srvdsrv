@@ -1,12 +1,5 @@
+
 @EndUserText.label: 'Dịch vụ phân bổ sản lượng công đoạn'
 define service ZUI_PP_OPALLOC {
-  // API mobile expose operation header cùng các static action có kiểm soát.
-  // Mỗi business command xác thực CASLA token/session/device, kiểm tra phạm vi
-  // công việc của người gọi và ghi dữ liệu thông qua RAP domain layer.
-  //
-  // Không expose entity set EmployeeAllocation và AllocationTransaction.
-  // Lịch sử theo nhân công chỉ được trả qua action getWorkHistory có token scope.
-  // Kết quả HTTP không chắc chắn được đối chiếu bằng getSyncStatus theo
-  // SyncItemUUID do client sinh; tuyệt đối không expose raw CRUD của ledger.
   expose ZC_PP_OpAlloc as OperationAllocations;
 }

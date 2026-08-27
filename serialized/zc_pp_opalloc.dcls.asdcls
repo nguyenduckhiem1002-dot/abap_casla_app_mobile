@@ -1,6 +1,7 @@
+
 @EndUserText.label: 'Chặn đọc trực tiếp API phân bổ'
 @MappingRole: true
 define role ZC_PP_OPALLOC {
   grant select on ZC_PP_OpAlloc
-    where inheriting conditions from entity ZR_PP_OpAlloc;
+    where OperationUUID is null;
 }
