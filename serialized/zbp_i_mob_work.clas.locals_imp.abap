@@ -8,10 +8,10 @@ ENDCLASS.
 
 CLASS lhc_mobilework IMPLEMENTATION.
   METHOD get_global_authorizations.
-    "Protected by IAM app/business catalog of the consolidated admin service.
+    "Được bảo vệ bằng IAM app/business catalog của service quản trị tập trung.
     result-%create = if_abap_behv=>auth-allowed.
     result-%update = if_abap_behv=>auth-allowed.
-    "Work IDs are authorization scope contracts. Deactivate instead of delete.
+    "Work ID là hợp đồng phạm vi phân quyền; hãy vô hiệu hóa thay vì hard-delete.
     result-%delete = if_abap_behv=>auth-unauthorized.
   ENDMETHOD.
 
