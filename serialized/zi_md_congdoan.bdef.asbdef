@@ -11,8 +11,8 @@ etag master LocalLastChangedAt
   update;
   delete;
 
-  field ( readonly : update ) MaCongDoan, ValidFrom;
-  field ( mandatory ) MaCongDoan, ValidFrom, TenCongDoan, ValidTo;
+  field ( mandatory : create, readonly : update ) MaCongDoan, ValidFrom;
+  field ( mandatory ) TenCongDoan, ValidTo;
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy, LocalLastChangedAt;
 
   validation validateMaster on save { create; update; field MaCongDoan, ValidFrom, ValidTo, TenCongDoan, DonGiaXM, DonGiaGC; }
