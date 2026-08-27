@@ -1,4 +1,4 @@
-"Canonical value set for the append-only CASLA allocation ledger.
+"Bộ giá trị chuẩn cho ledger phân bổ CASLA dạng append-only.
 CLASS zcl_pp_txn_type DEFINITION
   PUBLIC FINAL CREATE PRIVATE.
   PUBLIC SECTION.
@@ -10,9 +10,9 @@ CLASS zcl_pp_txn_type DEFINITION
       reverse        TYPE ztb_pp_alloc_txn-transaction_type VALUE 'REVERSE',
       correction     TYPE ztb_pp_alloc_txn-transaction_type VALUE 'CORRECTION'.
 
-    "A ledger row exists only after the business mutation is committed in SAP.
-    "Network/pending/failed transport states belong to the mobile queue, not to
-    "the immutable business ledger.
+    "Ledger và thay đổi nghiệp vụ được persist cùng một RAP LUW.
+    "Trạng thái network/pending/transport failure thuộc hàng đợi phía mobile,
+    "không được ghi như trạng thái nghiệp vụ vào immutable ledger.
     CONSTANTS posted TYPE ztb_pp_alloc_txn-transaction_status VALUE 'POSTED'.
 
     CONSTANTS:
