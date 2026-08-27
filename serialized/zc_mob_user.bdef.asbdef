@@ -1,14 +1,12 @@
 projection;
 strict ( 2 );
 
-"Device-facing API surface, self-service only: a device authenticates,
-"rotates its own session and changes its own password. login and refresh
-"return the caller's effective functions inside ZA_MOB_LoginResult for
-"rendering the menu; that list is never trusted as input again.
-"Everything administrative - creating accounts and assigning roles -
-"belongs to the Fiori services. Never add "use action createUser",
-""use update" or the _Roles association here: this projection is what
-"keeps them off the mobile API.
+// Bề mặt API dành cho thiết bị, chỉ cho phép các nghiệp vụ tự phục vụ.
+// Thiết bị có thể đăng nhập, đóng/làm mới phiên và đổi mật khẩu của chính mình.
+// login và refresh trả danh sách chức năng hiệu lực trong ZA_MOB_LoginResult
+// để hiển thị menu; backend không bao giờ tin danh sách đó như dữ liệu phân quyền đầu vào.
+// Mọi thao tác quản trị như tạo tài khoản và gán chức danh chỉ được expose qua Fiori.
+// Không thêm createUser, update hoặc association _Roles vào projection mobile này.
 define behavior for ZC_MOB_User alias MobileUser
 {
   use action login;
