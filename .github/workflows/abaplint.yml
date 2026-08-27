@@ -25,10 +25,16 @@ jobs:
             --include='*.asbdef' \
             --include='*.asddls' \
             --include='*.asdcls' \
-            --include='*.asddlxs' \
-            --include='*.srvdsrv'; then
-            echo 'Phát hiện comment kiểu ABAP (") trong artifact CDS/BDEF/DCL/SRVD.'
+            --include='*.asddlxs'; then
+            echo 'Phát hiện comment kiểu ABAP (") trong artifact CDS/BDEF/DCL/MDE.'
             echo 'Các artifact này phải dùng // cho comment một dòng.'
+            exit 1
+          fi
+
+          if grep -RInE '^[[:space:]]*(//|"|/\*|\*/)' serialized \
+            --include='*.srvdsrv'; then
+            echo 'Phát hiện comment trong Service Definition (*.srvdsrv).'
+            echo 'ADT không hỗ trợ comment trong Service Definition; phải xóa comment khỏi source.'
             exit 1
           fi
 
@@ -46,6 +52,17 @@ jobs:
           pp_bdef = Path('serialized/zr_pp_opalloc.bdef.asbdef').read_text(encoding='utf-8')
           if pp_bdef.count('deep result [1] ZA_PP_HistResult') != 1:
               raise SystemExit('getWorkHistory phải dùng deep result ZA_PP_HistResult')
+
+          md_bdef = Path('serialized/zi_md_congdoan.bdef.asbdef').read_text(encoding='utf-8')
+          key_rule = 'field ( mandatory : create, readonly : update ) MaCongDoan, ValidFrom;'
+          if key_rule not in md_bdef:
+              raise SystemExit(
+                  'MaCongDoan/ValidFrom phải dùng mandatory:create + readonly:update'
+              )
+          if 'field ( mandatory ) MaCongDoan' in md_bdef:
+              raise SystemExit(
+                  'Không được kết hợp mandatory với readonly:update cho MaCongDoan/ValidFrom'
+              )
 
           pp_impl = Path('serialized/zbp_r_pp_opalloc.clas.locals_imp.abap').read_text(encoding='utf-8')
           for method in ('initialAssign', 'transfer', 'recall', 'confirm', 'reverse', 'correctConfirm'):
