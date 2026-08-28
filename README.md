@@ -87,7 +87,7 @@ Snapshot object count trong working tree:
 
 | Loại | Số lượng |
 | --- | ---: |
-| Serialized files | 315 |
+| Serialized files | 318 |
 | DDIC table metadata | 24 |
 | CDS source | 51 |
 | Behavior definitions | 16 |
