@@ -17,7 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Synchronize technical DOCX
+      - name: Synchronize documentation object counts
         if: github.ref == 'refs/heads/chatgpt/ci-quality-remediation-20260828'
         shell: bash
         run: |
@@ -26,38 +26,48 @@ jobs:
           from docx import Document
           from pathlib import Path
 
-          path = Path('docs/CASLA_Mobile_Technical_Documentation.docx')
-          doc = Document(path)
-          replacements = {
-            'Sai lệch cần xử lý: predicate hiện chỉ enforce tối thiểu 6 ký tự và không chứa username, trong khi error text createUser mô tả policy 12 ký tự gồm hoa/thường/số. Message không phải enforcement; nếu thay policy phải sửa predicate, message, migration và test đồng bộ.':
-              'Policy hiện hành: mật khẩu phải dài tối thiểu 6 ký tự và không chứa username. Predicate và message của createUser/changePasswordAdmin đã được đồng bộ theo policy này. Nếu nâng policy, phải thay predicate, message, migration và ABAP Unit/test integration cùng một lần.',
-            'Workflow .github/workflows/abaplint.yml chạy ABAP Cloud syntax/check/DDIC/complexity và các pattern RAP. Repository ghi nhận lần chạy gần nhất: @abaplint/cli 2.120.35, 0 issue(s), 241 file(s) analyzed.':
-              'Workflow .github/workflows/abaplint.yml chạy custom RAP checks và @abaplint/cli 2.120.35 cho ABAP Cloud. Chạy local bằng bash scripts/check_ci.sh; CI phải xanh. Không ghi cố định số issue/file vì snapshot thay đổi theo source.'
-          }
-          changed = 0
-          for paragraph in doc.paragraphs:
-            if paragraph.text not in replacements:
-              continue
-            new_text = replacements[paragraph.text]
-            if paragraph.runs:
-              paragraph.runs[0].text = new_text
-              for run in paragraph.runs[1:]:
-                run.text = ''
-            else:
-              paragraph.add_run(new_text)
-            changed += 1
-          if changed not in (0, 2):
-            raise SystemExit(f'Unexpected DOCX replacement count: {changed}')
-          if changed == 2:
-            doc.save(path)
-          print(f'DOCX replacements: {changed}')
+          serialized_count = sum(1 for path in Path('serialized').iterdir() if path.is_file())
+          print(f'Serialized file count: {serialized_count}')
+
+          readme_path = Path('README.md')
+          readme = readme_path.read_text(encoding='utf-8')
+          old = '| Serialized files | 315 |'
+          new = f'| Serialized files | {serialized_count} |'
+          if old in readme:
+            readme_path.write_text(readme.replace(old, new, 1), encoding='utf-8')
+          elif new not in readme:
+            raise SystemExit('README serialized file count row not found')
+
+          docx_path = Path('docs/CASLA_Mobile_Technical_Documentation.docx')
+          doc = Document(docx_path)
+          docx_changed = False
+          found = False
+          for table in doc.tables:
+            for row in table.rows:
+              cells = row.cells
+              if len(cells) >= 2 and cells[0].text.strip() == 'Serialized files':
+                found = True
+                expected = str(serialized_count)
+                if cells[1].text.strip() != expected:
+                  p = cells[1].paragraphs[0]
+                  if p.runs:
+                    p.runs[0].text = expected
+                    for run in p.runs[1:]:
+                      run.text = ''
+                  else:
+                    p.add_run(expected)
+                  docx_changed = True
+          if not found:
+            raise SystemExit('DOCX serialized file count row not found')
+          if docx_changed:
+            doc.save(docx_path)
           PY
 
-          if ! git diff --quiet -- docs/CASLA_Mobile_Technical_Documentation.docx; then
+          if ! git diff --quiet -- README.md docs/CASLA_Mobile_Technical_Documentation.docx; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add docs/CASLA_Mobile_Technical_Documentation.docx
-            git commit -m "Synchronize technical documentation with remediation"
+            git add README.md docs/CASLA_Mobile_Technical_Documentation.docx
+            git commit -m "Synchronize documentation object counts"
             git push origin HEAD:chatgpt/ci-quality-remediation-20260828
           fi
 
@@ -65,7 +75,7 @@ jobs:
         if: github.ref == 'refs/heads/chatgpt/ci-quality-remediation-20260828'
         uses: actions/upload-artifact@v4
         with:
-          name: casla-technical-docx-synchronized
+          name: casla-technical-docx-final
           path: docs/CASLA_Mobile_Technical_Documentation.docx
           if-no-files-found: error
           retention-days: 1
