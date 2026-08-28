@@ -142,9 +142,11 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     IF password_is_acceptable(
          password = CONV string( input-Password )
          username = normalized ) = abap_false.
-      report_error( EXPORTING cid = cid
-                              text = |Mật khẩu phải có ít nhất { c_min_password_length } ký tự và không chứa tên đăng nhập|
-                    CHANGING failed = failed reported = reported ).
+      report_error(
+        EXPORTING cid = cid
+                  text = |Mật khẩu phải có ít nhất { c_min_password_length } ký tự|
+                      && ' và không chứa tên đăng nhập'
+        CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
     SELECT FROM ztb_mob_user FIELDS user_uuid
@@ -639,9 +641,11 @@ CLASS lhc_mobileuser IMPLEMENTATION.
        OR password_is_acceptable(
             password = CONV string( input-NewPassword )
             username = CONV string( credential-normalized_username ) ) = abap_false.
-      report_error( EXPORTING cid = cid
-                              text = |Mật khẩu mới phải khác mật khẩu cũ; tối thiểu { c_min_password_length } ký tự và không chứa tên đăng nhập|
-                    CHANGING failed = failed reported = reported ).
+      report_error(
+        EXPORTING cid = cid
+                  text = |Mật khẩu mới phải khác mật khẩu cũ; tối thiểu { c_min_password_length } ký tự|
+                      && ' và không chứa tên đăng nhập'
+        CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
     TRY.
