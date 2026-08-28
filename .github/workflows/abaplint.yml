@@ -21,6 +21,7 @@ jobs:
         if: github.ref == 'refs/heads/chatgpt/ci-quality-remediation-20260828'
         shell: bash
         run: |
+          python3 -m pip install --disable-pip-version-check --quiet python-docx==1.2.0
           python3 - <<'PY'
           from docx import Document
           from pathlib import Path
