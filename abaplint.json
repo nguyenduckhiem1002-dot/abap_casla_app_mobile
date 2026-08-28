@@ -21,6 +21,9 @@
     "unused_variables": {
       "exclude": [
         "zcl_pp_txn_type"
+      ],
+      "skipNames": [
+        "requested_authorizations"
       ]
     },
     "unused_methods": {
