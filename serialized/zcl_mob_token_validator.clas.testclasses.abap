@@ -3,9 +3,9 @@ CLASS ltcl_mob_token_validator DEFINITION FINAL FOR TESTING
   RISK LEVEL HARMLESS.
   PRIVATE SECTION.
     METHODS empty_token_is_rejected FOR TESTING.
-    METHODS low_kdf_iterations_are_rejected FOR TESTING.
-    METHODS high_kdf_iterations_are_rejected FOR TESTING.
-    METHODS empty_password_salt_is_rejected FOR TESTING.
+    METHODS reject_low_kdf_iterations FOR TESTING.
+    METHODS reject_high_kdf_iterations FOR TESTING.
+    METHODS reject_empty_password_salt FOR TESTING.
 ENDCLASS.
 
 CLASS ltcl_mob_token_validator IMPLEMENTATION.
@@ -22,7 +22,7 @@ CLASS ltcl_mob_token_validator IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
-  METHOD low_kdf_iterations_are_rejected.
+  METHOD reject_low_kdf_iterations.
     TRY.
         DATA(password_hash) = zcl_mob_token_validator=>hash_password(
           password = 'secret'
@@ -38,7 +38,7 @@ CLASS ltcl_mob_token_validator IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
-  METHOD high_kdf_iterations_are_rejected.
+  METHOD reject_high_kdf_iterations.
     TRY.
         DATA(password_hash) = zcl_mob_token_validator=>hash_password(
           password = 'secret'
@@ -54,7 +54,7 @@ CLASS ltcl_mob_token_validator IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
-  METHOD empty_password_salt_is_rejected.
+  METHOD reject_empty_password_salt.
     TRY.
         DATA(password_hash) = zcl_mob_token_validator=>hash_password(
           password = 'secret'
