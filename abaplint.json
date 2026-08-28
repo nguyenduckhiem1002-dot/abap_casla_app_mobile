@@ -20,7 +20,6 @@
     "check_ddic": true,
     "unused_variables": {
       "exclude": [
-        "locals_imp",
         "zcl_pp_txn_type"
       ]
     },
