@@ -20,7 +20,7 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS changepassword FOR MODIFY
       IMPORTING keys FOR ACTION MobileUser~changePassword.
     METHODS changePasswordAdmin FOR MODIFY
-       keys FOR ACTION MobileUser~changePasswordAdmin.
+      IMPORTING keys FOR ACTION MobileUser~changePasswordAdmin.
     METHODS unlockUser FOR MODIFY
       IMPORTING keys   FOR ACTION MobileUser~unlockUser
       RESULT    result.
@@ -93,7 +93,6 @@ CLASS lhc_mobileuser IMPLEMENTATION.
 
   METHOD password_is_acceptable.
     DATA(password_lower) = to_lower( password ).
-    DATA(password_upper) = to_upper( password ).
     DATA(username_lower) = to_lower( condense( username ) ).
     result = xsdbool(
       strlen( password ) >= c_min_password_length
@@ -144,7 +143,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
          password = CONV string( input-Password )
          username = normalized ) = abap_false.
       report_error( EXPORTING cid = cid
-                              text = 'Mật khẩu phải có ít nhất 12 ký tự, gồm chữ hoa, chữ thường và số'
+                              text = |Mật khẩu phải có ít nhất { c_min_password_length } ký tự và không chứa tên đăng nhập|
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
@@ -641,7 +640,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
             password = CONV string( input-NewPassword )
             username = CONV string( credential-normalized_username ) ) = abap_false.
       report_error( EXPORTING cid = cid
-                              text = 'Mật khẩu mới phải khác mật khẩu cũ; tối thiểu 12 ký tự, có hoa, thường và số'
+                              text = |Mật khẩu mới phải khác mật khẩu cũ; tối thiểu { c_min_password_length } ký tự và không chứa tên đăng nhập|
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
@@ -923,22 +922,6 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         RETURN.
       ENDIF.
     ENDIF.
-
-    "Đọc lại toàn bộ entity để trả result [1] $self
-    READ ENTITIES OF zi_mob_user IN LOCAL MODE
-      ENTITY MobileUser
-      ALL FIELDS
-      WITH VALUE #( ( %tky = user-%tky ) )
-      RESULT DATA(updated_users)
-      FAILED DATA(failed_result)
-      REPORTED DATA(reported_result).
-
-    IF failed_result IS NOT INITIAL.
-      failed = CORRESPONDING #( failed_result ).
-      reported = CORRESPONDING #( reported_result ).
-      RETURN.
-    ENDIF.
-
 
     APPEND VALUE #(
       %tky = user-%tky
