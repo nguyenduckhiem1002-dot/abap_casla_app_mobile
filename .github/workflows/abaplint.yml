@@ -8,7 +8,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   abaplint:
@@ -17,52 +17,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Patch stale repository documentation
+      - name: Upload technical DOCX for verification
         if: github.ref == 'refs/heads/chatgpt/ci-quality-remediation-20260828'
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import zipfile
-          from xml.etree import ElementTree as ET
-
-          readme = Path('README.md')
-          text = readme.read_text(encoding='utf-8')
-          replacements = {
-            'Có workflow GitHub Actions; source gate gần nhất ghi nhận 0 issue / 241 file':
-              'Có workflow GitHub Actions; CI phải xanh qua `bash scripts/check_ci.sh` (custom RAP checks + abaplint 2.120.35)',
-            '> **Sai lệch cần xử lý:** predicate thực tế hiện chỉ enforce mật khẩu dài tối thiểu 6 ký tự và không chứa username. Error text trong createUser vẫn nói “12 ký tự, hoa, thường và số”. Khi muốn áp chính sách mạnh hơn, phải sửa predicate, message và migration/test cùng lúc; không được coi message hiện tại là enforcement.':
-              '> **Policy hiện hành:** mật khẩu phải dài tối thiểu 6 ký tự và không chứa username. Predicate và message của createUser/changePasswordAdmin đã được đồng bộ theo policy này. Nếu nâng policy, phải thay predicate, message, migration và ABAP Unit/test integration cùng một lần.',
-            'Kết quả source gate được ghi nhận trong repository: 0 issue(s) found, 241 file(s) analyzed. Đây là kiểm tra tĩnh; không phải bằng chứng rằng tenant đích đã activate sạch.':
-              'Chạy local bằng `bash scripts/check_ci.sh`; CI phải xanh. Không ghi cố định số issue/file vào tài liệu vì snapshot thay đổi theo source. abaplint là kiểm tra tĩnh; không phải bằng chứng rằng tenant đích đã activate sạch.'
-          }
-          for old, new in replacements.items():
-            if old not in text:
-              raise SystemExit(f'Expected README text not found: {old[:80]}')
-            text = text.replace(old, new)
-          readme.write_text(text, encoding='utf-8')
-
-          docx_path = Path('docs/CASLA_Mobile_Technical_Documentation.docx')
-          print('== DOCX paragraphs containing stale CI/password markers ==')
-          with zipfile.ZipFile(docx_path) as zf:
-            xml = zf.read('word/document.xml')
-          root = ET.fromstring(xml)
-          ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
-          for idx, paragraph in enumerate(root.findall('.//w:p', ns), start=1):
-            content = ''.join(node.text or '' for node in paragraph.findall('.//w:t', ns))
-            lowered = content.lower()
-            if ('241' in content or '12 ký' in lowered or '0 issue' in lowered
-                or 'password policy' in lowered or 'chính sách mật khẩu' in lowered):
-              print(f'P{idx}: {content}')
-          PY
-
-          if ! git diff --quiet README.md; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add README.md
-            git commit -m "Synchronize README with current CI and password policy"
-            git push origin HEAD:chatgpt/ci-quality-remediation-20260828
-          fi
+        uses: actions/upload-artifact@v4
+        with:
+          name: casla-technical-docx-source
+          path: docs/CASLA_Mobile_Technical_Documentation.docx
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
