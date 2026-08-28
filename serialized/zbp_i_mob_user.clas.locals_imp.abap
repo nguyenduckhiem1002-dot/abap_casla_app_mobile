@@ -55,25 +55,44 @@ ENDCLASS.
 
 CLASS lhc_mobileuser IMPLEMENTATION.
   METHOD get_global_authorizations.
-    "Service quản trị Fiori được bảo vệ bằng IAM app/business catalog.
+  "Service quản trị Fiori được bảo vệ bằng IAM app/business catalog.
+  IF requested_authorizations-%action-createUser = if_abap_behv=>mk-on.
     result-%action-createUser = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-login = if_abap_behv=>mk-on.
     result-%action-login = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-refresh = if_abap_behv=>mk-on.
     result-%action-refresh = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-logout = if_abap_behv=>mk-on.
     result-%action-logout = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-changePassword = if_abap_behv=>mk-on.
     result-%action-changePassword = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%create = if_abap_behv=>mk-on.
     result-%create = if_abap_behv=>auth-unauthorized.
+  ENDIF.
+  IF requested_authorizations-%delete = if_abap_behv=>mk-on.
     result-%delete = if_abap_behv=>auth-unauthorized.
-    "MobileUserRole là composition child khai báo authorization dependent by _User,
-    "vì vậy RAP dùng quyền %update của master cho create-by-association và delete.
-    "Nếu %update bị unauthorized thì thao tác gán chức danh từ app quản trị sẽ
-    "bị chặn ở runtime. Bề mặt ghi bên ngoài vẫn được đóng ở projection layer:
-    "ZC_MOB_User_Adm chỉ expose createUser và composition _Roles, còn
-    "ZC_MOB_User chỉ expose các action xác thực; cả hai đều không expose update.
+  ENDIF.
+  "MobileUserRole là composition child khai báo authorization dependent by _User,
+  "vì vậy RAP dùng quyền %update của master cho create-by-association và delete.
+  "Nếu %update bị unauthorized thì thao tác gán chức danh từ app quản trị sẽ
+  "bị chặn ở runtime. Bề mặt ghi bên ngoài vẫn được đóng ở projection layer:
+  "ZC_MOB_User_Adm chỉ expose createUser và composition _Roles, còn
+  "ZC_MOB_User chỉ expose các action xác thực; cả hai đều không expose update.
+  IF requested_authorizations-%update = if_abap_behv=>mk-on.
     result-%update = if_abap_behv=>auth-allowed.
-
-    result-%action-changePasswordAdmin  = if_abap_behv=>auth-allowed.
-    result-%action-unlockUser           = if_abap_behv=>auth-allowed.
-  ENDMETHOD.
+  ENDIF.
+  IF requested_authorizations-%action-changePasswordAdmin = if_abap_behv=>mk-on.
+    result-%action-changePasswordAdmin = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-unlockUser = if_abap_behv=>mk-on.
+    result-%action-unlockUser = if_abap_behv=>auth-allowed.
+  ENDIF.
+ENDMETHOD.
 
   METHOD hash_password.
     "Ủy quyền cho implementation KDF dùng chung để việc hash mật khẩu chỉ có một
