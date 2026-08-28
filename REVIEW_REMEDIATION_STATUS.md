@@ -23,6 +23,7 @@ Tài liệu này ghi lại các quyết định đã xử lý trong working tree
 | `method_length` dùng sai key | Đã đổi sang `statements: 80`; phần revoke session được tách khỏi `login` để method quay lại dưới quality gate |
 | `unused_variables` exclude toàn `locals_imp` | Đã bỏ exclude rộng; các global authorization handler dùng `requested_authorizations` theo RAP request mask |
 | Custom RAP checks nhúng trong workflow YAML | Đã chuyển sang `scripts/check_rap_patterns.py`; local và CI cùng chạy qua `bash scripts/check_ci.sh` |
+| Không có ABAP Unit regression test | Đã thêm test class cho constant-time comparison/empty secret của `ZCL_MOB_HASHER` và guard cho empty token, KDF iteration range, empty salt của `ZCL_MOB_TOKEN_VALIDATOR` |
 
 ## Rủi ro còn mở
 
@@ -33,7 +34,7 @@ Tài liệu này ghi lại các quyết định đã xử lý trong working tree
 5. Pepper/token secret trong Z-table cần secure-store/rotation review.
 6. Released API/field của SAP CDS cần verify trên release đích.
 7. DCL/IAM/communication role phải test phân tách mobile và admin.
-8. Chưa có regression suite ABAP Unit đủ bao phủ password/token/session/idempotency và balance invariant.
+8. ABAP Unit hiện mới bao phủ các guard crypto/KDF thuần; session lifecycle, token rotation với persistence, idempotency, command invariants và balance invariant vẫn cần test seam/fixture phù hợp và chạy trên tenant đã activate.
 
 ## Kết quả chất lượng source
 
@@ -45,4 +46,4 @@ Chạy local bằng một lệnh duy nhất:
 bash scripts/check_ci.sh
 ```
 
-Tiêu chí merge là command trên và GitHub Action **ABAP lint** phải xanh. Không đóng đinh số lượng `issue/file analyzed` trong tài liệu vì đó là số liệu transient thay đổi theo working tree. Quality gate tĩnh này không thay thế ADT activation, ATC, ABAP Unit hoặc kiểm thử tích hợp trên tenant đích.
+Tiêu chí merge là command trên và GitHub Action **ABAP lint** phải xanh. Không đóng đinh số lượng `issue/file analyzed` trong tài liệu vì đó là số liệu transient thay đổi theo working tree. Quality gate tĩnh này không thay thế ADT activation, ATC, việc thực thi ABAP Unit hoặc kiểm thử tích hợp trên tenant đích.
