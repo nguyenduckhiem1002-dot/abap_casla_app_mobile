@@ -8,7 +8,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   abaplint:
@@ -16,69 +16,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Synchronize documentation object counts
-        if: github.ref == 'refs/heads/chatgpt/ci-quality-remediation-20260828'
-        shell: bash
-        run: |
-          python3 -m pip install --disable-pip-version-check --quiet python-docx==1.2.0
-          python3 - <<'PY'
-          from docx import Document
-          from pathlib import Path
-
-          serialized_count = sum(1 for path in Path('serialized').iterdir() if path.is_file())
-          print(f'Serialized file count: {serialized_count}')
-
-          readme_path = Path('README.md')
-          readme = readme_path.read_text(encoding='utf-8')
-          old = '| Serialized files | 315 |'
-          new = f'| Serialized files | {serialized_count} |'
-          if old in readme:
-            readme_path.write_text(readme.replace(old, new, 1), encoding='utf-8')
-          elif new not in readme:
-            raise SystemExit('README serialized file count row not found')
-
-          docx_path = Path('docs/CASLA_Mobile_Technical_Documentation.docx')
-          doc = Document(docx_path)
-          docx_changed = False
-          found = False
-          for table in doc.tables:
-            for row in table.rows:
-              cells = row.cells
-              if len(cells) >= 2 and cells[0].text.strip() == 'Serialized files':
-                found = True
-                expected = str(serialized_count)
-                if cells[1].text.strip() != expected:
-                  p = cells[1].paragraphs[0]
-                  if p.runs:
-                    p.runs[0].text = expected
-                    for run in p.runs[1:]:
-                      run.text = ''
-                  else:
-                    p.add_run(expected)
-                  docx_changed = True
-          if not found:
-            raise SystemExit('DOCX serialized file count row not found')
-          if docx_changed:
-            doc.save(docx_path)
-          PY
-
-          if ! git diff --quiet -- README.md docs/CASLA_Mobile_Technical_Documentation.docx; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add README.md docs/CASLA_Mobile_Technical_Documentation.docx
-            git commit -m "Synchronize documentation object counts"
-            git push origin HEAD:chatgpt/ci-quality-remediation-20260828
-          fi
-
-      - name: Upload synchronized technical DOCX
-        if: github.ref == 'refs/heads/chatgpt/ci-quality-remediation-20260828'
-        uses: actions/upload-artifact@v4
-        with:
-          name: casla-technical-docx-final
-          path: docs/CASLA_Mobile_Technical_Documentation.docx
-          if-no-files-found: error
-          retention-days: 1
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
