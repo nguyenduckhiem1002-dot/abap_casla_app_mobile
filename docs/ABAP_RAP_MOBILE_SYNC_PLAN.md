@@ -1,326 +1,97 @@
-# CASLA Mobile Direct Command & Reconciliation Design
+# Mobile command và reconciliation
 
-## 1. Scope
+Đây là thiết kế **hiện hành** cho đồng bộ nghiệp vụ giữa CASLA Mobile và backend ABAP RAP. “Sync” ở đây nghĩa là mobile đồng bộ command với custom Z-table trên SAP; không phải posting standard SAP Production Confirmation.
 
-This document describes the current synchronization architecture between CASLA Mobile and the ABAP RAP backend.
+## 1. Quyết định kiến trúc
 
-The word **sync** here means synchronizing the mobile client's business command with CASLA custom Z-table state hosted on SAP. It does **not** mean posting a standard SAP Production Confirmation document.
+    Mobile local queue
+       -> direct command + stable SyncItemUUID
+       -> ZUI_PP_OPALLOC
+       -> token/session/device guard
+       -> RBAC + Work Context
+       -> live Production Order / Operation guard
+       -> managed RAP action
+           -> ZTB_PP_EMP_ALLOC
+           -> ZTB_PP_ALLOC_TXN (POSTED receipt)
 
-## 2. Final architectural decision
+Đã loại bỏ khỏi flow: ZTB_PP_SYNC_H/I, submitSync, SAP-side mobile queue, background worker và standard confirmation adapter. Mobile là nơi quản lý offline/pending/retry; SAP quản lý authentication, authorization, validation, atomic mutation và audit evidence.
 
-Removed concepts:
+## 2. Command contract
 
-- SAP-side `ZTB_PP_SYNC_H` / `ZTB_PP_SYNC_I` queue;
-- `submitSync` batch envelope;
-- SAP-side background worker/dead-letter processor;
-- standard SAP Production Confirmation/reversal adapter.
+Static mobile actions:
 
-Current model:
+- submitInitialAssign
+- submitTransfer
+- submitRecall
+- submitConfirm
+- submitReverse
+- getSyncStatus
+- getWorkHistory
 
-```text
-Mobile background queue
-       |
-       | direct idempotent command
-       v
-ZUI_PP_OPALLOC
-       |
-       | token/session/device guard
-       v
-ZCL_PP_OPERATION_GUARD
-       |
-       | live SAP order/operation validation
-       v
-ZR_PP_OpAlloc domain action
-       |
-       +--> ZTB_PP_EMP_ALLOC current balance
-       |
-       +--> ZTB_PP_ALLOC_TXN immutable POSTED receipt
-             (same RAP LUW)
-```
+Common fields: AccessToken, DeviceID, ProductionOrder, Operation, SyncItemUUID và dữ liệu theo command. Backend resolve OperationUUID, Plant, Work Center, UoM, planned quantity và MaCongDoan; mobile không được gửi actor để backend tin trực tiếp.
 
-The mobile application owns retry scheduling and offline/pending state. The SAP backend owns authentication, authorization, validation, atomic business mutation and durable audit evidence.
+## 3. State machine phía mobile
 
-## 3. Command contract
+    PENDING_LOCAL -> SENDING
+                        ├─ SUCCESS -> SYNCED
+                        ├─ deterministic validation -> BUSINESS_FAILED
+                        └─ timeout/network ambiguity -> PENDING_CONFIRMATION
 
-Mobile command facade actions:
+    PENDING_CONFIRMATION -> getSyncStatus
+                        ├─ SUCCESS -> SYNCED
+                        ├─ NOT_FOUND -> giữ pending hoặc retry cùng command/key
+                        └─ auth failure -> refresh/re-login flow
 
-- `submitInitialAssign`
-- `submitTransfer`
-- `submitRecall`
-- `submitConfirm`
-- `submitReverse`
+Không tạo FAILED chỉ vì network exception. Nếu retry, giữ nguyên SyncItemUUID và logical payload.
 
-Common requirements:
+## 4. Idempotency
 
-- `AccessToken`
-- `DeviceID`
-- `ProductionOrder`
-- `Operation`
-- stable client-generated `SyncItemUUID`
-- command-specific business data
+Backend đọc ledger theo SyncItemUUID:
 
-The mobile client does not need `OperationUUID`. The backend resolves or refreshes the internal operation snapshot.
+| Receipt | Kết quả |
+| --- | --- |
+| 0 | thực thi command |
+| 1, payload khớp | idempotent success |
+| 1, payload khác | IDEMPOTENCY_KEY_REUSED |
+| >1 | SYNC_RECEIPT_DUPLICATE, fail-closed |
 
-## 4. Session middleware
+Các action bound kiểm tra payload của receipt tương ứng. getSyncStatus lọc thêm actor hiện tại và POSTED, vì cùng sync key của actor khác không được làm lộ receipt.
 
-Every post-login mobile endpoint must validate the session before business logic.
+## 5. Atomicity và transactional buffer
 
-Conceptually:
+Balance update và ledger append cùng managed RAP LUW:
 
-```text
-Request
-  -> token hash lookup
-  -> active session check
-  -> token expiry check
-  -> device binding check
-  -> active user check
-  -> optional Function permission
-  -> business action
-```
+    commit  -> cả balance và receipt tồn tại
+    rollback -> không có thay đổi nghiệp vụ
 
-`ActorUserUUID` is always derived from the validated token/session. It must never be trusted from the request body.
+Sau khi facade gọi domain action IN LOCAL MODE, receipt có thể chưa ở database. Vì vậy code đọc bằng EML READ ENTITIES ... BY _Transactions IN LOCAL MODE, không dùng Open SQL để đọc row vừa tạo trước save sequence.
 
-Fiori admin actions use SAP IAM instead of CASLA mobile tokens and are not part of this mobile middleware contract.
+## 6. Live operation guard
 
-## 5. Live operation resolution
+ZCL_PP_OPERATION_GUARD kiểm tra:
 
-For every new mobile mutation the backend validates the current SAP production state.
+- active system status có REL (I0002);
+- không có TECO (I0045), CLSD (I0046) hoặc DLFL (I0076);
+- operation có control profile YBP1, không marked-for-deletion;
+- có standard text code, planned quantity > 0, Plant, internal Work Center ID, UoM;
+- I_WorkCenter resolve được code theo Plant + internal ID.
 
-### Status guard
+Standard text code được snapshot thành MaCongDoan. Field/release phải verify trên target tenant.
 
-Read `I_ManufacturingOrderStatus` and require:
+## 7. Domain mutation
 
-- active REL (`I0002`)
+- **Initial assign:** verify function PP_INITIAL_ASSIGN, scope, worker active/password; create/cộng balance và append INITIAL_ASSIGN.
+- **Transfer:** verify target worker/password, source đủ Remaining; trừ source, cộng/tạo target; append TRANSFER.
+- **Recall:** original lineage phải là INITIAL_ASSIGN hoặc TRANSFER, balance đủ; append RECALL.
+- **Confirm:** worker active/password/UoM/balance; Completed += qty, Remaining -= qty; append CONFIRM custom.
+- **Reverse:** chỉ reverse POSTED CONFIRM, tính cả CORRECTION delta trước đó, append REVERSE.
+- **Correction:** Fiori/IAM dùng correctConfirm; append signed delta CORRECTION, giữ nguyên original.
 
-Block when active:
+## 8. Reconciliation result
 
-- TECO (`I0045`)
-- CLSD (`I0046`)
-- DLFL (`I0076`)
-
-### Operation guard
-
-Read `I_ManufacturingOrderOperation` using:
-
-```text
-ManufacturingOrder = ProductionOrder
-ManufacturingOrderOperation_2 = Operation
-```
-
-Require:
-
-- `OperationControlProfile = 'YBP1'`
-- operation not marked for deletion
-- `OperationStandardTextCode` available
-- Plant / WorkCenter internal ID / quantity / UoM available
-
-Resolve Work Center code through `I_WorkCenter`.
-
-`OperationStandardTextCode` becomes `MaCongDoan` in the custom operation snapshot.
-
-## 6. Idempotency
-
-`SyncItemUUID` is generated by mobile before network transmission and must remain unchanged for every retry of the same logical command.
-
-Backend rules:
-
-```text
-no ledger row for SyncItemUUID
-  -> execute once
-
-one matching ledger row
-  -> idempotent success / reconstruct result
-
-one row but different business payload
-  -> IDEMPOTENCY_KEY_REUSED
-
-more than one receipt
-  -> SYNC_RECEIPT_DUPLICATE
-  -> fail closed
-```
-
-Do not generate a new SyncItemUUID merely because an HTTP request timed out.
-
-## 7. HTTP timeout ambiguity
-
-The most important failure mode is:
-
-```text
-1. Mobile sends command.
-2. Backend validates and commits balance + ledger.
-3. HTTP response is lost.
-4. Mobile cannot know whether step 2 committed.
-```
-
-The mobile state in step 4 must be **UNKNOWN / PENDING_CONFIRMATION**, never definitive FAILED.
-
-The mobile then calls:
-
-```text
-getSyncStatus(
-  AccessToken,
-  DeviceID,
-  SyncItemUUID
-)
-```
-
-Result semantics:
-
-### SUCCESS
-
-The backend found exactly one POSTED ledger receipt for the authenticated actor and `SyncItemUUID`.
-
-This proves the business transaction committed.
-
-### NOT_FOUND
-
-The backend cannot prove that the command committed.
-
-This is not a business rejection. Mobile may keep reconciling or retry the exact same command with the same `SyncItemUUID`.
-
-### Error
-
-Authentication/session/device failure, duplicate receipt/data-integrity issue, or another explicit server error.
-
-## 8. Atomicity
-
-For a successful command, current balance update and transaction ledger append belong to the same RAP LUW.
-
-Desired property:
-
-```text
-commit -> both balance and receipt exist
-rollback -> neither exists
-```
-
-This greatly reduces internal ambiguous states. The reconciliation endpoint primarily solves **client response loss after server commit**.
-
-## 9. Ledger model
-
-`ZTB_PP_ALLOC_TXN` is the durable audit/event ledger.
-
-Transaction types:
-
-- `INITIAL_ASSIGN`
-- `TRANSFER`
-- `RECALL`
-- `CONFIRM`
-- `REVERSE`
-- `CORRECTION`
-
-Every mobile mutation stores, as applicable:
-
-- `SyncItemUUID`
-- `ActorUserUUID`
-- verified worker UUID/time/method
-- initiating session ID
-- device ID
-- original transaction lineage
-- worker/from/to worker
-- quantity/UoM/execution date
-- status = `POSTED`
-- source channel
-- reason fields
-
-Original transactions are not edited or deleted for reversal/correction history.
-
-## 10. Confirm
-
-CASLA `CONFIRM` updates custom allocation state:
-
-```text
-Completed += qty
-Remaining -= qty
-append CONFIRM ledger
-```
-
-It does not call a standard SAP confirmation API.
-
-## 11. Reverse
-
-Current `REVERSE` implementation reverses a POSTED CONFIRM:
-
-- reject if already reversed;
-- include all prior CORRECTION deltas when calculating effective confirmed quantity;
-- decrement Completed by effective quantity;
-- increment Remaining by effective quantity;
-- append a REVERSE transaction linked through `OriginalTransactionUUID`.
-
-The original CONFIRM/CORRECTION rows remain immutable.
-
-## 12. Fiori correction
-
-An IAM-protected Fiori user may correct a wrong confirmation only through `correctConfirm`.
-
-```text
-Original CONFIRM = 100
-Correction to 80 -> CORRECTION Quantity = -20
-Correction to 90 -> new CORRECTION Quantity = +10
-Effective quantity = 90
-```
-
-Current balance is adjusted by the same delta in the same transaction.
-
-The audit app exposes ledger read-only data for reconciliation. Generic balance/ledger CRUD is not exposed.
-
-## 13. Master Công đoạn
-
-`OperationStandardTextCode` is copied to `ZTB_PP_OP_ALLOC-MA_CONGDOAN`.
-
-`ZTB_MD_CONGDOAN` stores versioned business enrichment:
-
-```text
-CLIENT + MA_CONGDOAN + VALID_FROM
-```
-
-with name, department, XM/GC rates and `VALID_TO`.
-
-This master is intended for future wage/reporting logic and does not decide whether a Production Order/Operation is valid.
-
-## 14. Mobile retry state machine
-
-Recommended mobile-local states:
-
-```text
-PENDING_LOCAL
-  -> SENDING
-      -> SYNCED                     on command SUCCESS
-      -> PENDING_CONFIRMATION       on timeout/network ambiguity
-      -> BUSINESS_FAILED            on explicit deterministic validation error
-
-PENDING_CONFIRMATION
-  -> getSyncStatus
-      -> SYNCED                     on SUCCESS
-      -> remain pending / retry     on NOT_FOUND
-      -> auth recovery              on session/token failure
-```
-
-A network exception alone must not create a business FAILED record.
-
-## 15. Security boundary
-
-Never expose these as general mobile CRUD entity sets:
-
-- `ZTB_PP_EMP_ALLOC`
-- `ZTB_PP_ALLOC_TXN`
-
-The mobile service exposes controlled command/status/history actions only.
-
-Fiori administration has a separate IAM-protected service and must not be assigned to the mobile communication scenario.
-
-## 16. Validation scenarios
-
-Before production, test at least:
-
-1. same command sent twice with same `SyncItemUUID`;
-2. same key reused with changed quantity/worker;
-3. response deliberately dropped after backend commit, then `getSyncStatus`;
-4. `NOT_FOUND` followed by retry of the same command/key;
-5. expired/revoked token on every command and status API;
-6. device mismatch;
-7. Work Context mismatch;
-8. operation REL -> TECO between two commands;
-9. CONFIRM followed by Fiori CORRECTION;
-10. corrected CONFIRM followed by REVERSE;
-11. balance invariant after each transaction;
-12. duplicate/data-integrity condition fails closed instead of choosing an arbitrary row.
+| Status | Ý nghĩa |
+| --- | --- |
+| SUCCESS | tìm đúng một POSTED receipt của actor và SyncItemUUID |
+| NOT_FOUND | chưa chứng minh commit; không phải business failure |
+| SYNC_RECEIPT_DUPLICATE | data-integrity issue; fail-closed |
+| token/device/permission error | request bị reject theo security boundary |
