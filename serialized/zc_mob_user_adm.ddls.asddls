@@ -1,5 +1,5 @@
 @AccessControl.authorizationCheck: #MANDATORY
-@EndUserText.label: 'Quản trị tài khoản giám sát'
+@EndUserText.label: 'Quản trị tài khoản'
 @Metadata.allowExtensions: true
 define root view entity ZC_MOB_User_Adm
   provider contract transactional_query
@@ -14,5 +14,8 @@ define root view entity ZC_MOB_User_Adm
       PasswordChangeRequired,
       LastLoginAt,
       CreatedAt,
+      LockedUntil,
+      LocalLastChangedAt,
+      LastChangedAt,
       _Roles : redirected to composition child ZC_MOB_UsrRol_Adm
 }

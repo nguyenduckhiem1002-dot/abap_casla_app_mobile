@@ -1,17 +1,36 @@
 projection;
 strict ( 2 );
+use draft;
 
-// Bề mặt quản trị, chỉ được truy cập qua ứng dụng IAM của ZUI_MOB_USER_ADM.
-// Tạo tài khoản và gán chức danh được thực hiện tại đây và cố ý không expose
-// qua ZC_MOB_User, là projection dành cho thiết bị mobile.
+// Bề mặt quản trị, chỉ được truy cập qua ứng dụng IAM
+// của ZUI_MOB_USER_ADM.
 define behavior for ZC_MOB_User_Adm alias MobileUser
+use etag
 {
+  use update;
+
   use action createUser;
-  use association _Roles { create; }
+  use action changePasswordAdmin;
+
+  use action Edit;
+  use action Activate;
+  use action Discard;
+  use action Resume;
+  use action Prepare;
+
+  use association _Roles
+  {
+    create;
+    with draft;
+  }
 }
 
 define behavior for ZC_MOB_UsrRol_Adm alias MobileUserRole
 {
   use delete;
-  use association _User;
+
+  use association _User
+  {
+    with draft;
+  }
 }

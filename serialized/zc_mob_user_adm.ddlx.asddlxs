@@ -1,5 +1,6 @@
 @Metadata.layer: #CORE
 
+@EndUserText.label: 'Tài khoản giám sát'
 @UI.headerInfo: {
   typeName: 'Tài khoản giám sát',
   typeNamePlural: 'Tài khoản giám sát',
@@ -8,48 +9,93 @@
 annotate entity ZC_MOB_User_Adm with
 {
   @UI.facet: [
-    { id: 'General', purpose: #STANDARD, type: #IDENTIFICATION_REFERENCE,
-      label: 'Thông tin tài khoản', position: 10 },
-    { id: 'Roles', purpose: #STANDARD, type: #LINEITEM_REFERENCE,
-      label: 'Chức danh', position: 20, targetElement: '_Roles' }
+    {
+      id: 'General',
+      purpose: #STANDARD,
+      type: #IDENTIFICATION_REFERENCE,
+      label: 'Thông tin tài khoản',
+      position: 10
+    },
+    {
+      id: 'Roles',
+      purpose: #STANDARD,
+      type: #LINEITEM_REFERENCE,
+      label: 'Chức danh',
+      position: 20,
+      targetElement: '_Roles'
+    }
   ]
 
+  @EndUserText.label: 'UUID người dùng'
   @UI.hidden: true
   UserUUID;
 
+  @EndUserText.label: 'Tên đăng nhập'
   @UI.selectionField: [{ position: 10 }]
   @UI.lineItem: [
     { position: 10 },
-    { position: 90, type: #FOR_ACTION, dataAction: 'createUser', label: 'Tạo tài khoản' }
+    {
+      position: 90,
+      type: #FOR_ACTION,
+      dataAction: 'createUser',
+      label: 'Tạo tài khoản'
+    },
+    {
+      position: 100,
+      type: #FOR_ACTION,
+      dataAction: 'changePasswordAdmin',
+      label: 'Change Password'
+    },
+    {
+    position: 80,
+    type: #FOR_ACTION,
+    dataAction: 'unlockUser',
+    label: 'Mở khóa tài khoản'
+  }
   ]
   @UI.identification: [{ position: 10 }]
+
+
   Username;
 
+  @EndUserText.label: 'Họ và tên'
   @UI.selectionField: [{ position: 20 }]
   @UI.lineItem: [{ position: 20 }]
   @UI.identification: [{ position: 20 }]
   FullName;
 
+  @EndUserText.label: 'Email'
   @UI.lineItem: [{ position: 30 }]
   @UI.identification: [{ position: 30 }]
   Email;
 
+  @EndUserText.label: 'Mã nhân viên'
   @UI.selectionField: [{ position: 30 }]
   @UI.lineItem: [{ position: 40 }]
   @UI.identification: [{ position: 40 }]
   WorkerID;
 
+  @EndUserText.label: 'Trạng thái'
   @UI.selectionField: [{ position: 40 }]
   @UI.lineItem: [{ position: 50 }]
   @UI.identification: [{ position: 50 }]
   Status;
 
+  @EndUserText.label: 'Lock Until'
+  @UI.selectionField: [{ position: 60 }]
+  @UI.lineItem: [{ position: 70 }]
+  @UI.identification: [{ position: 70 }]
+  LockedUntil;
+
+  @EndUserText.label: 'Yêu cầu đổi mật khẩu'
   @UI.lineItem: [{ position: 60 }]
   PasswordChangeRequired;
 
+  @EndUserText.label: 'Lần đăng nhập cuối'
   @UI.lineItem: [{ position: 70 }]
   LastLoginAt;
 
+  @EndUserText.label: 'Thời điểm tạo'
   @UI.lineItem: [{ position: 80 }]
   CreatedAt;
 }

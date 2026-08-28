@@ -17,21 +17,22 @@ etag master LocalLastChangedAt
   field ( mandatory : create, readonly : update ) WorkID;
   field ( readonly ) LastChangedAt, LocalLastChangedAt;
   validation validateWork on save
-    { create; update; field WorkID, WorkName, Plant, WorkCenter, IsActive; }
+  { create; update; field WorkID, WorkName, Plant, WorkCenter, IsActive; }
   draft action Edit;
   draft action Activate optimized;
   draft action Discard;
   draft action Resume;
   draft determine action Prepare { validation validateWork; }
-  mapping for ztb_mob_work {
-    WorkID = work_id;
-    WorkName = work_name;
-    Plant = plant;
-    WorkCenter = workcenter;
-    BoPhan = bo_phan;
-    Location = location;
-    IsActive = is_active;
-    LastChangedAt = last_changed_at;
-    LocalLastChangedAt = local_last_changed_at;
-  }
+  mapping for ztb_mob_work
+    {
+      WorkID             = work_id;
+      WorkName           = work_name;
+      Plant              = plant;
+      WorkCenter         = workcenter;
+      BoPhan             = bo_phan;
+      Location           = location;
+      IsActive           = is_active;
+      LastChangedAt      = last_changed_at;
+      LocalLastChangedAt = local_last_changed_at;
+    }
 }

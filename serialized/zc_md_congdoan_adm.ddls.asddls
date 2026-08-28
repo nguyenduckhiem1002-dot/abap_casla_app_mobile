@@ -1,4 +1,3 @@
-
 @AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: 'Quản trị master công đoạn'
 @Metadata.allowExtensions: true

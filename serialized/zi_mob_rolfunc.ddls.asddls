@@ -1,4 +1,3 @@
-
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'Phân quyền chức năng cho chức danh'
 define view entity ZI_MOB_RolFunc
@@ -8,9 +7,10 @@ define view entity ZI_MOB_RolFunc
   association [1..1] to ZI_MOB_Func as _Func
     on $projection.FuncID = _Func.FuncID
 {
-  key role_id as RoleID,
-      @ObjectModel.text.association: '_Func'
-  key func_id as FuncID,
+  key role_id        as RoleID,
+  key func_id        as FuncID,
+      _Func.FuncName as FuncName,
+      _Func.AppModule as AppModule,
       _Role,
       _Func
 }

@@ -6,13 +6,13 @@ define root view entity ZC_MOB_Work_Adm
   provider contract transactional_query
   as projection on ZI_MOB_Work
 {
-  key WorkID,
-      WorkName,
-      Plant,
-      WorkCenter,
-      BoPhan,
-      Location,
-      IsActive,
-      LastChangedAt,
-      LocalLastChangedAt
+key WorkID,
+WorkName,
+Plant,
+WorkCenter,
+BoPhan,
+Location,
+IsActive,
+LastChangedAt,
+LocalLastChangedAt
 }

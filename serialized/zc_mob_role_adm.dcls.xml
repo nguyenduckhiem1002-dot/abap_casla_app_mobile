@@ -1,2 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
-<abapGit version="v1.0.0" serializer="LCL_OBJECT_DCLS" serializer_version="v1.0.0"><asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0"><asx:values><DCLS><DCLNAME>ZC_MOB_ROLE_ADM</DCLNAME><DESCRIPTION>Đọc ZC_MOB_Role_Adm - bảo vệ bằng IAM</DESCRIPTION><ABAP_LANGUAGE_VERSION>5</ABAP_LANGUAGE_VERSION></DCLS></asx:values></asx:abap></abapGit>
+﻿<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_DCLS" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <DCLS>
+    <DCLNAME>ZC_MOB_ROLE_ADM</DCLNAME>
+    <DCL_TYPE>ROLE</DCL_TYPE>
+    <MASTERLANG>E</MASTERLANG>
+    <LANGUAGE>E</LANGUAGE>
+    <SHORT_TEXT>ZC_MOB_ROLE_ADM</SHORT_TEXT>
+    <ABAP_LANGUAGE_VERSION>5</ABAP_LANGUAGE_VERSION>
+   </DCLS>
+  </asx:values>
+ </asx:abap>
+</abapGit>

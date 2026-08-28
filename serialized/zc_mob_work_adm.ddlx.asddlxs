@@ -1,5 +1,6 @@
 @Metadata.layer: #CORE
 
+@EndUserText.label: 'Vị trí làm việc'
 @UI.headerInfo: {
   typeName: 'Vị trí làm việc',
   typeNamePlural: 'Vị trí làm việc',
@@ -8,38 +9,48 @@
 annotate entity ZC_MOB_Work_Adm with
 {
   @UI.facet: [{
-    id: 'General', purpose: #STANDARD, type: #IDENTIFICATION_REFERENCE,
-    label: 'Thông tin vị trí làm việc', position: 10
+    id: 'General',
+    purpose: #STANDARD,
+    type: #IDENTIFICATION_REFERENCE,
+    label: 'Thông tin vị trí làm việc',
+    position: 10
   }]
 
+  @EndUserText.label: 'Mã vị trí làm việc'
   @UI.selectionField: [{ position: 10 }]
   @UI.lineItem: [{ position: 10 }]
   @UI.identification: [{ position: 10 }]
   WorkID;
 
+  @EndUserText.label: 'Tên vị trí làm việc'
   @UI.selectionField: [{ position: 20 }]
   @UI.lineItem: [{ position: 20 }]
   @UI.identification: [{ position: 20 }]
   WorkName;
 
+  @EndUserText.label: 'Nhà máy'
   @UI.selectionField: [{ position: 30 }]
   @UI.lineItem: [{ position: 30 }]
   @UI.identification: [{ position: 30 }]
   Plant;
 
+  @EndUserText.label: 'Trung tâm làm việc'
   @UI.selectionField: [{ position: 40 }]
   @UI.lineItem: [{ position: 40 }]
   @UI.identification: [{ position: 40 }]
   WorkCenter;
 
+  @EndUserText.label: 'Bộ phận'
   @UI.lineItem: [{ position: 50 }]
   @UI.identification: [{ position: 50 }]
   BoPhan;
 
+  @EndUserText.label: 'Địa điểm'
   @UI.lineItem: [{ position: 60 }]
   @UI.identification: [{ position: 60 }]
   Location;
 
+  @EndUserText.label: 'Đang hoạt động'
   @UI.selectionField: [{ position: 50 }]
   @UI.lineItem: [{ position: 70 }]
   @UI.identification: [{ position: 70 }]

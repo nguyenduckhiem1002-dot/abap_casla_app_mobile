@@ -1,7 +1,7 @@
 CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
   PRIVATE SECTION.
     CONSTANTS c_iterations TYPE i VALUE 10000.
-    CONSTANTS c_min_password_length TYPE i VALUE 12.
+    CONSTANTS c_min_password_length TYPE i VALUE 6.
     CONSTANTS c_max_active_sessions TYPE i VALUE 5.
     CONSTANTS c_max_failed_logins TYPE i VALUE 5.
     CONSTANTS c_failure_window_minutes TYPE i VALUE 1.
@@ -19,14 +19,19 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING keys FOR ACTION MobileUser~refresh RESULT result.
     METHODS changepassword FOR MODIFY
       IMPORTING keys FOR ACTION MobileUser~changePassword.
+    METHODS changePasswordAdmin FOR MODIFY
+       keys FOR ACTION MobileUser~changePasswordAdmin.
+    METHODS unlockUser FOR MODIFY
+      IMPORTING keys   FOR ACTION MobileUser~unlockUser
+      RESULT    result.
     METHODS hash_password
       IMPORTING password TYPE string salt TYPE string iterations TYPE i
       RETURNING VALUE(hash) TYPE ztb_mob_cred-password_hash
       RAISING cx_abap_message_digest zcx_mob_config.
     METHODS hash_token
-      IMPORTING token TYPE string
+      IMPORTING token       TYPE string
       RETURNING VALUE(hash) TYPE ztb_mob_session-access_token_hash
-      RAISING cx_abap_message_digest zcx_mob_config.
+      RAISING   cx_abap_message_digest zcx_mob_config.
     METHODS report_error
       IMPORTING cid TYPE string text TYPE string
       CHANGING failed TYPE failed_response reported TYPE reported_response.
@@ -35,9 +40,9 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
       RETURNING VALUE(result) TYPE abap_bool.
     METHODS consume_dummy_password_hash
       IMPORTING password TYPE string
-      RAISING cx_abap_message_digest zcx_mob_config.
+      RAISING   cx_abap_message_digest zcx_mob_config.
     METHODS role_is_active
-      IMPORTING role_id TYPE ztb_mob_role-role_id
+      IMPORTING role_id       TYPE ztb_mob_role-role_id
       RETURNING VALUE(result) TYPE abap_bool.
 ENDCLASS.
 
@@ -58,6 +63,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     "ZC_MOB_User_Adm chỉ expose createUser và composition _Roles, còn
     "ZC_MOB_User chỉ expose các action xác thực; cả hai đều không expose update.
     result-%update = if_abap_behv=>auth-allowed.
+
+    result-%action-changePasswordAdmin  = if_abap_behv=>auth-allowed.
+    result-%action-unlockUser           = if_abap_behv=>auth-allowed.
   ENDMETHOD.
 
   METHOD hash_password.
@@ -89,9 +97,6 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(username_lower) = to_lower( condense( username ) ).
     result = xsdbool(
       strlen( password ) >= c_min_password_length
-      AND password <> password_lower
-      AND password <> password_upper
-      AND password CA '0123456789'
       AND ( username_lower IS INITIAL
          OR password_lower NS username_lower ) ).
   ENDMETHOD.
@@ -703,6 +708,325 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         reported = CORRESPONDING #( reported_revoke ).
       ENDIF.
     ENDIF.
+  ENDMETHOD.
+
+  METHOD changepasswordadmin.
+    IF keys IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    "Không cho đổi mật khẩu nhiều tài khoản trong cùng một request
+    IF lines( keys ) > 1.
+      LOOP AT keys ASSIGNING FIELD-SYMBOL(<multiple_key>).
+        APPEND VALUE #(
+          %tky = <multiple_key>-%tky
+        ) TO failed-mobileuser.
+
+        APPEND VALUE #(
+          %tky = <multiple_key>-%tky
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text     = 'Mỗi yêu cầu chỉ được đổi mật khẩu một tài khoản'
+          )
+        ) TO reported-mobileuser.
+      ENDLOOP.
+      RETURN.
+    ENDIF.
+
+    ASSIGN keys[ 1 ] TO FIELD-SYMBOL(<admin_key>).
+
+    DATA(new_password) =
+      CONV string( <admin_key>-%param-NewPassword ).
+
+    "Đọc tài khoản đang được chọn
+    READ ENTITIES OF zi_mob_user IN LOCAL MODE
+      ENTITY MobileUser
+      FIELDS ( UserUUID Username NormalizedUsername )
+      WITH VALUE #( ( %tky = <admin_key>-%tky ) )
+      RESULT DATA(users)
+      FAILED DATA(failed_user_read)
+      REPORTED DATA(reported_user_read).
+
+    IF failed_user_read IS NOT INITIAL OR users IS INITIAL.
+      failed = CORRESPONDING #( failed_user_read ).
+      reported = CORRESPONDING #( reported_user_read ).
+
+      IF users IS INITIAL.
+        APPEND VALUE #(
+          %tky = <admin_key>-%tky
+        ) TO failed-mobileuser.
+
+        APPEND VALUE #(
+          %tky = <admin_key>-%tky
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text     = 'Tài khoản không tồn tại'
+          )
+        ) TO reported-mobileuser.
+      ENDIF.
+
+      RETURN.
+    ENDIF.
+
+    DATA(user) = users[ 1 ].
+
+    "Kiểm tra chính sách mật khẩu
+    IF new_password IS INITIAL
+       OR password_is_acceptable(
+            password = new_password
+            username = CONV string( user-NormalizedUsername )
+          ) = abap_false.
+
+      APPEND VALUE #(
+        %tky = user-%tky
+      ) TO failed-mobileuser.
+
+      APPEND VALUE #(
+        %tky = user-%tky
+        %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-error
+          text     =
+            |Mật khẩu phải có ít nhất { c_min_password_length } ký tự và không chứa tên đăng nhập|
+        )
+      ) TO reported-mobileuser.
+
+      RETURN.
+    ENDIF.
+
+    "Tài khoản phải có credential
+    SELECT FROM ztb_mob_cred
+      FIELDS user_uuid
+      WHERE user_uuid = @user-UserUUID
+      INTO TABLE @DATA(credentials)
+      UP TO 1 ROWS.
+
+    IF credentials IS INITIAL.
+      APPEND VALUE #(
+        %tky = user-%tky
+      ) TO failed-mobileuser.
+
+      APPEND VALUE #(
+        %tky = user-%tky
+        %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-error
+          text     = 'Tài khoản chưa có thông tin xác thực'
+        )
+      ) TO reported-mobileuser.
+
+      RETURN.
+    ENDIF.
+
+    "Sinh salt mới và hash mật khẩu
+    TRY.
+        DATA(new_salt) =
+          cl_system_uuid=>create_uuid_c36_static( ).
+
+        DATA(new_hash) = hash_password(
+          password   = new_password
+          salt       = CONV string( new_salt )
+          iterations = c_iterations
+        ).
+
+      CATCH cx_uuid_error
+            cx_abap_message_digest
+            zcx_mob_config.
+
+        APPEND VALUE #(
+          %tky = user-%tky
+        ) TO failed-mobileuser.
+
+        APPEND VALUE #(
+          %tky = user-%tky
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text     = 'Không thể xử lý mật khẩu mới'
+          )
+        ) TO reported-mobileuser.
+
+        RETURN.
+    ENDTRY.
+
+    DATA(now) = utclong_current( ).
+
+    "Cập nhật credential và bắt buộc user đổi mật khẩu sau khi đăng nhập
+    MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
+      ENTITY MobileCredential
+        UPDATE FIELDS (
+          PasswordHash
+          PasswordSalt
+          HashAlgorithm
+          HashIterations
+          PasswordChangedAt
+          CredentialStatus
+        )
+        WITH VALUE #(
+          (
+            UserUUID          = user-UserUUID
+            PasswordHash      = new_hash
+            PasswordSalt      = new_salt
+            HashAlgorithm     = 'SHA256-ITER'
+            HashIterations    = c_iterations
+            PasswordChangedAt = now
+            CredentialStatus  = 'A'
+          )
+        )
+
+      ENTITY MobileUser
+        UPDATE FIELDS ( PasswordChangeRequired )
+        WITH VALUE #(
+          (
+            %tky                   = user-%tky
+            PasswordChangeRequired = abap_true
+          )
+        )
+
+      FAILED DATA(failed_update)
+      REPORTED DATA(reported_update).
+
+    failed = CORRESPONDING #( failed_update ).
+    reported = CORRESPONDING #( reported_update ).
+
+    IF failed_update IS NOT INITIAL.
+      RETURN.
+    ENDIF.
+
+    "Thu hồi tất cả session phát hành bằng mật khẩu cũ
+    SELECT FROM ztb_mob_session
+      FIELDS session_id
+      WHERE user_uuid = @user-UserUUID
+        AND status = 'A'
+      INTO TABLE @DATA(active_sessions).
+
+    IF active_sessions IS NOT INITIAL.
+      MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
+        ENTITY MobileSession
+          UPDATE FIELDS (
+            Status
+            LogoutAt
+            RevokedReason
+          )
+          WITH VALUE #(
+            FOR session IN active_sessions
+            (
+              SessionID     = session-session_id
+              Status        = 'R'
+              LogoutAt      = now
+              RevokedReason = 'ADMIN_PWD_RESET'
+            )
+          )
+        FAILED DATA(failed_revoke)
+        REPORTED DATA(reported_revoke).
+
+      IF failed_revoke IS NOT INITIAL.
+        failed = CORRESPONDING #( failed_revoke ).
+        reported = CORRESPONDING #( reported_revoke ).
+        RETURN.
+      ENDIF.
+    ENDIF.
+
+    "Đọc lại toàn bộ entity để trả result [1] $self
+    READ ENTITIES OF zi_mob_user IN LOCAL MODE
+      ENTITY MobileUser
+      ALL FIELDS
+      WITH VALUE #( ( %tky = user-%tky ) )
+      RESULT DATA(updated_users)
+      FAILED DATA(failed_result)
+      REPORTED DATA(reported_result).
+
+    IF failed_result IS NOT INITIAL.
+      failed = CORRESPONDING #( failed_result ).
+      reported = CORRESPONDING #( reported_result ).
+      RETURN.
+    ENDIF.
+
+
+    APPEND VALUE #(
+      %tky = user-%tky
+      %msg = new_message_with_text(
+        severity = if_abap_behv_message=>severity-success
+        text     = 'Đã đặt lại mật khẩu thành công'
+      )
+    ) TO reported-mobileuser.
+  ENDMETHOD.
+
+  METHOD unlockUser.
+    IF keys IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    READ ENTITIES OF zi_mob_user IN LOCAL MODE
+      ENTITY MobileUser
+        FIELDS ( Status
+                 FailedLoginCount
+                 LastFailedLoginAt
+                 LockedUntil )
+        WITH CORRESPONDING #( keys )
+      RESULT DATA(users)
+      FAILED DATA(failed_read)
+      REPORTED DATA(reported_read).
+
+    failed   = CORRESPONDING #( failed_read ).
+    reported = CORRESPONDING #( reported_read ).
+
+    IF users IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
+      ENTITY MobileUser
+        UPDATE FIELDS (
+          FailedLoginCount
+          LastFailedLoginAt
+          LockedUntil )
+        WITH VALUE #(
+          FOR user IN users
+          ( %tky               = user-%tky
+            FailedLoginCount   = 0
+            LastFailedLoginAt  = VALUE #( )
+            LockedUntil        = VALUE #( ) ) )
+      FAILED DATA(failed_update)
+      REPORTED DATA(reported_update).
+
+    APPEND LINES OF failed_update-mobileuser
+      TO failed-mobileuser.
+
+    APPEND LINES OF reported_update-mobileuser
+      TO reported-mobileuser.
+
+    IF failed_update-mobileuser IS NOT INITIAL.
+      RETURN.
+    ENDIF.
+
+    "Đọc lại dữ liệu sau khi mở khóa để trả đầy đủ $self
+    READ ENTITIES OF zi_mob_user IN LOCAL MODE
+      ENTITY MobileUser
+        ALL FIELDS
+        WITH VALUE #(
+          FOR user IN users
+          ( %tky = user-%tky ) )
+      RESULT DATA(unlocked_users)
+      FAILED DATA(failed_result)
+      REPORTED DATA(reported_result).
+
+    APPEND LINES OF failed_result-mobileuser
+      TO failed-mobileuser.
+
+    APPEND LINES OF reported_result-mobileuser
+      TO reported-mobileuser.
+
+    result = VALUE #(
+      FOR unlocked_user IN unlocked_users
+      ( %tky   = unlocked_user-%tky
+        %param = unlocked_user ) ).
+
+    LOOP AT unlocked_users ASSIGNING FIELD-SYMBOL(<unlocked_user>).
+      APPEND VALUE #(
+        %tky = <unlocked_user>-%tky
+        %msg = new_message_with_text(
+          severity = if_abap_behv_message=>severity-success
+          text     = 'Đã mở khóa tài khoản' ) )
+        TO reported-mobileuser.
+    ENDLOOP.
   ENDMETHOD.
 
 ENDCLASS.

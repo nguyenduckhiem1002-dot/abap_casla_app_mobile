@@ -16,7 +16,7 @@ etag master LocalLastChangedAt
   delete;
   field ( mandatory : create, readonly : update ) RoleID;
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy, LastChangedAt,
-                     LocalLastChangedAt;
+  LocalLastChangedAt;
   association _Functions { create; with draft; }
   association _WorkAssignments { create; with draft; }
   validation validateRole on save { create; update; field RoleID, RoleName, Status; }
@@ -24,21 +24,23 @@ etag master LocalLastChangedAt
   draft action Activate optimized;
   draft action Discard;
   draft action Resume;
-  draft determine action Prepare {
+  draft determine action Prepare
+  {
     validation validateRole;
     validation MobileRoleFunc~validateFunctionAssignment;
     validation MobileRoleWork~validateWorkAssignment;
   }
-  mapping for ztb_mob_role {
-    RoleID = role_id;
-    RoleName = role_name;
-    Status = status;
-    CreatedBy = created_by;
-    CreatedAt = created_at;
-    LastChangedBy = last_changed_by;
-    LastChangedAt = last_changed_at;
-    LocalLastChangedAt = local_last_changed_at;
-  }
+  mapping for ztb_mob_role
+    {
+      RoleID             = role_id;
+      RoleName           = role_name;
+      Status             = status;
+      CreatedBy          = created_by;
+      CreatedAt          = created_at;
+      LastChangedBy      = last_changed_by;
+      LastChangedAt      = last_changed_at;
+      LocalLastChangedAt = local_last_changed_at;
+    }
 }
 
 define behavior for ZI_MOB_RolFunc alias MobileRoleFunc
@@ -53,10 +55,11 @@ etag dependent by _Role
   field ( mandatory : create, readonly : update ) FuncID;
   association _Role { with draft; }
   validation validateFunctionAssignment on save { create; field FuncID; }
-  mapping for ztb_mob_rol_fnc {
-    RoleID = role_id;
-    FuncID = func_id;
-  }
+  mapping for ztb_mob_rol_fnc
+    {
+      RoleID  = role_id;
+      FuncID  = func_id;
+    }
 }
 
 define behavior for ZI_MOB_RolWork alias MobileRoleWork
@@ -71,8 +74,9 @@ etag dependent by _Role
   field ( mandatory : create, readonly : update ) WorkID;
   association _Role { with draft; }
   validation validateWorkAssignment on save { create; field WorkID; }
-  mapping for ztb_mob_rol_wrk {
-    RoleID = role_id;
-    WorkID = work_id;
-  }
+  mapping for ztb_mob_rol_wrk
+    {
+      RoleID  = role_id;
+      WorkID  = work_id;
+    }
 }

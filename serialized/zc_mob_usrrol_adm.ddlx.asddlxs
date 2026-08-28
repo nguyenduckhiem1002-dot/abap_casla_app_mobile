@@ -1,5 +1,6 @@
 @Metadata.layer: #CORE
 
+@EndUserText.label: 'Chức danh người dùng'
 @UI.headerInfo: {
   typeName: 'Chức danh',
   typeNamePlural: 'Chức danh',
@@ -7,15 +8,19 @@
 }
 annotate entity ZC_MOB_UsrRol_Adm with
 {
+  @EndUserText.label: 'UUID người dùng'
   @UI.hidden: true
   UserUUID;
 
+  @EndUserText.label: 'Mã chức danh'
   @UI.lineItem: [{ position: 10 }]
   RoleID;
 
+  @EndUserText.label: 'Tên chức danh'
   @UI.lineItem: [{ position: 20 }]
   RoleName;
 
+  @EndUserText.label: 'Trạng thái chức danh'
   @UI.lineItem: [{ position: 30 }]
   RoleStatus;
 }
