@@ -28,7 +28,7 @@ Người dùng Fiori/IAM có các bề mặt quản trị tách biệt:
 
 | Hạng mục | Trạng thái trong repository |
 | --- | --- |
-| ABAP Cloud syntax/quality gate | Có workflow GitHub Actions; source gate gần nhất ghi nhận 0 issue / 241 file |
+| ABAP Cloud syntax/quality gate | Có workflow GitHub Actions; CI phải xanh qua `bash scripts/check_ci.sh` (custom RAP checks + abaplint 2.120.35) |
 | Mobile authentication/session | Đã có source RAP và behavior implementation |
 | RBAC + Work Context | Đã có source, validation và query server-side |
 | PP commands + immutable ledger | Đã có initialAssign, transfer, recall, confirm, reverse |
@@ -187,7 +187,7 @@ ZCL_MOB_TOKEN_VALIDATOR là nguồn logic dùng chung cho hash token, hash passw
 - mặc định 10.000 vòng (10.000..100.000 là miền được chấp nhận khi đọc credential);
 - so sánh digest constant-time.
 
-> **Sai lệch cần xử lý:** predicate thực tế hiện chỉ enforce mật khẩu dài tối thiểu 6 ký tự và không chứa username. Error text trong createUser vẫn nói “12 ký tự, hoa, thường và số”. Khi muốn áp chính sách mạnh hơn, phải sửa predicate, message và migration/test cùng lúc; không được coi message hiện tại là enforcement.
+> **Policy hiện hành:** mật khẩu phải dài tối thiểu 6 ký tự và không chứa username. Predicate và message của createUser/changePasswordAdmin đã được đồng bộ theo policy này. Nếu nâng policy, phải thay predicate, message, migration và ABAP Unit/test integration cùng một lần.
 
 ### 5.4. Token guard
 
@@ -463,7 +463,7 @@ Workflow .github/workflows/abaplint.yml hiện bật kiểm tra comment artifact
     @abaplint/cli 2.120.35
     ABAP language version: Cloud
 
-Kết quả source gate được ghi nhận trong repository: 0 issue(s) found, 241 file(s) analyzed. Đây là kiểm tra tĩnh; không phải bằng chứng rằng tenant đích đã activate sạch.
+Chạy local bằng `bash scripts/check_ci.sh`; CI phải xanh. Không ghi cố định số issue/file vào tài liệu vì snapshot thay đổi theo source. abaplint là kiểm tra tĩnh; không phải bằng chứng rằng tenant đích đã activate sạch.
 
 ## 14. Tài liệu liên quan
 
