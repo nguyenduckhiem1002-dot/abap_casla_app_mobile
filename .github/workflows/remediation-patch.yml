@@ -1,0 +1,186 @@
+name: One-shot remediation patch
+
+on:
+  push:
+    branches:
+      - chatgpt/ci-quality-remediation-20260828
+    paths:
+      - .github/workflows/remediation-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout remediation branch
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt/ci-quality-remediation-20260828
+
+      - name: Patch RAP authorization handlers
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          replacements = {
+              Path('serialized/zbp_i_mob_user.clas.locals_imp.abap'): (
+          '''  METHOD get_global_authorizations.
+            "Service quản trị Fiori được bảo vệ bằng IAM app/business catalog.
+            result-%action-createUser = if_abap_behv=>auth-allowed.
+            result-%action-login = if_abap_behv=>auth-allowed.
+            result-%action-refresh = if_abap_behv=>auth-allowed.
+            result-%action-logout = if_abap_behv=>auth-allowed.
+            result-%action-changePassword = if_abap_behv=>auth-allowed.
+            result-%create = if_abap_behv=>auth-unauthorized.
+            result-%delete = if_abap_behv=>auth-unauthorized.
+            "MobileUserRole là composition child khai báo authorization dependent by _User,
+            "vì vậy RAP dùng quyền %update của master cho create-by-association và delete.
+            "Nếu %update bị unauthorized thì thao tác gán chức danh từ app quản trị sẽ
+            "bị chặn ở runtime. Bề mặt ghi bên ngoài vẫn được đóng ở projection layer:
+            "ZC_MOB_User_Adm chỉ expose createUser và composition _Roles, còn
+            "ZC_MOB_User chỉ expose các action xác thực; cả hai đều không expose update.
+            result-%update = if_abap_behv=>auth-allowed.
+
+            result-%action-changePasswordAdmin  = if_abap_behv=>auth-allowed.
+            result-%action-unlockUser           = if_abap_behv=>auth-allowed.
+          ENDMETHOD.''',
+          '''  METHOD get_global_authorizations.
+            "Service quản trị Fiori được bảo vệ bằng IAM app/business catalog.
+            IF requested_authorizations-%action-createUser = if_abap_behv=>mk-on.
+              result-%action-createUser = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-login = if_abap_behv=>mk-on.
+              result-%action-login = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-refresh = if_abap_behv=>mk-on.
+              result-%action-refresh = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-logout = if_abap_behv=>mk-on.
+              result-%action-logout = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-changePassword = if_abap_behv=>mk-on.
+              result-%action-changePassword = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%create = if_abap_behv=>mk-on.
+              result-%create = if_abap_behv=>auth-unauthorized.
+            ENDIF.
+            IF requested_authorizations-%delete = if_abap_behv=>mk-on.
+              result-%delete = if_abap_behv=>auth-unauthorized.
+            ENDIF.
+            "MobileUserRole là composition child khai báo authorization dependent by _User,
+            "vì vậy RAP dùng quyền %update của master cho create-by-association và delete.
+            "Nếu %update bị unauthorized thì thao tác gán chức danh từ app quản trị sẽ
+            "bị chặn ở runtime. Bề mặt ghi bên ngoài vẫn được đóng ở projection layer:
+            "ZC_MOB_User_Adm chỉ expose createUser và composition _Roles, còn
+            "ZC_MOB_User chỉ expose các action xác thực; cả hai đều không expose update.
+            IF requested_authorizations-%update = if_abap_behv=>mk-on.
+              result-%update = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-changePasswordAdmin = if_abap_behv=>mk-on.
+              result-%action-changePasswordAdmin = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-unlockUser = if_abap_behv=>mk-on.
+              result-%action-unlockUser = if_abap_behv=>auth-allowed.
+            ENDIF.
+          ENDMETHOD.'''),
+              Path('serialized/zbp_r_pp_opalloc.clas.locals_imp.abap'): (
+          '''  METHOD get_global_authorizations.
+            "API mobile không expose raw CRUD. Các domain action tự xác thực CASLA token
+            "khi request xuất phát từ mobile; projection mobile chỉ expose các static
+            "facade action có kiểm soát.
+            result-%create = if_abap_behv=>auth-unauthorized.
+            result-%update = if_abap_behv=>auth-unauthorized.
+            result-%action-initialAssign = if_abap_behv=>auth-allowed.
+            result-%action-transfer = if_abap_behv=>auth-allowed.
+            result-%action-recall = if_abap_behv=>auth-allowed.
+            result-%action-confirm = if_abap_behv=>auth-allowed.
+            result-%action-reverse = if_abap_behv=>auth-allowed.
+            result-%action-correctConfirm = if_abap_behv=>auth-allowed.
+            result-%action-submitInitialAssign = if_abap_behv=>auth-allowed.
+            result-%action-submitTransfer = if_abap_behv=>auth-allowed.
+            result-%action-submitRecall = if_abap_behv=>auth-allowed.
+            result-%action-submitConfirm = if_abap_behv=>auth-allowed.
+            result-%action-submitReverse = if_abap_behv=>auth-allowed.
+            result-%action-getSyncStatus = if_abap_behv=>auth-allowed.
+            result-%action-getWorkHistory = if_abap_behv=>auth-allowed.
+          ENDMETHOD.''',
+          '''  METHOD get_global_authorizations.
+            "API mobile không expose raw CRUD. Các domain action tự xác thực CASLA token
+            "khi request xuất phát từ mobile; projection mobile chỉ expose các static
+            "facade action có kiểm soát.
+            IF requested_authorizations-%create = if_abap_behv=>mk-on.
+              result-%create = if_abap_behv=>auth-unauthorized.
+            ENDIF.
+            IF requested_authorizations-%update = if_abap_behv=>mk-on.
+              result-%update = if_abap_behv=>auth-unauthorized.
+            ENDIF.
+            IF requested_authorizations-%action-initialAssign = if_abap_behv=>mk-on.
+              result-%action-initialAssign = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-transfer = if_abap_behv=>mk-on.
+              result-%action-transfer = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-recall = if_abap_behv=>mk-on.
+              result-%action-recall = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-confirm = if_abap_behv=>mk-on.
+              result-%action-confirm = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-reverse = if_abap_behv=>mk-on.
+              result-%action-reverse = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-correctConfirm = if_abap_behv=>mk-on.
+              result-%action-correctConfirm = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-submitInitialAssign = if_abap_behv=>mk-on.
+              result-%action-submitInitialAssign = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-submitTransfer = if_abap_behv=>mk-on.
+              result-%action-submitTransfer = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-submitRecall = if_abap_behv=>mk-on.
+              result-%action-submitRecall = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-submitConfirm = if_abap_behv=>mk-on.
+              result-%action-submitConfirm = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-submitReverse = if_abap_behv=>mk-on.
+              result-%action-submitReverse = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-getSyncStatus = if_abap_behv=>mk-on.
+              result-%action-getSyncStatus = if_abap_behv=>auth-allowed.
+            ENDIF.
+            IF requested_authorizations-%action-getWorkHistory = if_abap_behv=>mk-on.
+              result-%action-getWorkHistory = if_abap_behv=>auth-allowed.
+            ENDIF.
+          ENDMETHOD.''')
+          }
+
+          for path, (old, new) in replacements.items():
+              text = path.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one authorization block in {path}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          config_path = Path('abaplint.json')
+          config = json.loads(config_path.read_text(encoding='utf-8'))
+          config['rules']['unused_variables'].pop('skipNames', None)
+          config_path.write_text(
+              json.dumps(config, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8')
+          PY
+
+      - name: Commit source patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add serialized/zbp_i_mob_user.clas.locals_imp.abap \
+                  serialized/zbp_r_pp_opalloc.clas.locals_imp.abap \
+                  abaplint.json
+          git commit -m "Use requested RAP authorization masks"
+          git push origin HEAD:chatgpt/ci-quality-remediation-20260828
