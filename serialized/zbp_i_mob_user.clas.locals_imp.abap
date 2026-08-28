@@ -44,6 +44,13 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS role_is_active
       IMPORTING role_id       TYPE ztb_mob_role-role_id
       RETURNING VALUE(result) TYPE abap_bool.
+    METHODS revoke_login_sessions
+      IMPORTING user_uuid TYPE ztb_mob_user-user_uuid
+                device_id TYPE ztb_mob_session-device_id
+                now       TYPE utclong
+      CHANGING success  TYPE abap_bool
+               failed   TYPE failed_response
+               reported TYPE reported_response.
 ENDCLASS.
 
 CLASS lhc_mobileuser IMPLEMENTATION.
@@ -115,6 +122,41 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       INTO TABLE @DATA(active_roles)
       UP TO 1 ROWS.
     result = xsdbool( active_roles IS NOT INITIAL ).
+  ENDMETHOD.
+
+  METHOD revoke_login_sessions.
+    success = abap_true.
+    SELECT FROM ztb_mob_session
+      FIELDS session_id, device_id
+      WHERE user_uuid = @user_uuid
+        AND status = 'A'
+      ORDER BY login_at DESCENDING
+      INTO TABLE @DATA(login_sessions).
+    DATA sessions_to_revoke TYPE SORTED TABLE OF sysuuid_x16
+                            WITH UNIQUE KEY table_line.
+    LOOP AT login_sessions ASSIGNING FIELD-SYMBOL(<login_session>).
+      IF <login_session>-device_id = device_id
+         OR sy-tabix >= c_max_active_sessions.
+        INSERT <login_session>-session_id INTO TABLE sessions_to_revoke.
+      ENDIF.
+    ENDLOOP.
+    IF sessions_to_revoke IS NOT INITIAL.
+      MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
+        ENTITY MobileSession UPDATE FIELDS
+          ( Status LogoutAt RevokedReason )
+        WITH VALUE #( FOR revoked_session IN sessions_to_revoke
+          ( SessionID = revoked_session
+            Status = 'R'
+            LogoutAt = now
+            RevokedReason = 'NEW_LOGIN' ) )
+        FAILED DATA(failed_session_revoke)
+        REPORTED DATA(reported_session_revoke).
+      IF failed_session_revoke IS NOT INITIAL.
+        failed = CORRESPONDING #( failed_session_revoke ).
+        reported = CORRESPONDING #( reported_session_revoke ).
+        success = abap_false.
+      ENDIF.
+    ENDIF.
   ENDMETHOD.
 
   METHOD createuser.
@@ -345,36 +387,16 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     "Mỗi device chỉ giữ một active session và tổng session active của account có
     "giới hạn; nếu không, login lặp lại sẽ làm session table tăng vô hạn và để
     "lại quá nhiều bearer token còn hiệu lực.
-    SELECT FROM ztb_mob_session
-      FIELDS session_id, device_id
-      WHERE user_uuid = @user-user_uuid
-        AND status = 'A'
-      ORDER BY login_at DESCENDING
-      INTO TABLE @DATA(login_sessions).
-    DATA sessions_to_revoke TYPE SORTED TABLE OF sysuuid_x16
-                            WITH UNIQUE KEY table_line.
-    LOOP AT login_sessions ASSIGNING FIELD-SYMBOL(<login_session>).
-      IF <login_session>-device_id = input-DeviceID
-         OR sy-tabix >= c_max_active_sessions.
-        INSERT <login_session>-session_id INTO TABLE sessions_to_revoke.
-      ENDIF.
-    ENDLOOP.
-    IF sessions_to_revoke IS NOT INITIAL.
-      MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
-        ENTITY MobileSession UPDATE FIELDS
-          ( Status LogoutAt RevokedReason )
-        WITH VALUE #( FOR revoked_session IN sessions_to_revoke
-          ( SessionID = revoked_session
-            Status = 'R'
-            LogoutAt = now
-            RevokedReason = 'NEW_LOGIN' ) )
-        FAILED DATA(failed_session_revoke)
-        REPORTED DATA(reported_session_revoke).
-      IF failed_session_revoke IS NOT INITIAL.
-        failed = CORRESPONDING #( failed_session_revoke ).
-        reported = CORRESPONDING #( reported_session_revoke ).
-        RETURN.
-      ENDIF.
+    DATA(session_revoke_ok) = abap_true.
+    revoke_login_sessions(
+      EXPORTING user_uuid = user-user_uuid
+                device_id = input-DeviceID
+                now = now
+      CHANGING success = session_revoke_ok
+               failed = failed
+               reported = reported ).
+    IF session_revoke_ok = abap_false.
+      RETURN.
     ENDIF.
     TRY.
         DATA(access_token) = cl_system_uuid=>create_uuid_c36_static( )
