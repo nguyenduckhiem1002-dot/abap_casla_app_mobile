@@ -9,10 +9,16 @@ ENDCLASS.
 CLASS lhc_mobilework IMPLEMENTATION.
   METHOD get_global_authorizations.
     "Được bảo vệ bằng IAM app/business catalog của service quản trị tập trung.
-    result-%create = if_abap_behv=>auth-allowed.
-    result-%update = if_abap_behv=>auth-allowed.
+    IF requested_authorizations-%create = if_abap_behv=>mk-on.
+      result-%create = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%update = if_abap_behv=>mk-on.
+      result-%update = if_abap_behv=>auth-allowed.
+    ENDIF.
     "Work ID là hợp đồng phạm vi phân quyền; hãy vô hiệu hóa thay vì hard-delete.
-    result-%delete = if_abap_behv=>auth-unauthorized.
+    IF requested_authorizations-%delete = if_abap_behv=>mk-on.
+      result-%delete = if_abap_behv=>auth-unauthorized.
+    ENDIF.
   ENDMETHOD.
 
   METHOD validateWork.

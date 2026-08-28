@@ -20,7 +20,7 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS changepassword FOR MODIFY
       IMPORTING keys FOR ACTION MobileUser~changePassword.
     METHODS changePasswordAdmin FOR MODIFY
-       keys FOR ACTION MobileUser~changePasswordAdmin.
+      IMPORTING keys FOR ACTION MobileUser~changePasswordAdmin.
     METHODS unlockUser FOR MODIFY
       IMPORTING keys   FOR ACTION MobileUser~unlockUser
       RESULT    result.
@@ -44,29 +44,55 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS role_is_active
       IMPORTING role_id       TYPE ztb_mob_role-role_id
       RETURNING VALUE(result) TYPE abap_bool.
+    METHODS revoke_login_sessions
+      IMPORTING user_uuid TYPE ztb_mob_user-user_uuid
+                device_id TYPE ztb_mob_session-device_id
+                now       TYPE utclong
+      CHANGING success  TYPE abap_bool
+               failed   TYPE failed_response
+               reported TYPE reported_response.
 ENDCLASS.
 
 CLASS lhc_mobileuser IMPLEMENTATION.
   METHOD get_global_authorizations.
-    "Service quản trị Fiori được bảo vệ bằng IAM app/business catalog.
+  "Service quản trị Fiori được bảo vệ bằng IAM app/business catalog.
+  IF requested_authorizations-%action-createUser = if_abap_behv=>mk-on.
     result-%action-createUser = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-login = if_abap_behv=>mk-on.
     result-%action-login = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-refresh = if_abap_behv=>mk-on.
     result-%action-refresh = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-logout = if_abap_behv=>mk-on.
     result-%action-logout = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-changePassword = if_abap_behv=>mk-on.
     result-%action-changePassword = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%create = if_abap_behv=>mk-on.
     result-%create = if_abap_behv=>auth-unauthorized.
+  ENDIF.
+  IF requested_authorizations-%delete = if_abap_behv=>mk-on.
     result-%delete = if_abap_behv=>auth-unauthorized.
-    "MobileUserRole là composition child khai báo authorization dependent by _User,
-    "vì vậy RAP dùng quyền %update của master cho create-by-association và delete.
-    "Nếu %update bị unauthorized thì thao tác gán chức danh từ app quản trị sẽ
-    "bị chặn ở runtime. Bề mặt ghi bên ngoài vẫn được đóng ở projection layer:
-    "ZC_MOB_User_Adm chỉ expose createUser và composition _Roles, còn
-    "ZC_MOB_User chỉ expose các action xác thực; cả hai đều không expose update.
+  ENDIF.
+  "MobileUserRole là composition child khai báo authorization dependent by _User,
+  "vì vậy RAP dùng quyền %update của master cho create-by-association và delete.
+  "Nếu %update bị unauthorized thì thao tác gán chức danh từ app quản trị sẽ
+  "bị chặn ở runtime. Bề mặt ghi bên ngoài vẫn được đóng ở projection layer:
+  "ZC_MOB_User_Adm chỉ expose createUser và composition _Roles, còn
+  "ZC_MOB_User chỉ expose các action xác thực; cả hai đều không expose update.
+  IF requested_authorizations-%update = if_abap_behv=>mk-on.
     result-%update = if_abap_behv=>auth-allowed.
-
-    result-%action-changePasswordAdmin  = if_abap_behv=>auth-allowed.
-    result-%action-unlockUser           = if_abap_behv=>auth-allowed.
-  ENDMETHOD.
+  ENDIF.
+  IF requested_authorizations-%action-changePasswordAdmin = if_abap_behv=>mk-on.
+    result-%action-changePasswordAdmin = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-unlockUser = if_abap_behv=>mk-on.
+    result-%action-unlockUser = if_abap_behv=>auth-allowed.
+  ENDIF.
+ENDMETHOD.
 
   METHOD hash_password.
     "Ủy quyền cho implementation KDF dùng chung để việc hash mật khẩu chỉ có một
@@ -93,7 +119,6 @@ CLASS lhc_mobileuser IMPLEMENTATION.
 
   METHOD password_is_acceptable.
     DATA(password_lower) = to_lower( password ).
-    DATA(password_upper) = to_upper( password ).
     DATA(username_lower) = to_lower( condense( username ) ).
     result = xsdbool(
       strlen( password ) >= c_min_password_length
@@ -116,6 +141,41 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       INTO TABLE @DATA(active_roles)
       UP TO 1 ROWS.
     result = xsdbool( active_roles IS NOT INITIAL ).
+  ENDMETHOD.
+
+  METHOD revoke_login_sessions.
+    success = abap_true.
+    SELECT FROM ztb_mob_session
+      FIELDS session_id, device_id
+      WHERE user_uuid = @user_uuid
+        AND status = 'A'
+      ORDER BY login_at DESCENDING
+      INTO TABLE @DATA(login_sessions).
+    DATA sessions_to_revoke TYPE SORTED TABLE OF sysuuid_x16
+                            WITH UNIQUE KEY table_line.
+    LOOP AT login_sessions ASSIGNING FIELD-SYMBOL(<login_session>).
+      IF <login_session>-device_id = device_id
+         OR sy-tabix >= c_max_active_sessions.
+        INSERT <login_session>-session_id INTO TABLE sessions_to_revoke.
+      ENDIF.
+    ENDLOOP.
+    IF sessions_to_revoke IS NOT INITIAL.
+      MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
+        ENTITY MobileSession UPDATE FIELDS
+          ( Status LogoutAt RevokedReason )
+        WITH VALUE #( FOR revoked_session IN sessions_to_revoke
+          ( SessionID = revoked_session
+            Status = 'R'
+            LogoutAt = now
+            RevokedReason = 'NEW_LOGIN' ) )
+        FAILED DATA(failed_session_revoke)
+        REPORTED DATA(reported_session_revoke).
+      IF failed_session_revoke IS NOT INITIAL.
+        failed = CORRESPONDING #( failed_session_revoke ).
+        reported = CORRESPONDING #( reported_session_revoke ).
+        success = abap_false.
+      ENDIF.
+    ENDIF.
   ENDMETHOD.
 
   METHOD createuser.
@@ -143,9 +203,11 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     IF password_is_acceptable(
          password = CONV string( input-Password )
          username = normalized ) = abap_false.
-      report_error( EXPORTING cid = cid
-                              text = 'Mật khẩu phải có ít nhất 12 ký tự, gồm chữ hoa, chữ thường và số'
-                    CHANGING failed = failed reported = reported ).
+      report_error(
+        EXPORTING cid = cid
+                  text = |Mật khẩu phải có ít nhất { c_min_password_length } ký tự|
+                      && ' và không chứa tên đăng nhập'
+        CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
     SELECT FROM ztb_mob_user FIELDS user_uuid
@@ -344,36 +406,16 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     "Mỗi device chỉ giữ một active session và tổng session active của account có
     "giới hạn; nếu không, login lặp lại sẽ làm session table tăng vô hạn và để
     "lại quá nhiều bearer token còn hiệu lực.
-    SELECT FROM ztb_mob_session
-      FIELDS session_id, device_id
-      WHERE user_uuid = @user-user_uuid
-        AND status = 'A'
-      ORDER BY login_at DESCENDING
-      INTO TABLE @DATA(login_sessions).
-    DATA sessions_to_revoke TYPE SORTED TABLE OF sysuuid_x16
-                            WITH UNIQUE KEY table_line.
-    LOOP AT login_sessions ASSIGNING FIELD-SYMBOL(<login_session>).
-      IF <login_session>-device_id = input-DeviceID
-         OR sy-tabix >= c_max_active_sessions.
-        INSERT <login_session>-session_id INTO TABLE sessions_to_revoke.
-      ENDIF.
-    ENDLOOP.
-    IF sessions_to_revoke IS NOT INITIAL.
-      MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
-        ENTITY MobileSession UPDATE FIELDS
-          ( Status LogoutAt RevokedReason )
-        WITH VALUE #( FOR revoked_session IN sessions_to_revoke
-          ( SessionID = revoked_session
-            Status = 'R'
-            LogoutAt = now
-            RevokedReason = 'NEW_LOGIN' ) )
-        FAILED DATA(failed_session_revoke)
-        REPORTED DATA(reported_session_revoke).
-      IF failed_session_revoke IS NOT INITIAL.
-        failed = CORRESPONDING #( failed_session_revoke ).
-        reported = CORRESPONDING #( reported_session_revoke ).
-        RETURN.
-      ENDIF.
+    DATA(session_revoke_ok) = abap_true.
+    revoke_login_sessions(
+      EXPORTING user_uuid = user-user_uuid
+                device_id = input-DeviceID
+                now = now
+      CHANGING success = session_revoke_ok
+               failed = failed
+               reported = reported ).
+    IF session_revoke_ok = abap_false.
+      RETURN.
     ENDIF.
     TRY.
         DATA(access_token) = cl_system_uuid=>create_uuid_c36_static( )
@@ -640,9 +682,11 @@ CLASS lhc_mobileuser IMPLEMENTATION.
        OR password_is_acceptable(
             password = CONV string( input-NewPassword )
             username = CONV string( credential-normalized_username ) ) = abap_false.
-      report_error( EXPORTING cid = cid
-                              text = 'Mật khẩu mới phải khác mật khẩu cũ; tối thiểu 12 ký tự, có hoa, thường và số'
-                    CHANGING failed = failed reported = reported ).
+      report_error(
+        EXPORTING cid = cid
+                  text = |Mật khẩu mới phải khác mật khẩu cũ; tối thiểu { c_min_password_length } ký tự|
+                      && ' và không chứa tên đăng nhập'
+        CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
     TRY.
@@ -923,22 +967,6 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         RETURN.
       ENDIF.
     ENDIF.
-
-    "Đọc lại toàn bộ entity để trả result [1] $self
-    READ ENTITIES OF zi_mob_user IN LOCAL MODE
-      ENTITY MobileUser
-      ALL FIELDS
-      WITH VALUE #( ( %tky = user-%tky ) )
-      RESULT DATA(updated_users)
-      FAILED DATA(failed_result)
-      REPORTED DATA(reported_result).
-
-    IF failed_result IS NOT INITIAL.
-      failed = CORRESPONDING #( failed_result ).
-      reported = CORRESPONDING #( reported_result ).
-      RETURN.
-    ENDIF.
-
 
     APPEND VALUE #(
       %tky = user-%tky

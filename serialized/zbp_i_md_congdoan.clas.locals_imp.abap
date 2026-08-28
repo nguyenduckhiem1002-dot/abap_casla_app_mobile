@@ -10,9 +10,15 @@ CLASS lhc_congdoan IMPLEMENTATION.
   METHOD get_global_authorizations.
     "Service này là ranh giới quản trị Fiori/IAM. Không hard-delete phiên bản
     "đơn giá lịch sử; khi hết hiệu lực thì đóng khoảng validity bằng ValidTo.
-    result-%create = if_abap_behv=>auth-allowed.
-    result-%update = if_abap_behv=>auth-allowed.
-    result-%delete = if_abap_behv=>auth-unauthorized.
+    IF requested_authorizations-%create = if_abap_behv=>mk-on.
+      result-%create = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%update = if_abap_behv=>mk-on.
+      result-%update = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%delete = if_abap_behv=>mk-on.
+      result-%delete = if_abap_behv=>auth-unauthorized.
+    ENDIF.
   ENDMETHOD.
 
   METHOD validateMaster.
