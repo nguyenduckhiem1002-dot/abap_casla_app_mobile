@@ -20,7 +20,6 @@
     "check_ddic": true,
     "unused_variables": {
       "exclude": [
-        "locals_imp",
         "zcl_pp_txn_type"
       ]
     },
@@ -36,7 +35,7 @@
       "max": 15
     },
     "method_length": {
-      "maxLines": 80
+      "statements": 80
     },
     "line_length": {
       "length": 120

@@ -123,25 +123,55 @@ ENDCLASS.
 
 CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD get_global_authorizations.
-    "API mobile không expose raw CRUD. Các domain action tự xác thực CASLA token
-    "khi request xuất phát từ mobile; projection mobile chỉ expose các static
-    "facade action có kiểm soát.
+  "API mobile không expose raw CRUD. Các domain action tự xác thực CASLA token
+  "khi request xuất phát từ mobile; projection mobile chỉ expose các static
+  "facade action có kiểm soát.
+  IF requested_authorizations-%create = if_abap_behv=>mk-on.
     result-%create = if_abap_behv=>auth-unauthorized.
+  ENDIF.
+  IF requested_authorizations-%update = if_abap_behv=>mk-on.
     result-%update = if_abap_behv=>auth-unauthorized.
+  ENDIF.
+  IF requested_authorizations-%action-initialAssign = if_abap_behv=>mk-on.
     result-%action-initialAssign = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-transfer = if_abap_behv=>mk-on.
     result-%action-transfer = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-recall = if_abap_behv=>mk-on.
     result-%action-recall = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-confirm = if_abap_behv=>mk-on.
     result-%action-confirm = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-reverse = if_abap_behv=>mk-on.
     result-%action-reverse = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-correctConfirm = if_abap_behv=>mk-on.
     result-%action-correctConfirm = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-submitInitialAssign = if_abap_behv=>mk-on.
     result-%action-submitInitialAssign = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-submitTransfer = if_abap_behv=>mk-on.
     result-%action-submitTransfer = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-submitRecall = if_abap_behv=>mk-on.
     result-%action-submitRecall = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-submitConfirm = if_abap_behv=>mk-on.
     result-%action-submitConfirm = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-submitReverse = if_abap_behv=>mk-on.
     result-%action-submitReverse = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-getSyncStatus = if_abap_behv=>mk-on.
     result-%action-getSyncStatus = if_abap_behv=>auth-allowed.
+  ENDIF.
+  IF requested_authorizations-%action-getWorkHistory = if_abap_behv=>mk-on.
     result-%action-getWorkHistory = if_abap_behv=>auth-allowed.
-  ENDMETHOD.
+  ENDIF.
+ENDMETHOD.
 
   METHOD validateOperation.
     READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
