@@ -809,7 +809,8 @@ ENDMETHOD.
       IF input-UnitOfMeasure <> operation-UnitOfMeasure
          OR zcl_pp_worker_validator=>is_worker_active(
            worker_id = input-WorkerID plant = operation-Plant
-           work_center = operation-WorkCenter execution_date = input-ExecutionDate ) = abap_false.
+           work_center = operation-WorkCenter
+           execution_date = input-ExecutionDate ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = 'WORKER_NOT_ALLOWED'

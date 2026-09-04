@@ -79,7 +79,23 @@ CLASS zcl_pp_operation_guard IMPLEMENTATION.
     ENDIF.
 
     DATA(operation) = operations[ 1 ].
-    IF operation-OperationControlProfile <> 'YBP1'.
+    IF operation-OperationControlProfile IS INITIAL.
+      value-error_code = 'OPERATION_CONTROL_PROFILE_REQUIRED'.
+      RETURN.
+    ENDIF.
+
+    "Tenant co the khoa control profile bang config. Neu chua cau hinh thi
+    "chap nhan profile khong rong cua operation SAP thay vi hardcode YBP1.
+    SELECT FROM ztb_mob_config
+      FIELDS config_value
+      WHERE config_key = 'PP_OPERATION_CONTROL_PROFILE'
+        AND is_active = @abap_true
+      INTO TABLE @DATA(profile_configs)
+      UP TO 1 ROWS.
+    DATA(required_profile) = VALUE #(
+      profile_configs[ 1 ]-config_value OPTIONAL ).
+    IF required_profile IS NOT INITIAL
+       AND operation-OperationControlProfile <> required_profile.
       value-error_code = 'OPERATION_CONTROL_PROFILE_INVALID'.
       RETURN.
     ENDIF.

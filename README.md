@@ -208,7 +208,8 @@ ZCL_PP_OPERATION_GUARD=>resolve nhận ProductionOrder + Operation và trả con
 1. Đọc active system status từ I_ManufacturingOrderStatus.
 2. Bắt buộc status REL (I0002). Chặn TECO (I0045), CLSD (I0046), DLFL (I0076), kể cả khi REL vẫn còn active.
 3. Đọc I_ManufacturingOrderOperation theo ManufacturingOrder và ManufacturingOrderOperation_2.
-4. Bắt buộc OperationControlProfile = YBP1, không đánh dấu xóa, có OperationStandardTextCode.
+4. Bắt buộc OperationControlProfile không rỗng, không đánh dấu xóa và có OperationStandardTextCode. Nếu
+   `ZTB_MOB_CONFIG-PP_OPERATION_CONTROL_PROFILE` đang active thì profile phải khớp giá trị cấu hình này.
 5. Bắt buộc planned quantity > 0, UoM, Plant và Work Center internal ID.
 6. Resolve mã Work Center từ I_WorkCenter theo Plant + WorkCenterInternalID.
 7. Ghi snapshot vào ZTB_PP_OP_ALLOC, trong đó OperationStandardTextCode -> MaCongDoan.

@@ -72,7 +72,8 @@ ZCL_PP_OPERATION_GUARD kiểm tra:
 
 - active system status có REL (I0002);
 - không có TECO (I0045), CLSD (I0046) hoặc DLFL (I0076);
-- operation có control profile YBP1, không marked-for-deletion;
+- operation có control profile không rỗng, không marked-for-deletion; khi
+  `PP_OPERATION_CONTROL_PROFILE` active trong `ZTB_MOB_CONFIG` thì profile phải khớp cấu hình;
 - có standard text code, planned quantity > 0, Plant, internal Work Center ID, UoM;
 - I_WorkCenter resolve được code theo Plant + internal ID.
 

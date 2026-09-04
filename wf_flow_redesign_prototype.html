@@ -86,7 +86,7 @@
         case'SELECT_CONTEXT':if(!s.permissions.length){s.message='Chưa có quyền hiệu lực để vào phiên làm việc.';break}s.context={date:'2026-08-26',shift:'CA_NGAY',plant:'1000',workCenter:'MAY01',department:'Tổ may 1'};s.stage='CONTEXT_READY';s.screen='OVERVIEW';s.message='Đã chọn context làm việc. Phần lưu/mapping context vẫn cần thiết kế backend.';break;
         case'OPEN_OVERVIEW':s.screen='OVERVIEW';s.stage='OVERVIEW';s.message='Hiển thị tổng quan theo context và các function được cấp.';break;
         case'OPEN_ASSIGN':s.screen='ASSIGN';s.stage='ASSIGN_DRAFT';s.workerVerified=false;s.message='Mở form tạo phân công.';break;
-        case'CHECK_ORDER':s.orderStatus='REL';s.stage='ORDER_VALID';s.message='LSX REL, operation YBP1 hợp lệ và chưa bị xóa.';break;
+        case'CHECK_ORDER':s.orderStatus='REL';s.stage='ORDER_VALID';s.message='LSX REL, control profile hợp lệ và operation chưa bị xóa.';break;
         case'PICK_WORKER':if(s.orderStatus!=='REL'){s.message='Phải kiểm tra LSX và operation trước.';break}s.stage='WORKER_SELECTED';s.message='Đã chọn CN000001 và nhập 1.000 PC.';break;
         case'VERIFY_WORKER':if(!['WORKER_SELECTED','CONFIRM_DRAFT'].includes(s.stage)){s.message='Chưa có worker cần xác minh.';break}s.workerVerified=true;s.stage=s.screen==='CONFIRM'?'CONFIRM_VERIFIED':'ASSIGN_VERIFIED';s.message='Worker xác nhận tại popup trên thiết bị giám sát. Đây là thiết kế chưa có trong ABAP.';break;
         case'QUEUE_ASSIGN':if(!s.workerVerified){s.message='Worker chưa xác minh.';break}s.syncStatus='QUEUED';s.stage='ASSIGN_QUEUED';s.message='Tạo Sync Header và INITIAL_ASSIGN item. submitSync hiện chưa implement.';break;
