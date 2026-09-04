@@ -1,4 +1,4 @@
-"Bootstrap mot tai khoan mobile quan ly bang RAP business logic hien co.
+" Seed du lieu demo lich su san luong cho hai mobile user co san.
 CLASS zcl_pp_mock_confirm_data DEFINITION
   PUBLIC
   FINAL
@@ -9,317 +9,473 @@ CLASS zcl_pp_mock_confirm_data DEFINITION
 
   PRIVATE SECTION.
     CONSTANTS:
-      requested_worker TYPE zi_pp_workerref-workerid VALUE '',
-      manager_role     TYPE ztb_mob_role-role_id VALUE 'PP_MANAGER',
-      function_assign  TYPE ztb_mob_func-func_id VALUE 'PP_INITIAL_ASSIGN',
-      function_team    TYPE ztb_mob_func-func_id VALUE 'PP_HIST_TEAM',
-      function_self    TYPE ztb_mob_func-func_id VALUE 'PP_HIST_SELF'.
+      manager_username TYPE ztb_mob_user-normalized_username
+        VALUE 'manager_67310035',
+      operator_username TYPE ztb_mob_user-normalized_username VALUE 'duck',
+      manager_role TYPE ztb_mob_role-role_id VALUE 'PP_MANAGER',
+      operator_role TYPE ztb_mob_role-role_id VALUE 'PP_OPERATOR',
+      function_assign TYPE ztb_mob_func-func_id VALUE 'PP_INITIAL_ASSIGN',
+      function_team TYPE ztb_mob_func-func_id VALUE 'PP_HIST_TEAM',
+      function_self TYPE ztb_mob_func-func_id VALUE 'PP_HIST_SELF',
+      demo_order TYPE ztb_pp_op_alloc-production_order VALUE 'DEMO00000001',
+      demo_operation TYPE ztb_pp_op_alloc-operation_no VALUE '0010',
+      demo_process TYPE ztb_pp_op_alloc-ma_congdoan VALUE 'DEMO001',
+      "ST la ma UoM noi bo SAP cho piece; Gateway V4 serialize thanh PCE.
+      demo_uom TYPE ztb_pp_op_alloc-uom VALUE 'ST'.
 
     TYPES:
-      BEGIN OF worker_context,
-        worker_id   TYPE zi_pp_workerref-workerid,
-        worker_name TYPE zi_pp_workerref-workername,
-        plant       TYPE zi_pp_workerref-plant,
-        work_center TYPE zi_pp_workerref-workcenter,
-      END OF worker_context,
-      BEGIN OF creation_result,
-        success            TYPE abap_bool,
-        message            TYPE string,
-        user_uuid          TYPE ztb_mob_user-user_uuid,
-        username           TYPE ztb_mob_user-username,
-        temporary_password TYPE string,
-      END OF creation_result.
+      BEGIN OF user_context,
+        user_uuid TYPE ztb_mob_user-user_uuid,
+        username TYPE ztb_mob_user-username,
+        worker_id TYPE ztb_mob_user-worker_id,
+      END OF user_context,
+      BEGIN OF work_context,
+        plant TYPE ztb_mob_work-plant,
+        work_center TYPE ztb_mob_work-workcenter,
+        work_id TYPE ztb_mob_work-work_id,
+      END OF work_context,
+      BEGIN OF seed_result,
+        success TYPE abap_bool,
+        created TYPE abap_bool,
+        message TYPE string,
+        operation_uuid TYPE ztb_pp_op_alloc-operation_uuid,
+      END OF seed_result.
 
-    CLASS-METHODS find_available_worker
-      RETURNING VALUE(worker) TYPE worker_context.
+    CLASS-METHODS read_user
+      IMPORTING normalized_username
+                  TYPE ztb_mob_user-normalized_username
+      RETURNING VALUE(user) TYPE user_context.
 
-    CLASS-METHODS ensure_functions
+    CLASS-METHODS determine_work_context
+      IMPORTING worker_id TYPE ztb_mob_user-worker_id
+      RETURNING VALUE(context) TYPE work_context.
+
+    CLASS-METHODS ensure_function
+      IMPORTING func_id TYPE ztb_mob_func-func_id
+                func_name TYPE ztb_mob_func-func_name
       RETURNING VALUE(success) TYPE abap_bool.
 
-    CLASS-METHODS ensure_work_context
-      IMPORTING worker TYPE worker_context
-      RETURNING VALUE(work_id) TYPE ztb_mob_work-work_id.
-
-    CLASS-METHODS ensure_manager_role
-      IMPORTING work_id TYPE ztb_mob_work-work_id
+    CLASS-METHODS ensure_role
+      IMPORTING role_id TYPE ztb_mob_role-role_id
+                role_name TYPE ztb_mob_role-role_name
       RETURNING VALUE(success) TYPE abap_bool.
 
-    CLASS-METHODS create_manager_user
-      IMPORTING worker TYPE worker_context
-      RETURNING VALUE(result) TYPE creation_result.
+    CLASS-METHODS ensure_work
+      IMPORTING context TYPE work_context
+      RETURNING VALUE(success) TYPE abap_bool.
+
+    CLASS-METHODS ensure_role_grant
+      IMPORTING role_id TYPE ztb_mob_rol_fnc-role_id
+                func_id TYPE ztb_mob_rol_fnc-func_id
+      RETURNING VALUE(success) TYPE abap_bool.
+
+    CLASS-METHODS ensure_role_work
+      IMPORTING role_id TYPE ztb_mob_rol_wrk-role_id
+                work_id TYPE ztb_mob_rol_wrk-work_id
+      RETURNING VALUE(success) TYPE abap_bool.
+
+    CLASS-METHODS ensure_user_role
+      IMPORTING user_uuid TYPE ztb_mob_usr_rol-user_uuid
+                role_id TYPE ztb_mob_usr_rol-role_id
+      RETURNING VALUE(success) TYPE abap_bool.
+
+    CLASS-METHODS ensure_demo_access
+      IMPORTING manager TYPE user_context
+                operator TYPE user_context
+                context TYPE work_context
+      RETURNING VALUE(success) TYPE abap_bool.
+
+    CLASS-METHODS seed_production
+      IMPORTING manager TYPE user_context
+                operator TYPE user_context
+                context TYPE work_context
+      RETURNING VALUE(result) TYPE seed_result.
+
+    CLASS-METHODS delete_demo_data
+      RETURNING VALUE(success) TYPE abap_bool.
 ENDCLASS.
 
 CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
   METHOD if_oo_adt_classrun~main.
-    DATA(worker) = find_available_worker( ).
-    IF worker-worker_id IS INITIAL.
-      out->write( 'Khong tim thay worker active chua co mobile user' ).
-      out->write( 'Chay cac cau SELECT trong docs/MANAGER_BOOTSTRAP_QUERIES.md' ).
+    DATA(manager) = read_user( manager_username ).
+    DATA(operator) = read_user( operator_username ).
+    IF manager-user_uuid IS INITIAL OR operator-user_uuid IS INITIAL.
+      out->write( 'Khong tim thay du hai user active: manager_67310035 va duck' ).
+      RETURN.
+    ENDIF.
+    IF manager-worker_id IS INITIAL OR operator-worker_id IS INITIAL.
+      out->write( 'Ca hai user phai co WorkerID truoc khi seed demo' ).
       RETURN.
     ENDIF.
 
-    IF ensure_functions( ) = abap_false.
-      out->write( 'Khong tao duoc function master cho role quan ly' ).
+    DATA(context) = determine_work_context( operator-worker_id ).
+    IF ensure_demo_access( manager = manager
+                           operator = operator
+                           context = context ) = abap_false.
+      out->write( 'Khong tao duoc role, function hoac Work ID demo' ).
       RETURN.
     ENDIF.
 
-    DATA(work_id) = ensure_work_context( worker ).
-    IF work_id IS INITIAL.
-      out->write( 'Khong tao duoc work context tu worker reference' ).
+    DATA(result) = seed_production( manager = manager
+                                    operator = operator
+                                    context = context ).
+    out->write( result-message ).
+    IF result-success = abap_false.
       RETURN.
     ENDIF.
-
-    IF ensure_manager_role( work_id ) = abap_false.
-      out->write( 'Khong tao duoc role PP_MANAGER hoac role assignments' ).
-      RETURN.
-    ENDIF.
-
-    DATA(created) = create_manager_user( worker ).
-    out->write( created-message ).
-    IF created-success = abap_false.
-      RETURN.
-    ENDIF.
-    out->write( |User UUID: { created-user_uuid }| ).
-    out->write( |Username: { created-username }| ).
-    out->write( |Temporary password: { created-temporary_password }| ).
-    out->write( |Worker: { worker-worker_id } - { worker-worker_name }| ).
-    out->write( |Role / Work context: { manager_role } / { work_id }| ).
-    out->write( 'Dang nhap roi doi mat khau ngay; password tam chi hien thi mot lan.' ).
+    out->write( |Work ID: { context-work_id }| ).
+    out->write( |Lenh / cong doan: { demo_order } / { demo_operation }| ).
+    out->write( |Operation UUID: { result-operation_uuid }| ).
+    out->write( |Quan ly { manager-username } ({ manager-worker_id }) giao viec| ).
+    out->write( |Nhan cong { operator-username } ({ operator-worker_id }): giao 100 ST, da lam 25 ST, con 75 ST| ).
+    out->write( 'Manager xem team history; duck xem self history trong ngay hien tai.' ).
   ENDMETHOD.
 
-  METHOD find_available_worker.
+  METHOD read_user.
+    SELECT FROM ztb_mob_user
+      FIELDS user_uuid, username, worker_id
+      WHERE normalized_username = @normalized_username
+        AND status = 'A'
+      INTO TABLE @DATA(users)
+      UP TO 2 ROWS.
+    IF lines( users ) = 1.
+      user = CORRESPONDING #( users[ 1 ] ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD determine_work_context.
     DATA(today) = cl_abap_context_info=>get_system_date( ).
     SELECT FROM zi_pp_workerref
-      FIELDS WorkerID, WorkerName, Plant, WorkCenter
-      WHERE ValidFrom <= @today
+      FIELDS Plant, WorkCenter
+      WHERE WorkerID = @worker_id
+        AND ValidFrom <= @today
         AND ValidTo >= @today
-      ORDER BY WorkerID, Plant, WorkCenter
-      INTO TABLE @DATA(workers)
-      UP TO 500 ROWS.
-
-    LOOP AT workers INTO DATA(candidate).
-      IF requested_worker IS NOT INITIAL
-         AND candidate-WorkerID <> requested_worker.
-        CONTINUE.
-      ENDIF.
-      SELECT FROM ztb_mob_user
-        FIELDS user_uuid
-        WHERE worker_id = @candidate-WorkerID
-        INTO TABLE @DATA(existing_accounts)
-        UP TO 1 ROWS.
-      IF existing_accounts IS INITIAL.
-        worker = CORRESPONDING #( candidate MAPPING
-          worker_id = WorkerID worker_name = WorkerName
-          plant = Plant work_center = WorkCenter ).
-        RETURN.
-      ENDIF.
-    ENDLOOP.
+      ORDER BY ValidFrom DESCENDING
+      INTO TABLE @DATA(worker_locations)
+      UP TO 1 ROWS.
+    IF worker_locations IS INITIAL.
+      context-plant = 'D001'.
+      context-work_center = 'DEMO001'.
+    ELSE.
+      context-plant = worker_locations[ 1 ]-Plant.
+      context-work_center = worker_locations[ 1 ]-WorkCenter.
+    ENDIF.
+    context-work_id = CONV #( |DEMO_{ context-plant }_{ context-work_center }| ).
   ENDMETHOD.
 
-  METHOD ensure_functions.
-    DATA create_functions TYPE TABLE FOR CREATE zi_mob_func.
-    DATA(required_functions) = VALUE zcl_mob_token_validator=>permissions(
-      ( func_id = function_assign func_name = 'Giao san luong ban dau' app_module = 'PP' )
-      ( func_id = function_team func_name = 'Xem lich su cua doi' app_module = 'PP' )
-      ( func_id = function_self func_name = 'Xem lich su ca nhan' app_module = 'PP' ) ).
-
-    LOOP AT required_functions INTO DATA(required_function).
-      SELECT FROM ztb_mob_func
-        FIELDS func_id
-        WHERE func_id = @required_function-func_id
-        INTO TABLE @DATA(existing_functions)
-        UP TO 1 ROWS.
-      IF existing_functions IS INITIAL.
-        APPEND VALUE #(
-          %cid = |FUNC{ sy-tabix }|
-          FuncID = required_function-func_id
-          FuncName = required_function-func_name
-          AppModule = required_function-app_module ) TO create_functions.
-      ENDIF.
-    ENDLOOP.
-
-    IF create_functions IS INITIAL.
+  METHOD ensure_function.
+    SELECT FROM ztb_mob_func
+      FIELDS func_id
+      WHERE func_id = @func_id
+      INTO TABLE @DATA(existing)
+      UP TO 1 ROWS.
+    IF existing IS NOT INITIAL.
       success = abap_true.
       RETURN.
     ENDIF.
-    MODIFY ENTITIES OF zi_mob_func
-      ENTITY MobileFunc CREATE FIELDS ( FuncID FuncName AppModule )
-      WITH create_functions
-      FAILED DATA(failed_create).
-    IF failed_create IS NOT INITIAL.
-      ROLLBACK ENTITIES.
-      RETURN.
-    ENDIF.
-    COMMIT ENTITIES RESPONSE OF zi_mob_func
-      FAILED DATA(failed_commit).
-    success = xsdbool( failed_commit IS INITIAL ).
+    GET TIME STAMP FIELD DATA(now).
+    INSERT ztb_mob_func FROM @( VALUE #(
+      func_id = func_id
+      func_name = func_name
+      app_module = 'PP'
+      last_changed_at = now
+      local_last_changed_at = now ) ).
+    success = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
 
-  METHOD ensure_work_context.
-    work_id = CONV #( |MGR_{ worker-plant }_{ worker-work_center }| ).
-    SELECT FROM ztb_mob_work
-      FIELDS plant, workcenter, is_active
-      WHERE work_id = @work_id
-      INTO TABLE @DATA(existing_work)
-      UP TO 1 ROWS.
-    IF existing_work IS NOT INITIAL.
-      IF existing_work[ 1 ]-plant = worker-plant
-         AND existing_work[ 1 ]-workcenter = worker-work_center
-         AND existing_work[ 1 ]-is_active = 'A'.
-        RETURN.
-      ENDIF.
-      CLEAR work_id.
-      RETURN.
-    ENDIF.
-
-    MODIFY ENTITIES OF zi_mob_work
-      ENTITY MobileWork CREATE FIELDS
-        ( WorkID WorkName Plant WorkCenter BoPhan Location IsActive )
-      WITH VALUE #( ( %cid = 'WORK'
-        WorkID = work_id
-        WorkName = |Quan ly { worker-plant }/{ worker-work_center }|
-        Plant = worker-plant
-        WorkCenter = worker-work_center
-        BoPhan = 'PP'
-        Location = |Plant { worker-plant }|
-        IsActive = 'A' ) )
-      FAILED DATA(failed_create).
-    IF failed_create IS NOT INITIAL.
-      ROLLBACK ENTITIES.
-      CLEAR work_id.
-      RETURN.
-    ENDIF.
-    COMMIT ENTITIES RESPONSE OF zi_mob_work
-      FAILED DATA(failed_commit).
-    IF failed_commit IS NOT INITIAL.
-      CLEAR work_id.
-    ENDIF.
-  ENDMETHOD.
-
-  METHOD ensure_manager_role.
+  METHOD ensure_role.
     SELECT FROM ztb_mob_role
       FIELDS status
-      WHERE role_id = @manager_role
-      INTO TABLE @DATA(existing_roles)
+      WHERE role_id = @role_id
+      INTO TABLE @DATA(existing)
       UP TO 1 ROWS.
-    IF existing_roles IS INITIAL.
-      MODIFY ENTITIES OF zi_mob_role
-        ENTITY MobileRole CREATE FIELDS ( RoleID RoleName Status )
-        WITH VALUE #( ( %cid = 'ROLE'
-          RoleID = manager_role RoleName = 'Quan ly san xuat' Status = 'A' ) )
-        FAILED DATA(failed_role).
-      IF failed_role IS NOT INITIAL.
-        ROLLBACK ENTITIES.
-        RETURN.
-      ENDIF.
-      COMMIT ENTITIES RESPONSE OF zi_mob_role
-        FAILED DATA(failed_role_commit).
-      IF failed_role_commit IS NOT INITIAL.
-        RETURN.
-      ENDIF.
-    ELSEIF existing_roles[ 1 ]-status <> 'A'.
+    IF existing IS NOT INITIAL.
+      success = xsdbool( existing[ 1 ]-status = 'A' ).
       RETURN.
     ENDIF.
-
-    DATA create_functions TYPE TABLE FOR CREATE zi_mob_role\_Functions.
-    APPEND INITIAL LINE TO create_functions ASSIGNING FIELD-SYMBOL(<role_functions>).
-    <role_functions>-RoleID = manager_role.
-    DATA(function_ids) = VALUE zcl_mob_token_validator=>permissions(
-      ( func_id = function_assign )
-      ( func_id = function_team )
-      ( func_id = function_self ) ).
-    LOOP AT function_ids INTO DATA(function_id).
-      SELECT FROM ztb_mob_rol_fnc
-        FIELDS role_id
-        WHERE role_id = @manager_role
-          AND func_id = @function_id-func_id
-        INTO TABLE @DATA(existing_grants)
-        UP TO 1 ROWS.
-      IF existing_grants IS INITIAL.
-        APPEND VALUE #( %cid = |GRANT{ sy-tabix }|
-          FuncID = function_id-func_id ) TO <role_functions>-%target.
-      ENDIF.
-    ENDLOOP.
-    IF <role_functions>-%target IS INITIAL.
-      CLEAR create_functions.
-    ENDIF.
-
-    SELECT FROM ztb_mob_rol_wrk
-      FIELDS role_id
-      WHERE role_id = @manager_role
-        AND work_id = @work_id
-      INTO TABLE @DATA(existing_scopes)
-      UP TO 1 ROWS.
-    DATA create_work TYPE TABLE FOR CREATE zi_mob_role\_WorkAssignments.
-    IF existing_scopes IS INITIAL.
-      create_work = VALUE #( ( RoleID = manager_role %target = VALUE #(
-        ( %cid = 'SCOPE' WorkID = work_id ) ) ) ).
-    ENDIF.
-
-    MODIFY ENTITIES OF zi_mob_role
-      ENTITY MobileRole CREATE BY \_Functions FIELDS ( FuncID )
-        WITH create_functions
-      ENTITY MobileRole CREATE BY \_WorkAssignments FIELDS ( WorkID )
-        WITH create_work
-      FAILED DATA(failed_assignments).
-    IF failed_assignments IS NOT INITIAL.
-      ROLLBACK ENTITIES.
-      RETURN.
-    ENDIF.
-    COMMIT ENTITIES RESPONSE OF zi_mob_role
-      FAILED DATA(failed_commit).
-    success = xsdbool( failed_commit IS INITIAL ).
+    GET TIME STAMP FIELD DATA(now).
+    DATA(current_user) = cl_abap_context_info=>get_user_technical_name( ).
+    INSERT ztb_mob_role FROM @( VALUE #(
+      role_id = role_id
+      role_name = role_name
+      status = 'A'
+      created_by = current_user
+      created_at = now
+      last_changed_by = current_user
+      last_changed_at = now
+      local_last_changed_at = now ) ).
+    success = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
 
-  METHOD create_manager_user.
-    DATA(worker_lower) = to_lower( CONV string( worker-worker_id ) ).
-    result-username = CONV #( |manager_{ worker_lower }| ).
-    SELECT FROM ztb_mob_user
-      FIELDS user_uuid
-      WHERE normalized_username = @result-username
-         OR worker_id = @worker-worker_id
-      INTO TABLE @DATA(existing_users)
+  METHOD ensure_work.
+    SELECT FROM ztb_mob_work
+      FIELDS plant, workcenter, is_active
+      WHERE work_id = @context-work_id
+      INTO TABLE @DATA(existing)
       UP TO 1 ROWS.
-    IF existing_users IS NOT INITIAL.
-      result-message = 'Username hoac worker da duoc lien ket voi mobile user'.
+    IF existing IS NOT INITIAL.
+      success = xsdbool( existing[ 1 ]-plant = context-plant
+        AND existing[ 1 ]-workcenter = context-work_center
+        AND existing[ 1 ]-is_active = 'A' ).
+      RETURN.
+    ENDIF.
+    GET TIME STAMP FIELD DATA(now).
+    INSERT ztb_mob_work FROM @( VALUE #(
+      work_id = context-work_id
+      work_name = |Demo san luong { context-plant }/{ context-work_center }|
+      plant = context-plant
+      workcenter = context-work_center
+      bo_phan = 'PP'
+      location = |Plant { context-plant }|
+      is_active = 'A'
+      last_changed_at = now
+      local_last_changed_at = now ) ).
+    success = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+  METHOD ensure_role_grant.
+    SELECT FROM ztb_mob_rol_fnc
+      FIELDS role_id
+      WHERE role_id = @role_id
+        AND func_id = @func_id
+      INTO TABLE @DATA(existing)
+      UP TO 1 ROWS.
+    IF existing IS NOT INITIAL.
+      success = abap_true.
+      RETURN.
+    ENDIF.
+    INSERT ztb_mob_rol_fnc FROM @( VALUE #(
+      role_id = role_id func_id = func_id ) ).
+    success = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+  METHOD ensure_role_work.
+    SELECT FROM ztb_mob_rol_wrk
+      FIELDS role_id
+      WHERE role_id = @role_id
+        AND work_id = @work_id
+      INTO TABLE @DATA(existing)
+      UP TO 1 ROWS.
+    IF existing IS NOT INITIAL.
+      success = abap_true.
+      RETURN.
+    ENDIF.
+    INSERT ztb_mob_rol_wrk FROM @( VALUE #(
+      role_id = role_id work_id = work_id ) ).
+    success = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+  METHOD ensure_user_role.
+    SELECT FROM ztb_mob_usr_rol
+      FIELDS user_uuid
+      WHERE user_uuid = @user_uuid
+        AND role_id = @role_id
+      INTO TABLE @DATA(existing)
+      UP TO 1 ROWS.
+    IF existing IS NOT INITIAL.
+      success = abap_true.
+      RETURN.
+    ENDIF.
+    INSERT ztb_mob_usr_rol FROM @( VALUE #(
+      user_uuid = user_uuid role_id = role_id ) ).
+    success = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+  METHOD ensure_demo_access.
+    success = ensure_function(
+      func_id = function_assign func_name = 'Giao san luong ban dau' ).
+    IF success = abap_false.
+      RETURN.
+    ENDIF.
+    success = ensure_function(
+      func_id = function_team func_name = 'Xem lich su cua doi' ).
+    IF success = abap_false.
+      RETURN.
+    ENDIF.
+    success = ensure_function(
+      func_id = function_self func_name = 'Xem lich su ca nhan' ).
+    IF success = abap_false OR ensure_work( context ) = abap_false.
+      success = abap_false.
+      RETURN.
+    ENDIF.
+    success = ensure_role(
+      role_id = manager_role role_name = 'Quan ly san xuat' ).
+    IF success = abap_false.
+      RETURN.
+    ENDIF.
+    success = ensure_role(
+      role_id = operator_role role_name = 'Nhan vien san xuat' ).
+    IF success = abap_false.
+      RETURN.
+    ENDIF.
+
+    success = ensure_role_grant( role_id = manager_role
+                                 func_id = function_assign ).
+    success = xsdbool( success = abap_true AND
+      ensure_role_grant( role_id = manager_role
+                         func_id = function_team ) = abap_true ).
+    success = xsdbool( success = abap_true AND
+      ensure_role_grant( role_id = manager_role
+                         func_id = function_self ) = abap_true ).
+    success = xsdbool( success = abap_true AND
+      ensure_role_grant( role_id = operator_role
+                         func_id = function_self ) = abap_true ).
+    success = xsdbool( success = abap_true AND
+      ensure_role_work( role_id = manager_role
+                        work_id = context-work_id ) = abap_true ).
+    success = xsdbool( success = abap_true AND
+      ensure_role_work( role_id = operator_role
+                        work_id = context-work_id ) = abap_true ).
+    success = xsdbool( success = abap_true AND
+      ensure_user_role( user_uuid = manager-user_uuid
+                        role_id = manager_role ) = abap_true ).
+    success = xsdbool( success = abap_true AND
+      ensure_user_role( user_uuid = operator-user_uuid
+                        role_id = operator_role ) = abap_true ).
+  ENDMETHOD.
+
+  METHOD seed_production.
+    IF delete_demo_data( ) = abap_false.
+      result-message = 'Khong xoa sach duoc bo du lieu demo cu'.
       RETURN.
     ENDIF.
 
     TRY.
-        DATA(password_seed) = cl_system_uuid=>create_uuid_c36_static( ).
+        DATA(operation_uuid) = cl_system_uuid=>create_uuid_x16_static( ).
+        DATA(operator_balance_uuid) = cl_system_uuid=>create_uuid_x16_static( ).
+        DATA(assign_operator_uuid) = cl_system_uuid=>create_uuid_x16_static( ).
+        DATA(confirm_operator_uuid) = cl_system_uuid=>create_uuid_x16_static( ).
+        DATA(sync_assign_operator) = cl_system_uuid=>create_uuid_x16_static( ).
+        DATA(sync_confirm_operator) = cl_system_uuid=>create_uuid_x16_static( ).
       CATCH cx_uuid_error.
-        result-message = 'Khong tao duoc temporary password'.
+        result-message = 'Khong tao duoc UUID cho du lieu demo'.
         RETURN.
     ENDTRY.
-    result-temporary_password = |Aa1!{ password_seed+0(12) }|.
-    DATA(email) = CONV ztb_mob_user-email(
-      |manager.{ worker_lower }@local.invalid| ).
 
-    MODIFY ENTITIES OF zi_mob_user
-      ENTITY MobileUser EXECUTE createUser
-      FROM VALUE #( ( %cid = 'CREATE_MANAGER' %param = VALUE #(
-        Username = result-username
-        Password = result-temporary_password
-        FullName = |Quan ly - { worker-worker_name }|
-        Email = email
-        WorkerID = worker-worker_id
-        RoleID = manager_role ) ) )
-      RESULT DATA(created_users)
-      FAILED DATA(failed_create).
-    IF failed_create IS NOT INITIAL OR created_users IS INITIAL.
-      ROLLBACK ENTITIES.
-      result-message = 'RAP createUser that bai; kiem tra worker, role va security config'.
+    GET TIME STAMP FIELD DATA(now).
+    DATA(now_utc) = utclong_current( ).
+    DATA(today) = cl_abap_context_info=>get_system_date( ).
+    DATA(current_user) = cl_abap_context_info=>get_user_technical_name( ).
+    DATA(operation) = VALUE ztb_pp_op_alloc(
+      operation_uuid = operation_uuid
+      production_order = demo_order
+      operation_no = demo_operation
+      ma_congdoan = demo_process
+      plant = context-plant
+      work_center = context-work_center
+      operation_qty = '100.000'
+      uom = demo_uom
+      operation_status = 'REL'
+      created_by = current_user
+      created_at = now
+      last_changed_by = current_user
+      local_last_changed_at = now ).
+    INSERT ztb_pp_op_alloc FROM @operation.
+    IF sy-subrc <> 0.
+      result-message = 'Khong insert duoc operation demo'.
       RETURN.
     ENDIF.
 
-    COMMIT ENTITIES RESPONSE OF zi_mob_user
-      FAILED DATA(failed_commit).
-    IF failed_commit IS NOT INITIAL.
-      result-message = 'Commit mobile user that bai'.
+    DATA balances TYPE STANDARD TABLE OF ztb_pp_emp_alloc WITH EMPTY KEY.
+    balances = VALUE #(
+      ( emp_alloc_uuid = operator_balance_uuid
+        operation_uuid = operation_uuid
+        worker_id = operator-worker_id
+        initial_assigned_qty = '100.000'
+        completed_qty = '25.000'
+        remaining_qty = '75.000'
+        uom = demo_uom
+        last_execution_date = today
+        last_sync_at = now_utc
+        created_by = current_user
+        created_at = now
+        last_changed_by = current_user
+        local_last_changed_at = now ) ).
+    INSERT ztb_pp_emp_alloc FROM TABLE @balances.
+    IF sy-subrc <> 0.
+      result-message = 'Da tao operation nhung khong insert duoc balance demo'.
       RETURN.
     ENDIF.
-    result-user_uuid = created_users[ 1 ]-%param-UserUUID.
+
+    DATA transactions TYPE STANDARD TABLE OF ztb_pp_alloc_txn WITH EMPTY KEY.
+    transactions = VALUE #(
+      ( transaction_uuid = assign_operator_uuid
+        operation_uuid = operation_uuid
+        sync_item_uuid = sync_assign_operator
+        actor_user_uuid = manager-user_uuid
+        verified_worker_user_uuid = operator-user_uuid
+        worker_verified_at = now_utc
+        device_id = 'ADT-DEMO-SEED'
+        verification_method = 'SEED'
+        transaction_type = zcl_pp_txn_type=>initial_assign
+        to_worker_id = operator-worker_id
+        worker_id = operator-worker_id
+        quantity = '100.000'
+        uom = demo_uom
+        execution_date = today
+        transaction_status = zcl_pp_txn_type=>posted
+        reason_code = 'DEMO_VIEW_QTY'
+        reason_text = 'Phan cong demo cho duck'
+        source_channel = zcl_pp_txn_type=>source_system
+        created_by = current_user
+        created_at = now
+        local_last_changed_at = now )
+      ( transaction_uuid = confirm_operator_uuid
+        operation_uuid = operation_uuid
+        original_transaction_uuid = assign_operator_uuid
+        sync_item_uuid = sync_confirm_operator
+        actor_user_uuid = operator-user_uuid
+        verified_worker_user_uuid = operator-user_uuid
+        worker_verified_at = now_utc
+        device_id = 'ADT-DEMO-SEED'
+        verification_method = 'SEED'
+        transaction_type = zcl_pp_txn_type=>confirm
+        original_transaction_type = zcl_pp_txn_type=>initial_assign
+        worker_id = operator-worker_id
+        quantity = '25.000'
+        uom = demo_uom
+        execution_date = today
+        transaction_status = zcl_pp_txn_type=>posted
+        reason_code = 'DEMO_VIEW_QTY'
+        reason_text = 'Xac nhan san luong demo cua duck'
+        source_channel = zcl_pp_txn_type=>source_system
+        created_by = current_user
+        created_at = now
+        local_last_changed_at = now ) ).
+    INSERT ztb_pp_alloc_txn FROM TABLE @transactions.
+    IF sy-subrc <> 0.
+      result-message = 'Da tao balance nhung khong insert duoc ledger demo'.
+      RETURN.
+    ENDIF.
+
     result-success = abap_true.
-    result-message = 'Tao mobile manager user thanh cong'.
+    result-created = abap_true.
+    result-operation_uuid = operation_uuid.
+    result-message = 'Tao thanh cong Work ID, phan cong va san luong demo'.
+  ENDMETHOD.
+
+  METHOD delete_demo_data.
+    SELECT FROM ztb_pp_op_alloc
+      FIELDS operation_uuid
+      WHERE production_order = @demo_order
+        AND operation_no = @demo_operation
+      INTO TABLE @DATA(demo_operations).
+
+    LOOP AT demo_operations INTO DATA(demo_operation_row).
+      DELETE FROM ztb_pp_alloc_txn
+        WHERE operation_uuid = @demo_operation_row-operation_uuid.
+      DELETE FROM ztb_pp_emp_alloc
+        WHERE operation_uuid = @demo_operation_row-operation_uuid.
+      DELETE FROM ztb_pp_op_alloc
+        WHERE operation_uuid = @demo_operation_row-operation_uuid.
+    ENDLOOP.
+
+    SELECT FROM ztb_pp_op_alloc
+      FIELDS operation_uuid
+      WHERE production_order = @demo_order
+        AND operation_no = @demo_operation
+      INTO TABLE @DATA(remaining_operations)
+      UP TO 1 ROWS.
+    success = xsdbool( remaining_operations IS INITIAL ).
   ENDMETHOD.
 ENDCLASS.
