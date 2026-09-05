@@ -1,5 +1,6 @@
 @EndUserText.label: 'Dịch vụ quản trị tài khoản giám sát'
 define service ZUI_MOB_USER_ADM {
+  expose ZI_PP_Worker_VH as WorkerValueHelp;
   expose ZC_MOB_User_Adm   as Accounts;
   expose ZC_MOB_UsrRol_Adm as UserRoles;
   expose ZI_MOB_Role_VH    as RoleValueHelp;

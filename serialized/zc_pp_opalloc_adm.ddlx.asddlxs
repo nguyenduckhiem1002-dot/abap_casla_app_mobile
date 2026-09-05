@@ -14,28 +14,40 @@ annotate entity ZC_PP_OpAlloc_Adm with
     { type: #FOR_ACTION, dataAction: 'correctConfirm', label: 'Điều chỉnh xác nhận', position: 5 }
   ]
   @UI.identification: [ { position: 10, label: 'Lệnh sản xuất' } ]
+  @EndUserText.label: 'Lệnh sản xuất'
+  @UI.selectionField: [{ position: 10 }]
   ProductionOrder;
 
   @UI.lineItem: [ { position: 20, label: 'Công đoạn' } ]
   @UI.identification: [ { position: 20, label: 'Công đoạn' } ]
+  @EndUserText.label: 'Công đoạn lệnh sản xuất'
   Operation;
 
   @UI.lineItem: [ { position: 30, label: 'Mã công đoạn' } ]
   @UI.identification: [ { position: 30, label: 'Mã công đoạn' } ]
+  @EndUserText.label: 'Mã công đoạn'
+  @UI.selectionField: [{ position: 20 }]
   MaCongDoan;
 
   @UI.lineItem: [ { position: 40, label: 'Nhà máy' } ]
+  @EndUserText.label: 'Nhà máy'
+  @UI.selectionField: [{ position: 30 }]
   Plant;
 
   @UI.lineItem: [ { position: 50, label: 'Tổ/Work Center' } ]
+  @EndUserText.label: 'Trung tâm làm việc'
+  @UI.selectionField: [{ position: 40 }]
   WorkCenter;
 
   @UI.lineItem: [ { position: 60, label: 'Sản lượng công đoạn' } ]
+  @EndUserText.label: 'Sản lượng công đoạn'
   OperationQuantity;
 
   @UI.lineItem: [ { position: 70, label: 'ĐVT' } ]
+  @EndUserText.label: 'Đơn vị tính'
   UnitOfMeasure;
 
   @UI.lineItem: [ { position: 80, label: 'Trạng thái' } ]
+  @EndUserText.label: 'Trạng thái công đoạn'
   OperationStatus;
 }

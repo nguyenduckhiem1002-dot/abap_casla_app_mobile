@@ -16,10 +16,11 @@ annotate entity ZC_MOB_Work_Adm with
     position: 10
   }]
 
-  @EndUserText.label: 'Mã vị trí làm việc'
+  @EndUserText.label: 'Work ID'
   @UI.selectionField: [{ position: 10 }]
   @UI.lineItem: [{ position: 10 }]
   @UI.identification: [{ position: 10 }]
+  @EndUserText.label: 'Work ID'
   WorkID;
 
   @EndUserText.label: 'Tên vị trí làm việc'

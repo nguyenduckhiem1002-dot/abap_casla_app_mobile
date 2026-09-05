@@ -33,6 +33,7 @@ annotate entity ZC_MOB_Func_Adm with
     position: 10,
     label: 'Mã chức năng'
   }]
+  @EndUserText.label: 'Mã chức năng'
   FuncID;
 
   @EndUserText.label: 'Tên chức năng'

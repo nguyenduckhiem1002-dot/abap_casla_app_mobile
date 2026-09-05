@@ -28,6 +28,7 @@ annotate entity ZC_MOB_User_Adm with
 
   @EndUserText.label: 'UUID người dùng'
   @UI.hidden: true
+  @EndUserText.label: 'Mã định danh người dùng'
   UserUUID;
 
   @EndUserText.label: 'Tên đăng nhập'
@@ -81,7 +82,7 @@ annotate entity ZC_MOB_User_Adm with
   @UI.identification: [{ position: 50 }]
   Status;
 
-  @EndUserText.label: 'Lock Until'
+  @EndUserText.label: 'Khóa đến'
   @UI.selectionField: [{ position: 60 }]
   @UI.lineItem: [{ position: 70 }]
   @UI.identification: [{ position: 70 }]

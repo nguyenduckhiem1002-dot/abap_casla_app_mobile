@@ -1,6 +1,11 @@
 
 @EndUserText.label: 'Quản trị điều chỉnh sản lượng'
 define service ZUI_PP_ALLOC_ADM {
+  expose I_Plant as PlantValueHelp;
+  expose I_UnitOfMeasure as UnitValueHelp;
+  expose ZI_MOB_WorkCenter_VH as WorkCenterValueHelp;
+  expose ZI_PP_Worker_VH as WorkerValueHelp;
+  expose ZI_MD_CongDoan_VH as OperationValueHelp;
   expose ZC_PP_OpAlloc_Adm as OperationAllocations;
   expose ZC_PP_AllocTxn_Adm as AllocationTransactions;
 }

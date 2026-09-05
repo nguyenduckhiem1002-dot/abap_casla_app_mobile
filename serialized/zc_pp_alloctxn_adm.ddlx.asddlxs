@@ -10,47 +10,66 @@
 annotate entity ZC_PP_AllocTxn_Adm with
 {
   @UI.lineItem: [ { position: 10, label: 'Lệnh SX' } ]
+  @EndUserText.label: 'Lệnh sản xuất'
+  @UI.selectionField: [{ position: 10 }]
   ProductionOrder;
 
   @UI.lineItem: [ { position: 20, label: 'Operation' } ]
+  @EndUserText.label: 'Công đoạn lệnh sản xuất'
   Operation;
 
   @UI.lineItem: [ { position: 30, label: 'Mã công đoạn' } ]
+  @EndUserText.label: 'Mã công đoạn'
   MaCongDoan;
 
   @UI.lineItem: [ { position: 40, label: 'Loại giao dịch' } ]
+  @EndUserText.label: 'Loại giao dịch'
   TransactionType;
 
   @UI.lineItem: [ { position: 50, label: 'Nhân công' } ]
+  @EndUserText.label: 'Mã nhân công'
+  @UI.selectionField: [{ position: 20 }]
   WorkerID;
 
   @UI.lineItem: [ { position: 60, label: 'Số lượng' } ]
+  @EndUserText.label: 'Số lượng'
   Quantity;
 
   @UI.lineItem: [ { position: 70, label: 'ĐVT' } ]
+  @EndUserText.label: 'Đơn vị tính'
   UnitOfMeasure;
 
   @UI.lineItem: [ { position: 80, label: 'Ngày thực hiện' } ]
+  @EndUserText.label: 'Ngày thực hiện'
+  @UI.selectionField: [{ position: 30 }]
   ExecutionDate;
 
   @UI.lineItem: [ { position: 90, label: 'Trạng thái' } ]
+  @EndUserText.label: 'Trạng thái giao dịch'
+  @UI.selectionField: [{ position: 40 }]
   TransactionStatus;
 
   @UI.lineItem: [ { position: 100, label: 'Nguồn' } ]
+  @EndUserText.label: 'Nguồn giao dịch'
   SourceChannel;
 
   @UI.lineItem: [ { position: 110, label: 'Lý do' } ]
+  @EndUserText.label: 'Nội dung lý do'
   ReasonText;
 
   @UI.lineItem: [ { position: 120, label: 'Giao dịch gốc' } ]
+  @EndUserText.label: 'Mã giao dịch gốc'
   OriginalTransactionUUID;
 
   @UI.lineItem: [ { position: 130, label: 'Sync Item UUID' } ]
+  @EndUserText.label: 'Mã đồng bộ'
   SyncItemUUID;
 
   @UI.lineItem: [ { position: 140, label: 'Người ghi SAP' } ]
+  @EndUserText.label: 'Người tạo'
   CreatedBy;
 
   @UI.lineItem: [ { position: 150, label: 'Thời điểm ghi' } ]
+  @EndUserText.label: 'Thời điểm tạo'
   CreatedAt;
 }

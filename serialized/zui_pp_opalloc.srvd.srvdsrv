@@ -1,5 +1,6 @@
 
 @EndUserText.label: 'Dịch vụ phân bổ sản lượng công đoạn'
 define service ZUI_PP_OPALLOC {
+  expose I_UnitOfMeasure as UnitValueHelp;
   expose ZC_PP_OpAlloc as OperationAllocations;
 }

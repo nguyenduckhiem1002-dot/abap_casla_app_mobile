@@ -38,6 +38,7 @@ annotate entity ZC_MOB_Role_Adm with
   @UI.selectionField: [{ position: 10 }]
   @UI.lineItem: [{ position: 10 }]
   @UI.identification: [{ position: 10 }]
+  @EndUserText.label: 'Mã chức danh'
   RoleID;
 
   @EndUserText.label: 'Tên chức danh'

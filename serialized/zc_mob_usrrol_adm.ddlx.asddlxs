@@ -10,6 +10,7 @@ annotate entity ZC_MOB_UsrRol_Adm with
 {
   @EndUserText.label: 'UUID người dùng'
   @UI.hidden: true
+  @EndUserText.label: 'Mã định danh người dùng'
   UserUUID;
 
   @EndUserText.label: 'Mã chức danh'

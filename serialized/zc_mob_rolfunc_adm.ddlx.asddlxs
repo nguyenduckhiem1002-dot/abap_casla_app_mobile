@@ -9,8 +9,21 @@
 annotate entity ZC_MOB_RolFunc_Adm with
 {
   @UI.hidden: true
+  @EndUserText.label: 'Mã chức danh'
   RoleID;
 
   @UI.lineItem: [{ position: 10 }]
+  @EndUserText.label: 'Mã chức năng'
+  @UI.identification: [{ position: 10 }]
   FuncID;
+
+  @EndUserText.label: 'Tên chức năng'
+  @UI.lineItem: [{ position: 20 }]
+  @UI.identification: [{ position: 20 }]
+  FuncName;
+
+  @EndUserText.label: 'Phân hệ ứng dụng'
+  @UI.lineItem: [{ position: 30 }]
+  @UI.identification: [{ position: 30 }]
+  AppModule;
 }
