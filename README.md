@@ -1,5 +1,7 @@
 # CASLA Mobile Production Allocation
 
+Tài liệu kỹ thuật chuẩn và đầy đủ của backend nằm tại [Technical Documentation](docs/TECHNICAL_DOCUMENTATION.md). File này là điểm bắt đầu cho developer; các tài liệu chuyên đề trong `docs/` bổ sung chi tiết theo từng chủ đề.
+
 Tài liệu kỹ thuật chuẩn cho backend ABAP RAP/CDS của CASLA Mobile. Repository này lưu các object ABAP Cloud ở dạng serialize để triển khai bằng abapGit lên SAP S/4HANA Cloud Public Edition hoặc tenant ABAP Cloud tương thích.
 
 > **Phạm vi nghiệp vụ:** backend ghi nhận nghiệp vụ phân bổ sản lượng CASLA vào các bảng Z trên SAP thông qua RAP/OData V4. Backend **không** tạo standard SAP Production Confirmation, material document hoặc business document SAP chuẩn khác.
