@@ -1,0 +1,5 @@
+@EndUserText.label: 'Danh mục ca làm việc'
+define service ZUI_PP_SHIFT_ADM {
+  expose ZC_PP_Shift_Adm as Shifts;
+  expose I_Plant as PlantValueHelp;
+}

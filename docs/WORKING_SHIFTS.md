@@ -17,6 +17,25 @@ Ví dụ tại nhà máy UTC+07:00:
 
 ## Cấu hình và GET
 
+### Service riêng cho ứng dụng Fiori
+
+- Consumption view: `ZC_PP_Shift_Adm` (chỉ đọc).
+- Service definition: `ZUI_PP_SHIFT_ADM`.
+- Service binding: `ZUI_PP_SHIFT_ADM_O4`, OData V4 UI.
+- Main entity: `Shifts`; `PlantValueHelp` chỉ phục vụ chọn nhà máy.
+- Metadata extension: `ZC_PP_SHIFT_ADM`, gồm danh sách, bộ lọc, facet chi tiết,
+  nhãn tiếng Việt, tìm kiếm mã/tên ca và text trạng thái.
+
+Activate consumption view và metadata, service definition, rồi binding trong ADT.
+Publish binding trên tenant đích và lấy URL thực tế từ binding; trạng thái publish
+không được coi là đã triển khai chỉ vì có file trong Git.
+Khi tạo app Fiori elements List Report/Object Page, chọn service riêng này và
+main entity `Shifts`. App hiện chỉ xem dữ liệu, không có create/update/delete.
+
+Hai service phân bổ cũ vẫn expose `ZI_PP_Shift` để giữ value help và tương thích API;
+app ca làm việc mới không phụ thuộc vào các entity phân bổ đó.
+Không xóa hay tạo lại bảng để thêm service này; dữ liệu ca hiện có được dùng nguyên trạng.
+
 ZTB_PP_SHIFT có khóa CLIENT/PLANT/SHIFT_ID/VALID_FROM, cùng SHIFT_NAME,
 START_TIME, END_TIME, END_DAY_OFFSET (0 hoặc 1), TIME_ZONE, VALID_TO, IS_ACTIVE (A/I).
 TIME_ZONE phải là khóa múi giờ SAP được cấu hình trong tenant, không phải tự điền chuỗi IANA.
