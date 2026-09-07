@@ -26,4 +26,18 @@ define abstract entity ZA_PP_HistEntry {
   UnitOfMeasure : abap.unit(3);
   @EndUserText.label: 'Trạng thái giao dịch'
   TransactionStatus : abap.char(20);
+  @EndUserText.label: 'Mã ca'
+  ShiftID : abap.char(10);
+  @EndUserText.label: 'Ngày làm việc'
+  WorkDate : abap.dats;
+  @EndUserText.label: 'Thời điểm thực hiện UTC'
+  ExecutedAt : abap.utclong;
+  @EndUserText.label: 'Bắt đầu ca UTC'
+  ShiftStartAt : abap.utclong;
+  @EndUserText.label: 'Kết thúc ca UTC'
+  ShiftEndAt : abap.utclong;
+  @EndUserText.label: 'Múi giờ ca'
+  ShiftTimeZone : abap.char(6);
+  @EndUserText.label: 'Phiên bản ca hiệu lực từ'
+  ShiftValidFrom : abap.dats;
 }

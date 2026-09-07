@@ -47,6 +47,20 @@ define root view entity ZC_PP_AllocTxn_Adm
       txn.uom                       as UnitOfMeasure,
   @EndUserText.label: 'Ngày thực hiện'
       txn.execution_date            as ExecutionDate,
+      @EndUserText.label: 'Mã ca'
+      txn.shift_id as ShiftID,
+      @EndUserText.label: 'Ngày làm việc'
+      txn.work_date as WorkDate,
+      @EndUserText.label: 'Thời điểm thực hiện UTC'
+      txn.executed_at as ExecutedAt,
+      @EndUserText.label: 'Bắt đầu ca UTC'
+      txn.shift_start_at as ShiftStartAt,
+      @EndUserText.label: 'Kết thúc ca UTC'
+      txn.shift_end_at as ShiftEndAt,
+      @EndUserText.label: 'Múi giờ ca'
+      txn.shift_time_zone as ShiftTimeZone,
+      @EndUserText.label: 'Phiên bản ca hiệu lực từ'
+      txn.shift_valid_from as ShiftValidFrom,
   @EndUserText.label: 'Trạng thái giao dịch'
       txn.transaction_status        as TransactionStatus,
   @EndUserText.label: 'Mã lý do'

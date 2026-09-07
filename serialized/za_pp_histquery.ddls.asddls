@@ -13,4 +13,7 @@ define abstract entity ZA_PP_HistQuery {
   @EndUserText.label: 'Mã nhân công'
   WorkerID : abap.char(8);
   SummaryOnly : abap_boolean;
+  @EndUserText.label: 'Mã ca'
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Shift', element: 'ShiftID' } }]
+  ShiftID : abap.char(10);
 }

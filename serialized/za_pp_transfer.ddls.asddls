@@ -24,4 +24,9 @@ define abstract entity ZA_PP_Transfer
   WorkerPassword : abap.char(255);
   @EndUserText.label: 'Mã đồng bộ'
   SyncItemUUID : sysuuid_x16;
+  @EndUserText.label: 'Mã ca (tùy chọn cho client cũ)'
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Shift', element: 'ShiftID' } }]
+  ShiftID : abap.char(10);
+  @EndUserText.label: 'Thời điểm thực hiện thực tế UTC'
+  ExecutedAt : abap.utclong;
 }

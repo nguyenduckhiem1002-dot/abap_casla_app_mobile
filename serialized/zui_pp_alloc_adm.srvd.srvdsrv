@@ -1,6 +1,7 @@
 
 @EndUserText.label: 'Quản trị điều chỉnh sản lượng'
 define service ZUI_PP_ALLOC_ADM {
+  expose ZI_PP_Shift as Shifts;
   expose I_Plant as PlantValueHelp;
   expose I_UnitOfMeasure as UnitValueHelp;
   expose ZI_MOB_WorkCenter_VH as WorkCenterValueHelp;
