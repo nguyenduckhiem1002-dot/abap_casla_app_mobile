@@ -44,7 +44,7 @@ annotate entity ZC_MOB_User_Adm with
       position: 100,
       type: #FOR_ACTION,
       dataAction: 'changePasswordAdmin',
-      label: 'Change Password'
+      label: 'Đổi mật khẩu'
     },
     {
     position: 80,
@@ -65,25 +65,26 @@ annotate entity ZC_MOB_User_Adm with
   FullName;
 
   @EndUserText.label: 'Email'
+  @UI.selectionField: [{ position: 30 }]
   @UI.lineItem: [{ position: 30 }]
   @UI.identification: [{ position: 30 }]
   Email;
 
   @EndUserText.label: 'Mã nhân viên'
-  @UI.selectionField: [{ position: 30 }]
+  @UI.selectionField: [{ position: 40 }]
   @UI.lineItem: [{ position: 40 }]
   @UI.identification: [{ position: 40 }]
   WorkerID;
 
   @EndUserText.label: 'Trạng thái'
-  @UI.selectionField: [{ position: 40 }]
+  @UI.selectionField: [{ position: 50 }]
   @UI.lineItem: [{ position: 50 }]
   @UI.identification: [{ position: 50 }]
   Status;
 
-  @EndUserText.label: 'Lock Until'
+  @EndUserText.label: 'Khóa đến'
   @UI.selectionField: [{ position: 60 }]
-  @UI.lineItem: [{ position: 70 }]
+  @UI.lineItem: [{ position: 80 }]
   @UI.identification: [{ position: 70 }]
   LockedUntil;
 
@@ -96,6 +97,6 @@ annotate entity ZC_MOB_User_Adm with
   LastLoginAt;
 
   @EndUserText.label: 'Thời điểm tạo'
-  @UI.lineItem: [{ position: 80 }]
+  @UI.lineItem: [{ position: 90 }]
   CreatedAt;
 }

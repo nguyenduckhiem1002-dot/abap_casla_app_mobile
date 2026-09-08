@@ -7,7 +7,12 @@ define abstract entity ZA_PP_Recall
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   Quantity : abap.quan(15,3);
   UnitOfMeasure : abap.unit(3);
+  @EndUserText.label: 'Mã ca'
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Shift', element: 'ShiftID' } }]
+  ShiftID : abap.char(10);
   ExecutionDate : abap.dats;
+  @EndUserText.label: 'Thời điểm thực hiện thực tế UTC'
+  ExecutedAt : abap.utclong;
   OriginalTransactionUUID : sysuuid_x16;
   AccessToken : abap.char(128);
   DeviceID : abap.char(120);

@@ -1,6 +1,6 @@
 # Fiori Elements administration
 
-Repository cung cấp bốn bề mặt quản trị IAM-protected. User/Role mapping và Role/Function/Work mapping là composition child trong app cha; không tạo app rời cho từng mapping row.
+Repository cung cấp năm bề mặt quản trị IAM-protected, trong đó danh mục ca làm việc được tách thành app read-only riêng. User/Role mapping và Role/Function/Work mapping là composition child trong app cha; không tạo app rời cho từng mapping row.
 
 ## 1. User Administration
 
@@ -70,7 +70,18 @@ Ví dụ:
 
 Original CONFIRM không bị sửa. Nếu đã có REVERSE thì correction bị reject. CORRECTION ghi SourceChannel = FIORI, VerificationMethod = IAM, reason và lineage.
 
-## 5. Service boundary
+## 5. Working Shift Catalog
+
+- Service: ZUI_PP_SHIFT_ADM
+- Binding: ZUI_PP_SHIFT_ADM_O4
+- Entity chính: Shifts / ZC_PP_Shift_Adm
+- Quyền: chỉ đọc danh mục ca, lọc theo Plant, ShiftID, hiệu lực và trạng thái.
+
+Ca đêm được xác định theo `ExecutedAt` và timezone của Plant. Ví dụ 22:00 ngày
+07/09 đến 06:00 ngày 08/09 vẫn có `WorkDate = 07/09` cho các xác nhận lúc
+23:00, 02:00 và 05:30. Không dùng thời điểm server nhận request khi đồng bộ offline.
+
+## 6. Service boundary
 
 | Surface | Identity | Mutation |
 | --- | --- | --- |
@@ -80,13 +91,14 @@ Original CONFIRM không bị sửa. Nếu đã có REVERSE thì correction bị 
 | ZUI_MOB_RBAC_ADM | SAP IAM | role/function/work administration |
 | ZUI_MD_CONGDOAN_ADM | SAP IAM | versioned master maintenance |
 | ZUI_PP_ALLOC_ADM | SAP IAM | correction + audit read |
+| ZUI_PP_SHIFT_ADM | SAP IAM | read-only working-shift catalog |
 
 Không thêm admin service binding vào mobile communication scenario. Không expose generic update/delete cho ZTB_PP_EMP_ALLOC hoặc ZTB_PP_ALLOC_TXN.
 
-## 6. Tenant setup checklist
+## 7. Tenant setup checklist
 
 1. Import và activate DDIC/CDS/BDEF/class theo dependency order.
-2. Publish bốn OData V4 admin bindings.
+2. Publish các OData V4 admin bindings, trong đó `ZUI_PP_SHIFT_ADM_O4` là binding riêng cho app ca.
 3. Gán IAM business catalogs/roles theo từng trách nhiệm admin.
 4. Tạo Fiori Elements shell từ binding thật trên tenant; không commit URL/semantic object giả vào backend repo.
 5. Test create account + initial Role, mapping assignments, deactivate Role/Work, validity overlap, correction/audit và raw CRUD denial.

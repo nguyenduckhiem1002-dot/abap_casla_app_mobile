@@ -82,10 +82,10 @@ Standard text code được snapshot thành MaCongDoan. Field/release phải ver
 ## 7. Domain mutation
 
 - **Initial assign:** verify function PP_INITIAL_ASSIGN, scope, worker active/password; create/cộng balance và append INITIAL_ASSIGN.
-- **Transfer:** verify target worker/password, source đủ Remaining; trừ source, cộng/tạo target; append TRANSFER.
-- **Recall:** original lineage phải là INITIAL_ASSIGN hoặc TRANSFER, balance đủ; append RECALL.
-- **Confirm:** worker active/password/UoM/balance; Completed += qty, Remaining -= qty; append CONFIRM custom.
-- **Reverse:** chỉ reverse POSTED CONFIRM, tính cả CORRECTION delta trước đó, append REVERSE.
+- **Transfer:** verify function PP_TRANSFER, target worker/password, source đủ Remaining; trừ source, cộng/tạo target; append TRANSFER.
+- **Recall:** verify function PP_RECALL; original lineage phải là INITIAL_ASSIGN hoặc TRANSFER cho đúng worker, balance đủ; append RECALL.
+- **Confirm:** verify function PP_CONFIRM; yêu cầu OriginalTransactionUUID của INITIAL_ASSIGN hoặc TRANSFER cho đúng worker; Completed += qty, Remaining -= qty; append CONFIRM custom.
+- **Reverse:** verify function PP_REVERSE; chỉ reverse POSTED CONFIRM, tính cả CORRECTION delta trước đó, append REVERSE.
 - **Correction:** Fiori/IAM dùng correctConfirm; append signed delta CORRECTION, giữ nguyên original.
 
 ## 8. Reconciliation result

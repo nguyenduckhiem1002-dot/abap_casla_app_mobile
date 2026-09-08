@@ -3,9 +3,9 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <DDLS>
-    <DDLNAME>ZC_PP_SHIFT_ADM</DDLNAME>
+    <DDLNAME>ZI_MD_CONGDOAN_HIST_VH</DDLNAME>
     <DDLANGUAGE>E</DDLANGUAGE>
-    <DDTEXT>Danh mục ca làm việc cho Fiori</DDTEXT>
+    <DDTEXT>Tra cứu công đoạn theo lịch sử</DDTEXT>
     <SOURCE_TYPE>W</SOURCE_TYPE>
    </DDLS>
   </asx:values>

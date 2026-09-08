@@ -25,5 +25,8 @@ fi
 echo "==> Checking RAP activation-risk patterns"
 python3 scripts/check_rap_patterns.py
 
+echo "==> Checking admin metadata/service coverage"
+python3 scripts/check_admin_metadata.py
+
 echo "==> Running abaplint 2.120.35"
 npx --yes @abaplint/cli@2.120.35

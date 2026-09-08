@@ -9,48 +9,183 @@
 }
 annotate entity ZC_PP_AllocTxn_Adm with
 {
-  @UI.lineItem: [ { position: 10, label: 'Lệnh SX' } ]
+  @UI.facet: [{
+    id: 'General',
+    purpose: #STANDARD,
+    type: #IDENTIFICATION_REFERENCE,
+    label: 'Chi tiết giao dịch sản lượng',
+    position: 10
+  }]
+
+  @EndUserText.label: 'Lệnh sản xuất'
+  @UI.lineItem: [{ position: 10 }]
+  @UI.selectionField: [{ position: 10 }]
+  @UI.identification: [{ position: 10 }]
   ProductionOrder;
 
-  @UI.lineItem: [ { position: 20, label: 'Operation' } ]
+  @EndUserText.label: 'Công đoạn lệnh sản xuất'
+  @UI.lineItem: [{ position: 20 }]
+  @UI.selectionField: [{ position: 20 }]
+  @UI.identification: [{ position: 20 }]
   Operation;
 
-  @UI.lineItem: [ { position: 30, label: 'Mã công đoạn' } ]
+  @EndUserText.label: 'Mã công đoạn'
+  @UI.lineItem: [{ position: 30 }]
+  @UI.selectionField: [{ position: 30 }]
+  @UI.identification: [{ position: 30 }]
   MaCongDoan;
 
-  @UI.lineItem: [ { position: 40, label: 'Loại giao dịch' } ]
+  @EndUserText.label: 'Nhà máy'
+  @UI.lineItem: [{ position: 40 }]
+  @UI.selectionField: [{ position: 40 }]
+  @UI.identification: [{ position: 40 }]
+  Plant;
+
+  @EndUserText.label: 'Trung tâm làm việc'
+  @UI.lineItem: [{ position: 50 }]
+  @UI.selectionField: [{ position: 50 }]
+  @UI.identification: [{ position: 50 }]
+  WorkCenter;
+
+  @EndUserText.label: 'Loại giao dịch'
+  @UI.lineItem: [{ position: 60 }]
+  @UI.selectionField: [{ position: 90 }]
+  @UI.identification: [{ position: 60 }]
   TransactionType;
 
-  @UI.lineItem: [ { position: 50, label: 'Nhân công' } ]
+  @EndUserText.label: 'Mã nhân công'
+  @UI.lineItem: [{ position: 70 }]
+  @UI.selectionField: [{ position: 60 }]
+  @UI.identification: [{ position: 70 }]
   WorkerID;
 
-  @UI.lineItem: [ { position: 60, label: 'Số lượng' } ]
+  @EndUserText.label: 'Số lượng'
+  @UI.lineItem: [{ position: 80 }]
+  @UI.identification: [{ position: 80 }]
   Quantity;
 
-  @UI.lineItem: [ { position: 70, label: 'ĐVT' } ]
+  @EndUserText.label: 'Đơn vị tính'
+  @UI.lineItem: [{ position: 90 }]
+  @UI.identification: [{ position: 90 }]
   UnitOfMeasure;
 
-  @UI.lineItem: [ { position: 80, label: 'Ngày thực hiện' } ]
-  ExecutionDate;
+  @EndUserText.label: 'Ngày làm việc'
+  @UI.lineItem: [{ position: 100 }]
+  @UI.selectionField: [{ position: 70 }]
+  @UI.identification: [{ position: 100 }]
+  WorkDate;
 
-  @UI.lineItem: [ { position: 90, label: 'Trạng thái' } ]
+  @EndUserText.label: 'Mã ca'
+  @UI.lineItem: [{ position: 110 }]
+  @UI.selectionField: [{ position: 80 }]
+  @UI.identification: [{ position: 110 }]
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Shift', element: 'ShiftID' },
+    additionalBinding: [{ localElement: 'Plant', element: 'Plant', usage: #FILTER }] }]
+  ShiftID;
+
+  @EndUserText.label: 'Thời điểm thực hiện UTC'
+  @UI.lineItem: [{ position: 120 }]
+  @UI.identification: [{ position: 120 }]
+  ExecutedAt;
+
+  @EndUserText.label: 'Trạng thái giao dịch'
+  @UI.lineItem: [{ position: 130 }]
+  @UI.selectionField: [{ position: 100 }]
+  @UI.identification: [{ position: 130 }]
   TransactionStatus;
 
-  @UI.lineItem: [ { position: 100, label: 'Nguồn' } ]
+  @EndUserText.label: 'Nguồn giao dịch'
+  @UI.lineItem: [{ position: 140 }]
+  @UI.selectionField: [{ position: 110 }]
+  @UI.identification: [{ position: 140 }]
   SourceChannel;
 
-  @UI.lineItem: [ { position: 110, label: 'Lý do' } ]
+  @EndUserText.label: 'Nội dung lý do'
+  @UI.lineItem: [{ position: 150 }]
+  @UI.identification: [{ position: 150 }]
   ReasonText;
 
-  @UI.lineItem: [ { position: 120, label: 'Giao dịch gốc' } ]
+  @EndUserText.label: 'Nhân công chuyển'
+  @UI.identification: [{ position: 160 }]
+  FromWorkerID;
+
+  @EndUserText.label: 'Nhân công nhận'
+  @UI.identification: [{ position: 170 }]
+  ToWorkerID;
+
+  @EndUserText.label: 'Ngày thực hiện'
+  @UI.identification: [{ position: 180 }]
+  ExecutionDate;
+
+  @EndUserText.label: 'Mã lý do'
+  @UI.identification: [{ position: 190 }]
+  ReasonCode;
+
+  @EndUserText.label: 'Loại giao dịch gốc'
+  @UI.identification: [{ position: 200 }]
+  OriginalTransactionType;
+
+  @EndUserText.label: 'Mã giao dịch gốc'
+  @UI.identification: [{ position: 210 }]
   OriginalTransactionUUID;
 
-  @UI.lineItem: [ { position: 130, label: 'Sync Item UUID' } ]
+  @EndUserText.label: 'Mã giao dịch'
+  @UI.identification: [{ position: 220 }]
+  TransactionUUID;
+
+  @EndUserText.label: 'Mã định danh công đoạn'
+  @UI.identification: [{ position: 230 }]
+  OperationUUID;
+
+  @EndUserText.label: 'Mã đồng bộ'
+  @UI.identification: [{ position: 240 }]
   SyncItemUUID;
 
-  @UI.lineItem: [ { position: 140, label: 'Người ghi SAP' } ]
+  @EndUserText.label: 'Bắt đầu ca UTC'
+  @UI.identification: [{ position: 250 }]
+  ShiftStartAt;
+
+  @EndUserText.label: 'Kết thúc ca UTC'
+  @UI.identification: [{ position: 260 }]
+  ShiftEndAt;
+
+  @EndUserText.label: 'Múi giờ ca'
+  @UI.identification: [{ position: 270 }]
+  ShiftTimeZone;
+
+  @EndUserText.label: 'Phiên bản ca hiệu lực từ'
+  @UI.identification: [{ position: 280 }]
+  ShiftValidFrom;
+
+  @EndUserText.label: 'Người thực hiện'
+  @UI.identification: [{ position: 290 }]
+  ActorUserUUID;
+
+  @EndUserText.label: 'Phiên thực hiện'
+  @UI.identification: [{ position: 300 }]
+  InitiatorSessionID;
+
+  @EndUserText.label: 'Mã thiết bị'
+  @UI.identification: [{ position: 310 }]
+  DeviceID;
+
+  @EndUserText.label: 'Phương thức xác thực'
+  @UI.identification: [{ position: 320 }]
+  VerificationMethod;
+
+  @EndUserText.label: 'Tài khoản nhân công xác thực'
+  @UI.identification: [{ position: 330 }]
+  VerifiedWorkerUserUUID;
+
+  @EndUserText.label: 'Thời điểm xác thực nhân công'
+  @UI.identification: [{ position: 340 }]
+  WorkerVerifiedAt;
+
+  @EndUserText.label: 'Người tạo'
+  @UI.identification: [{ position: 350 }]
   CreatedBy;
 
-  @UI.lineItem: [ { position: 150, label: 'Thời điểm ghi' } ]
+  @EndUserText.label: 'Thời điểm tạo'
+  @UI.identification: [{ position: 360 }]
   CreatedAt;
 }

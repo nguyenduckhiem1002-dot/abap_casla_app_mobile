@@ -39,17 +39,16 @@ CLASS zcl_mob_config IMPLEMENTATION.
 
   METHOD if_oo_adt_classrun~main.
 
-    "Điền hai giá trị khác nhau trước khi chạy.
-    "Không commit giá trị thật lên Git.
+    "Điền hai giá trị trong ADT trước khi chạy. Không commit secret lên Git.
     DATA(lt_config) = VALUE tt_config(
       (
         config_key   = c_password_pepper
-        config_value = 'b0d1ff6b79d5dc998ad31b8a7e265e53914e829e331220ad84e062e2d52d963d'  "Bạn tự điền PASSWORD_PEPPER
+        config_value = ``
         is_active    = abap_true
       )
       (
         config_key   = c_token_secret
-        config_value = '4c10fc6f564b0d4c7455900cedc02b895c600b92b69bf50a033465e85b734669'  "Bạn tự điền TOKEN_SECRET
+        config_value = ``
         is_active    = abap_true
       )
     ).
@@ -141,10 +140,19 @@ CLASS zcl_mob_config IMPLEMENTATION.
       )
     ).
 
-    "Chỉ insert/update key được truyền vào.
-    "Không có câu lệnh DELETE.
-    MODIFY ztb_mob_config
-      FROM TABLE @lt_database_config.
+    "Bootstrap chỉ thêm key còn thiếu. Không ghi đè secret đã có trong tenant.
+    SELECT FROM ztb_mob_config
+      FIELDS config_key
+      FOR ALL ENTRIES IN @lt_database_config
+      WHERE config_key = @lt_database_config-config_key
+      INTO TABLE @DATA(existing_keys).
+    LOOP AT existing_keys ASSIGNING FIELD-SYMBOL(<existing_key>).
+      DELETE lt_database_config WHERE config_key = <existing_key>-config_key.
+    ENDLOOP.
+    IF lt_database_config IS INITIAL.
+      RETURN.
+    ENDIF.
+    INSERT ztb_mob_config FROM TABLE @lt_database_config.
 
     rv_affected_rows = sy-dbcnt.
 

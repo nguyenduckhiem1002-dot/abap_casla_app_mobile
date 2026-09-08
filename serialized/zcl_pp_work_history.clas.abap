@@ -51,6 +51,13 @@ CLASS zcl_pp_work_history DEFINITION
     TYPES: BEGIN OF history_entry,
              transaction_uuid   TYPE ztb_pp_alloc_txn-transaction_uuid,
              execution_date     TYPE ztb_pp_alloc_txn-execution_date,
+             shift_id TYPE ztb_pp_alloc_txn-shift_id,
+             work_date TYPE ztb_pp_alloc_txn-work_date,
+             executed_at TYPE ztb_pp_alloc_txn-executed_at,
+             shift_start_at TYPE ztb_pp_alloc_txn-shift_start_at,
+             shift_end_at TYPE ztb_pp_alloc_txn-shift_end_at,
+             shift_time_zone TYPE ztb_pp_alloc_txn-shift_time_zone,
+             shift_valid_from TYPE ztb_pp_alloc_txn-shift_valid_from,
              worker_id          TYPE ztb_pp_alloc_txn-worker_id,
              worker_name        TYPE zi_pp_workerref-workername,
              production_order   TYPE ztb_pp_op_alloc-production_order,
@@ -85,16 +92,39 @@ CLASS zcl_pp_work_history DEFINITION
                 date_from       TYPE d
                 date_to         TYPE d
                 worker_id       TYPE ztb_pp_alloc_txn-worker_id OPTIONAL
+                shift_id TYPE ztb_pp_shift-shift_id OPTIONAL
                 include_entries TYPE abap_bool DEFAULT abap_true
       RETURNING VALUE(result)   TYPE history
       RAISING   cx_abap_message_digest zcx_mob_config.
 
   PRIVATE SECTION.
+    TYPES: BEGIN OF root_key,
+             transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid,
+             worker_id TYPE ztb_pp_alloc_txn-worker_id,
+           END OF root_key,
+           root_keys TYPE SORTED TABLE OF root_key WITH UNIQUE KEY transaction_uuid worker_id.
+    TYPES: BEGIN OF txn_link,
+             transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid,
+             original_transaction_uuid TYPE ztb_pp_alloc_txn-original_transaction_uuid,
+             worker_id TYPE ztb_pp_alloc_txn-worker_id,
+           END OF txn_link,
+           txn_links TYPE STANDARD TABLE OF txn_link WITH EMPTY KEY.
+    CLASS-METHODS expand_roots
+      IMPORTING derived TYPE txn_links
+      CHANGING roots TYPE root_keys.
+
     TYPES: BEGIN OF ledger_row,
              transaction_uuid   TYPE ztb_pp_alloc_txn-transaction_uuid,
              original_transaction_uuid
                TYPE ztb_pp_alloc_txn-original_transaction_uuid,
              execution_date     TYPE ztb_pp_alloc_txn-execution_date,
+             shift_id TYPE ztb_pp_alloc_txn-shift_id,
+             work_date TYPE ztb_pp_alloc_txn-work_date,
+             executed_at TYPE ztb_pp_alloc_txn-executed_at,
+             shift_start_at TYPE ztb_pp_alloc_txn-shift_start_at,
+             shift_end_at TYPE ztb_pp_alloc_txn-shift_end_at,
+             shift_time_zone TYPE ztb_pp_alloc_txn-shift_time_zone,
+             shift_valid_from TYPE ztb_pp_alloc_txn-shift_valid_from,
              report_worker_id   TYPE ztb_pp_alloc_txn-worker_id,
              worker_id          TYPE ztb_pp_alloc_txn-worker_id,
              from_worker_id     TYPE ztb_pp_alloc_txn-from_worker_id,
@@ -135,6 +165,7 @@ CLASS zcl_pp_work_history DEFINITION
       IMPORTING worker        TYPE ztb_pp_alloc_txn-worker_id
                 date_from     TYPE d
                 date_to       TYPE d
+                shift_id TYPE ztb_pp_shift-shift_id
       RETURNING VALUE(result) TYPE ledger_rows.
 
     CLASS-METHODS select_team
@@ -142,6 +173,7 @@ CLASS zcl_pp_work_history DEFINITION
                 worker        TYPE ztb_pp_alloc_txn-worker_id
                 date_from     TYPE d
                 date_to       TYPE d
+                shift_id TYPE ztb_pp_shift-shift_id
       RETURNING VALUE(result) TYPE ledger_rows.
 
     CLASS-METHODS summarize
@@ -217,19 +249,20 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       WHEN result-scope_code = scope_self
       THEN select_self( worker = worker_filter
                         date_from = result-date_from
-                        date_to = result-date_to )
+                        date_to = result-date_to shift_id = shift_id )
       ELSE select_team( user_uuid = auth-user_uuid
                         worker = worker_filter
                         date_from = result-date_from
-                        date_to = result-date_to ) ).
+                        date_to = result-date_to shift_id = shift_id ) ).
 
     result-entry_count = lines( rows ).
     result-is_truncated = xsdbool( result-entry_count >= max_scan_rows ).
     result-workers = summarize( rows ).
     DATA unique_workers TYPE SORTED TABLE OF ztb_pp_alloc_txn-worker_id
                         WITH UNIQUE KEY table_line.
-    unique_workers = VALUE #( FOR summary IN result-workers
-                              ( summary-worker_id ) ).
+    LOOP AT result-workers INTO DATA(worker_summary_row).
+      INSERT worker_summary_row-worker_id INTO TABLE unique_workers.
+    ENDLOOP.
     result-worker_count = lines( unique_workers ).
     IF include_entries = abap_true.
       result-entries = build_entries( rows ).
@@ -310,11 +343,14 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       INNER JOIN ztb_pp_op_alloc AS op
         ON op~operation_uuid = txn~operation_uuid
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
-             txn~execution_date, txn~worker_id,
+             txn~execution_date, txn~shift_id, txn~work_date, txn~executed_at, txn~shift_start_at,
+             txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~plant, op~work_center
-      WHERE txn~execution_date BETWEEN @date_from AND @date_to
+      WHERE ( txn~work_date BETWEEN @date_from AND @date_to
+           OR ( txn~work_date = '00000000' AND txn~execution_date BETWEEN @date_from AND @date_to ) )
+        AND ( @shift_id = ' ' OR txn~shift_id = @shift_id )
         AND txn~transaction_status = @zcl_pp_txn_type=>posted
         AND ( txn~worker_id = @worker
            OR txn~from_worker_id = @worker
@@ -339,7 +375,8 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
         AND transaction_type IN ( @zcl_pp_txn_type=>initial_assign,
                                   @zcl_pp_txn_type=>transfer )
         AND transaction_status = @zcl_pp_txn_type=>posted
-        AND execution_date <= @date_to
+        AND ( work_date <= @date_to AND work_date <> '00000000'
+           OR ( work_date = '00000000' AND execution_date <= @date_to ) )
         AND ( @worker = ' '
            OR worker_id = @worker
            OR from_worker_id = @worker
@@ -355,12 +392,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
            END OF scope_key.
     DATA scope TYPE SORTED TABLE OF scope_key
                WITH UNIQUE KEY operation_uuid worker_id.
-    TYPES: BEGIN OF root_key,
-             transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid,
-             worker_id        TYPE ztb_pp_alloc_txn-worker_id,
-           END OF root_key.
-    DATA roots TYPE SORTED TABLE OF root_key
-               WITH UNIQUE KEY transaction_uuid worker_id.
+    DATA roots TYPE root_keys.
     LOOP AT booked ASSIGNING FIELD-SYMBOL(<booked>).
       IF <booked>-worker_id IS NOT INITIAL.
         INSERT VALUE #( operation_uuid = <booked>-operation_uuid
@@ -388,6 +420,16 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       RETURN.
     ENDIF.
 
+    "Include derived corrections/reversals by following the original receipt chain.
+    SELECT FROM ztb_pp_alloc_txn
+      FIELDS transaction_uuid, original_transaction_uuid, worker_id
+      FOR ALL ENTRIES IN @scope
+      WHERE operation_uuid = @scope-operation_uuid
+        AND worker_id = @scope-worker_id
+        AND transaction_status = @zcl_pp_txn_type=>posted
+      INTO TABLE @DATA(derived).
+    expand_roots( EXPORTING derived = derived CHANGING roots = roots ).
+
     "Bước 2: lấy mọi POSTED row của các cặp operation/worker trong scope, gồm cả
     "CONFIRM do worker ghi sau đó. Nếu thiếu các row này thì cột progress sẽ trống
     "đối với supervisor chỉ thực hiện assignment.
@@ -395,7 +437,8 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       INNER JOIN ztb_pp_op_alloc AS op
         ON op~operation_uuid = txn~operation_uuid
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
-             txn~operation_uuid, txn~execution_date, txn~worker_id,
+             txn~operation_uuid, txn~execution_date, txn~shift_id, txn~work_date, txn~executed_at,
+             txn~shift_start_at, txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~plant, op~work_center
@@ -404,7 +447,9 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
         AND ( txn~worker_id = @scope-worker_id
            OR txn~from_worker_id = @scope-worker_id
            OR txn~to_worker_id = @scope-worker_id )
-        AND txn~execution_date BETWEEN @date_from AND @date_to
+        AND ( txn~work_date BETWEEN @date_from AND @date_to
+           OR ( txn~work_date = '00000000' AND txn~execution_date BETWEEN @date_from AND @date_to ) )
+        AND ( @shift_id = ' ' OR txn~shift_id = @shift_id )
         AND txn~transaction_status = @zcl_pp_txn_type=>posted
       INTO TABLE @DATA(candidates)
       UP TO @max_scan_rows ROWS.
@@ -442,6 +487,23 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     SORT result BY execution_date DESCENDING transaction_uuid report_worker_id.
   ENDMETHOD.
 
+  METHOD expand_roots.
+    DATA(expanded) = abap_true.
+    WHILE expanded = abap_true.
+      expanded = abap_false.
+      LOOP AT derived INTO DATA(child).
+        IF line_exists( roots[ transaction_uuid = child-original_transaction_uuid
+                               worker_id = child-worker_id ] )
+           AND NOT line_exists( roots[ transaction_uuid = child-transaction_uuid
+                                       worker_id = child-worker_id ] ).
+          INSERT VALUE #( transaction_uuid = child-transaction_uuid
+                          worker_id = child-worker_id ) INTO TABLE roots.
+          expanded = abap_true.
+        ENDIF.
+      ENDLOOP.
+    ENDWHILE.
+  ENDMETHOD.
+
   METHOD summarize.
     LOOP AT rows ASSIGNING FIELD-SYMBOL(<row>).
       CASE <row>-transaction_type.
@@ -466,7 +528,15 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
                                     assigned = <row>-quantity * -1
                           CHANGING summaries = result ).
           ENDIF.
-        WHEN zcl_pp_txn_type=>confirm.
+        WHEN zcl_pp_txn_type=>recall.
+          IF <row>-worker_id <> <row>-report_worker_id.
+            CONTINUE.
+          ENDIF.
+          add_quantity( EXPORTING worker = <row>-report_worker_id
+                                  uom = <row>-uom
+                                  assigned = <row>-quantity * -1
+                        CHANGING summaries = result ).
+        WHEN zcl_pp_txn_type=>confirm OR zcl_pp_txn_type=>correction.
           IF <row>-worker_id <> <row>-report_worker_id.
             CONTINUE.
           ENDIF.
@@ -515,6 +585,13 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       APPEND VALUE #(
         transaction_uuid = <row>-transaction_uuid
         execution_date = <row>-execution_date
+        shift_id = <row>-shift_id
+        work_date = COND #( WHEN <row>-work_date IS INITIAL THEN <row>-execution_date ELSE <row>-work_date )
+        executed_at = <row>-executed_at
+        shift_start_at = <row>-shift_start_at
+        shift_end_at = <row>-shift_end_at
+        shift_time_zone = <row>-shift_time_zone
+        shift_valid_from = <row>-shift_valid_from
         worker_id = <row>-report_worker_id
         production_order = <row>-production_order
         operation_no = <row>-operation_no

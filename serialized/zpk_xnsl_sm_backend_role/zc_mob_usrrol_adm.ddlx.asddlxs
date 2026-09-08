@@ -8,19 +8,31 @@
 }
 annotate entity ZC_MOB_UsrRol_Adm with
 {
+  @UI.facet: [{
+    id: 'General',
+    purpose: #STANDARD,
+    type: #IDENTIFICATION_REFERENCE,
+    label: 'Chức danh người dùng',
+    position: 10
+  }]
+
   @EndUserText.label: 'UUID người dùng'
   @UI.hidden: true
   UserUUID;
 
   @EndUserText.label: 'Mã chức danh'
+  @UI.selectionField: [{ position: 10 }]
   @UI.lineItem: [{ position: 10 }]
+  @UI.identification: [{ position: 10 }]
   RoleID;
 
   @EndUserText.label: 'Tên chức danh'
   @UI.lineItem: [{ position: 20 }]
+  @UI.identification: [{ position: 20 }]
   RoleName;
 
   @EndUserText.label: 'Trạng thái chức danh'
   @UI.lineItem: [{ position: 30 }]
+  @UI.identification: [{ position: 30 }]
   RoleStatus;
 }

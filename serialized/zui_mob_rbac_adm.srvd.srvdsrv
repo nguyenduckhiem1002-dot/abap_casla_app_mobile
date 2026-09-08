@@ -7,4 +7,7 @@ define service ZUI_MOB_RBAC_ADM {
   expose ZC_MOB_Work_Adm      as WorkContexts;
   expose ZI_MOB_Func_VH       as FunctionValueHelp;
   expose ZI_MOB_Work_VH       as WorkContextValueHelp;
+  expose ZI_MOB_Work_Hist_VH  as WorkContextHistoryValueHelp;
+  expose I_Plant              as PlantValueHelp;
+  expose ZI_MOB_WorkCenter_VH as WorkCenterValueHelp;
 }

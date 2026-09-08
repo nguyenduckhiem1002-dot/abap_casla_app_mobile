@@ -32,7 +32,7 @@ không được coi là đã triển khai chỉ vì có file trong Git.
 Khi tạo app Fiori elements List Report/Object Page, chọn service riêng này và
 main entity `Shifts`. App hiện chỉ xem dữ liệu, không có create/update/delete.
 
-Hai service phân bổ cũ vẫn expose `ZI_PP_Shift` để giữ value help và tương thích API;
+Service mobile cũ vẫn expose `ZI_PP_Shift` để giữ value help và tương thích API;
 app ca làm việc mới không phụ thuộc vào các entity phân bổ đó.
 Không xóa hay tạo lại bảng để thêm service này; dữ liệu ca hiện có được dùng nguyên trạng.
 
@@ -41,7 +41,7 @@ START_TIME, END_TIME, END_DAY_OFFSET (0 hoặc 1), TIME_ZONE, VALID_TO, IS_ACTIV
 TIME_ZONE phải là khóa múi giờ SAP được cấu hình trong tenant, không phải tự điền chuỗi IANA.
 Ca cùng ngày phải có giờ kết thúc lớn hơn giờ bắt đầu; ca qua ngày dài tối đa 24 giờ.
 
-ZI_PP_Shift được expose tên Shifts trong ZUI_PP_OPALLOC và ZUI_PP_ALLOC_ADM.
+ZI_PP_Shift được expose tên `Shifts` trong `ZUI_PP_OPALLOC`; danh mục ca dành cho Fiori admin dùng riêng `ZUI_PP_SHIFT_ADM`.
 Entity này chỉ đọc, không có behavior create/update/delete.
 
 ```http

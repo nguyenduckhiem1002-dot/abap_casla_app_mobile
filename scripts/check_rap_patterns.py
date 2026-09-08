@@ -1,16 +1,30 @@
 from pathlib import Path
 
 
+ROOT = Path(__file__).resolve().parents[1]
+SERIALIZED = ROOT / "serialized"
+
+
+def object_file(name: str) -> Path:
+    matches = sorted(SERIALIZED.rglob(name))
+    if len(matches) != 1:
+        raise SystemExit(
+            f"Expected exactly one {name} below serialized/, found {len(matches)}: "
+            + ", ".join(str(path.relative_to(ROOT)) for path in matches)
+        )
+    return matches[0]
+
+
 def main() -> None:
-    user_bdef = Path("serialized/zi_mob_user.bdef.asbdef").read_text(encoding="utf-8")
+    user_bdef = object_file("zi_mob_user.bdef.asbdef").read_text(encoding="utf-8-sig")
     if user_bdef.count("deep result [1] ZA_MOB_LoginResult") != 2:
         raise SystemExit("login/refresh phải dùng deep result ZA_MOB_LoginResult")
 
-    pp_bdef = Path("serialized/zr_pp_opalloc.bdef.asbdef").read_text(encoding="utf-8")
+    pp_bdef = object_file("zr_pp_opalloc.bdef.asbdef").read_text(encoding="utf-8-sig")
     if pp_bdef.count("deep result [1] ZA_PP_HistResult") != 1:
         raise SystemExit("getWorkHistory phải dùng deep result ZA_PP_HistResult")
 
-    md_bdef = Path("serialized/zi_md_congdoan.bdef.asbdef").read_text(encoding="utf-8")
+    md_bdef = object_file("zi_md_congdoan.bdef.asbdef").read_text(encoding="utf-8-sig")
     key_rule = "field ( mandatory : create, readonly : update ) MaCongDoan, ValidFrom;"
     if key_rule not in md_bdef:
         raise SystemExit(
@@ -21,8 +35,8 @@ def main() -> None:
             "Không được kết hợp mandatory với readonly:update cho MaCongDoan/ValidFrom"
         )
 
-    pp_impl = Path("serialized/zbp_r_pp_opalloc.clas.locals_imp.abap").read_text(
-        encoding="utf-8"
+    pp_impl = object_file("zbp_r_pp_opalloc.clas.locals_imp.abap").read_text(
+        encoding="utf-8-sig"
     )
     for method in (
         "initialAssign",
@@ -45,8 +59,8 @@ def main() -> None:
             "Aggregate một cột INTO @DATA(...) là scalar, không được dereference component"
         )
 
-    for path in Path("serialized").glob("*.ddlx.asddlxs"):
-        mde = path.read_text(encoding="utf-8")
+    for path in SERIALIZED.rglob("*.ddlx.asddlxs"):
+        mde = path.read_text(encoding="utf-8-sig")
         if "@UI.facet" not in mde:
             continue
         annotate = mde.find("annotate entity ")

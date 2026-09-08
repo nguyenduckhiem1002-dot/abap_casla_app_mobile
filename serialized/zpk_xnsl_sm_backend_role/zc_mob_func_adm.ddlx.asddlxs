@@ -8,7 +8,7 @@
     value: 'FuncName'
   },
   description: {
-    value: 'FuncId'
+    value: 'FuncID'
   }
 }
 

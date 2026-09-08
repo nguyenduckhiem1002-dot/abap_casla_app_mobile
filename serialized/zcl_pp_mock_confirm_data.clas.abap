@@ -15,6 +15,10 @@ CLASS zcl_pp_mock_confirm_data DEFINITION
       manager_role TYPE ztb_mob_role-role_id VALUE 'PP_MANAGER',
       operator_role TYPE ztb_mob_role-role_id VALUE 'PP_OPERATOR',
       function_assign TYPE ztb_mob_func-func_id VALUE 'PP_INITIAL_ASSIGN',
+      function_transfer TYPE ztb_mob_func-func_id VALUE 'PP_TRANSFER',
+      function_recall TYPE ztb_mob_func-func_id VALUE 'PP_RECALL',
+      function_confirm TYPE ztb_mob_func-func_id VALUE 'PP_CONFIRM',
+      function_reverse TYPE ztb_mob_func-func_id VALUE 'PP_REVERSE',
       function_team TYPE ztb_mob_func-func_id VALUE 'PP_HIST_TEAM',
       function_self TYPE ztb_mob_func-func_id VALUE 'PP_HIST_SELF',
       demo_order TYPE ztb_pp_op_alloc-production_order VALUE 'DEMO00000001',
@@ -288,6 +292,26 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
       RETURN.
     ENDIF.
     success = ensure_function(
+      func_id = function_transfer func_name = 'Dieu chuyen san luong' ).
+    IF success = abap_false.
+      RETURN.
+    ENDIF.
+    success = ensure_function(
+      func_id = function_recall func_name = 'Thu hoi san luong' ).
+    IF success = abap_false.
+      RETURN.
+    ENDIF.
+    success = ensure_function(
+      func_id = function_confirm func_name = 'Xac nhan san luong' ).
+    IF success = abap_false.
+      RETURN.
+    ENDIF.
+    success = ensure_function(
+      func_id = function_reverse func_name = 'Dao xac nhan san luong' ).
+    IF success = abap_false.
+      RETURN.
+    ENDIF.
+    success = ensure_function(
       func_id = function_team func_name = 'Xem lich su cua doi' ).
     IF success = abap_false.
       RETURN.
@@ -313,10 +337,22 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
                                  func_id = function_assign ).
     success = xsdbool( success = abap_true AND
       ensure_role_grant( role_id = manager_role
+                         func_id = function_transfer ) = abap_true ).
+    success = xsdbool( success = abap_true AND
+      ensure_role_grant( role_id = manager_role
+                         func_id = function_recall ) = abap_true ).
+    success = xsdbool( success = abap_true AND
+      ensure_role_grant( role_id = manager_role
+                         func_id = function_reverse ) = abap_true ).
+    success = xsdbool( success = abap_true AND
+      ensure_role_grant( role_id = manager_role
                          func_id = function_team ) = abap_true ).
     success = xsdbool( success = abap_true AND
       ensure_role_grant( role_id = manager_role
                          func_id = function_self ) = abap_true ).
+    success = xsdbool( success = abap_true AND
+      ensure_role_grant( role_id = operator_role
+                         func_id = function_confirm ) = abap_true ).
     success = xsdbool( success = abap_true AND
       ensure_role_grant( role_id = operator_role
                          func_id = function_self ) = abap_true ).

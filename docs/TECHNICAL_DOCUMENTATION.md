@@ -262,19 +262,19 @@ The actor must have the initial-assignment function and a matching work context.
 
 ### 8.3 Transfer
 
-Source and target workers must differ. The target worker is independently verified. The source balance must have enough remaining quantity. The source receives `TransferredOutQuantity`; the target receives `TransferredInQuantity`; the ledger stores both worker IDs.
+The actor needs `PP_TRANSFER`. Source and target workers must differ. The target worker is independently verified. The source balance must have enough remaining quantity. The source receives `TransferredOutQuantity`; the target receives `TransferredInQuantity`; the ledger stores both worker IDs.
 
 ### 8.4 Recall
 
-The original transaction must belong to the operation and be an eligible `INITIAL_ASSIGN` or `TRANSFER`. The worker and UoM must match the balance and enough remaining quantity must exist. The original row is not changed; a linked `RECALL` row is appended.
+The actor needs `PP_RECALL`. The original transaction must belong to the operation, identify the same worker, and be an eligible `INITIAL_ASSIGN` or `TRANSFER`. The worker and UoM must match the balance and enough remaining quantity must exist. The original row is not changed; a linked `RECALL` row is appended.
 
 ### 8.5 Confirm
 
-The worker must be active and verified, the UoM must match, and the balance must be sufficient. The optional original transaction must belong to the same operation and be posted. The backend updates `CompletedQuantity` and `RemainingQuantity`, then appends `CONFIRM` as a CASLA custom transaction.
+The actor needs `PP_CONFIRM`. The worker must be active and verified, the UoM must match, and the balance must be sufficient. `OriginalTransactionUUID` is required and must identify a posted `INITIAL_ASSIGN` or `TRANSFER` for the same operation and worker. This immutable lineage lets team history attribute the confirmation to the correct allocation. The backend updates `CompletedQuantity` and `RemainingQuantity`, then appends `CONFIRM` as a CASLA custom transaction.
 
 ### 8.6 Reverse
 
-The target must be a posted `CONFIRM` for the same operation and must not already be reversed. Effective quantity is the original quantity plus earlier correction deltas. The balance is compensated and a linked `REVERSE` row is added. Original rows remain unchanged.
+The actor needs `PP_REVERSE`. The target must be a posted `CONFIRM` for the same operation and must not already be reversed. Effective quantity is the original quantity plus earlier correction deltas. The balance is compensated and a linked `REVERSE` row is added. Original rows remain unchanged.
 
 ### 8.7 Controlled correction
 
@@ -304,7 +304,7 @@ More than one receipt exists
   -> SYNC_RECEIPT_DUPLICATE; fail closed
 ```
 
-The comparison includes operation, transaction type, worker/from/to worker, quantity, UoM, execution date, original transaction and shift event fields when supplied.
+The comparison includes actor, operation, transaction type, worker/from/to worker, quantity, UoM, execution date, original transaction and shift event fields when supplied. A persisted matching `CONFIRM` is returned before the live SAP operation guard runs, so a lost HTTP response remains retryable after the order status changes.
 
 If HTTP response is lost, the mobile status becomes `UNKNOWN` or `PENDING_CONFIRMATION` and calls `getSyncStatus`. `NOT_FOUND` means that the backend has not proved a commit; it is not a business rejection. A retry uses the same key and logical payload.
 
@@ -389,7 +389,7 @@ The scan is capped at 20,000 ledger rows and entries at 1,000 rows. `IsTruncated
 
 Team history follows original-transaction links through correction and reversal chains. This prevents a correction or reversal from disappearing merely because the supervisor did not create that derived row.
 
-The current summary counts initial assignment and transfer as assigned, confirm and correction as completed, and reverse as negative completed. Recall is returned in the ledger but is not currently included in the assigned summary. If the product requires summary treatment of recall or separate per-shift aggregates, the reporting contract must be extended explicitly.
+The summary counts initial assignment and transfer as assigned, recall as negative assigned, confirm and correction as completed, and reverse as negative completed. `Remaining` therefore reconciles with the worker-operation balance: assigned minus completed.
 
 ## 12. OData services and Fiori
 
@@ -399,7 +399,7 @@ The current summary counts initial assignment and transfer as assigned, confirm 
 | --- | --- | --- |
 | `ZUI_MOB_AUTH` | Mobile authentication and session | Auth actions and results |
 | `ZUI_PP_OPALLOC` | Mobile allocation and history | `OperationAllocations`, `Shifts`, value helps |
-| `ZUI_PP_ALLOC_ADM` | Admin correction and audit | `OperationAllocations`, `AllocationTransactions`, `Shifts`, value helps |
+| `ZUI_PP_ALLOC_ADM` | Admin correction and audit | `OperationAllocations`, `AllocationTransactions`, value helps |
 | `ZUI_PP_SHIFT_ADM` | Separate read-only shift catalog app | `Shifts`, `PlantValueHelp` |
 | `ZUI_MOB_USER_ADM` | User administration | User and related admin entities |
 | `ZUI_MOB_RBAC_ADM` | Role/function/work administration | RBAC admin entities |
@@ -420,7 +420,7 @@ Protocol       OData V4 UI
 
 `ZC_PP_Shift_Adm` is read-only and contains labels, line items, selection fields, a general-information facet, search for shift ID/name, plant value help and status text. It does not implement create/update/delete. The binding in Git is a deployment descriptor; it must be activated and published on the tenant before an endpoint exists.
 
-For a Fiori Elements List Report/Object Page, choose service `ZUI_PP_SHIFT_ADM` and main entity `Shifts`. Existing services still expose `ZI_PP_Shift` to preserve value help and mobile/API compatibility.
+For a Fiori Elements List Report/Object Page, choose service `ZUI_PP_SHIFT_ADM` and main entity `Shifts`. The mobile service `ZUI_PP_OPALLOC` still exposes `ZI_PP_Shift` as `Shifts` for mobile/API compatibility; the admin correction service stays focused on allocation and audit.
 
 ### 12.3 Value helps and metadata
 

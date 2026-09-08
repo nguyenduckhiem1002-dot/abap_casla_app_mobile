@@ -9,33 +9,78 @@
 }
 annotate entity ZC_PP_OpAlloc_Adm with
 {
+  @UI.facet: [{
+    id: 'General',
+    purpose: #STANDARD,
+    type: #IDENTIFICATION_REFERENCE,
+    label: 'Thông tin công đoạn sản xuất',
+    position: 10
+  }]
+
+  @EndUserText.label: 'Mã định danh công đoạn'
+  @UI.identification: [{ position: 90 }]
+  OperationUUID;
+
   @UI.lineItem: [
     { position: 10, label: 'Lệnh sản xuất' },
     { type: #FOR_ACTION, dataAction: 'correctConfirm', label: 'Điều chỉnh xác nhận', position: 5 }
   ]
   @UI.identification: [ { position: 10, label: 'Lệnh sản xuất' } ]
+  @UI.selectionField: [{ position: 10 }]
+  @EndUserText.label: 'Lệnh sản xuất'
   ProductionOrder;
 
   @UI.lineItem: [ { position: 20, label: 'Công đoạn' } ]
   @UI.identification: [ { position: 20, label: 'Công đoạn' } ]
+  @EndUserText.label: 'Công đoạn lệnh sản xuất'
   Operation;
 
   @UI.lineItem: [ { position: 30, label: 'Mã công đoạn' } ]
   @UI.identification: [ { position: 30, label: 'Mã công đoạn' } ]
+  @UI.selectionField: [{ position: 20 }]
+  @EndUserText.label: 'Mã công đoạn'
   MaCongDoan;
 
   @UI.lineItem: [ { position: 40, label: 'Nhà máy' } ]
+  @UI.identification: [{ position: 40 }]
+  @UI.selectionField: [{ position: 30 }]
+  @EndUserText.label: 'Nhà máy'
   Plant;
 
   @UI.lineItem: [ { position: 50, label: 'Tổ/Work Center' } ]
+  @UI.identification: [{ position: 50 }]
+  @UI.selectionField: [{ position: 40 }]
+  @EndUserText.label: 'Trung tâm làm việc'
   WorkCenter;
 
   @UI.lineItem: [ { position: 60, label: 'Sản lượng công đoạn' } ]
+  @UI.identification: [{ position: 60 }]
+  @EndUserText.label: 'Sản lượng công đoạn'
   OperationQuantity;
 
   @UI.lineItem: [ { position: 70, label: 'ĐVT' } ]
+  @UI.identification: [{ position: 70 }]
+  @EndUserText.label: 'Đơn vị tính'
   UnitOfMeasure;
 
   @UI.lineItem: [ { position: 80, label: 'Trạng thái' } ]
+  @UI.identification: [{ position: 80 }]
+  @EndUserText.label: 'Trạng thái công đoạn'
   OperationStatus;
+
+  @EndUserText.label: 'Người tạo'
+  @UI.identification: [{ position: 100 }]
+  CreatedBy;
+
+  @EndUserText.label: 'Thời điểm tạo'
+  @UI.identification: [{ position: 110 }]
+  CreatedAt;
+
+  @EndUserText.label: 'Người thay đổi cuối'
+  @UI.identification: [{ position: 120 }]
+  LastChangedBy;
+
+  @EndUserText.label: 'Thời điểm cập nhật bản ghi'
+  @UI.identification: [{ position: 130 }]
+  LocalLastChangedAt;
 }

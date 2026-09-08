@@ -1,7 +1,7 @@
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'Chọn công đoạn'
+@EndUserText.label: 'Tra cứu công đoạn theo lịch sử'
 @Search.searchable: true
-define view entity ZI_MD_CongDoan_VH
+define view entity ZI_MD_CongDoan_Hist_VH
   as select from ZI_MD_CongDoan
 {
   @EndUserText.label: 'Mã công đoạn'
@@ -18,5 +18,3 @@ define view entity ZI_MD_CongDoan_VH
   @EndUserText.label: 'Hiệu lực đến'
   ValidTo
 }
-where ValidFrom <= $session.system_date
-  and ( ValidTo >= $session.system_date or ValidTo = abap.dats'00000000' )

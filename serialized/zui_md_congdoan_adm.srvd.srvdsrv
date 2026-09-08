@@ -1,4 +1,6 @@
 @EndUserText.label: 'Dịch vụ Master Công đoạn'
 define service ZUI_MD_CONGDOAN_ADM {
   expose ZC_MD_CongDoan_Adm as CongDoans;
+  expose ZI_MD_CongDoan_VH as OperationValueHelp;
+  expose ZI_MD_CongDoan_Hist_VH as OperationHistoryValueHelp;
 }

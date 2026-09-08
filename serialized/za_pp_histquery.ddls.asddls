@@ -6,5 +6,8 @@ define abstract entity ZA_PP_HistQuery {
   DateFrom : abap.dats;
   DateTo : abap.dats;
   WorkerID : abap.char(8);
+  @EndUserText.label: 'Mã ca'
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Shift', element: 'ShiftID' } }]
+  ShiftID : abap.char(10);
   SummaryOnly : abap_boolean;
 }

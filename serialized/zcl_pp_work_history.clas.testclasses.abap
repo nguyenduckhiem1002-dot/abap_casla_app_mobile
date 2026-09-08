@@ -16,13 +16,15 @@ CLASS ltc_history IMPLEMENTATION.
       ( worker_id = 'HD000001' report_worker_id = 'HD000001' uom = 'ST'
         transaction_type = zcl_pp_txn_type=>confirm quantity = 25 )
       ( worker_id = 'HD000001' report_worker_id = 'HD000001' uom = 'ST'
+        transaction_type = zcl_pp_txn_type=>recall quantity = 20 )
+      ( worker_id = 'HD000001' report_worker_id = 'HD000001' uom = 'ST'
         transaction_type = zcl_pp_txn_type=>correction quantity = 10 )
       ( worker_id = 'HD000001' report_worker_id = 'HD000001' uom = 'ST'
         transaction_type = zcl_pp_txn_type=>reverse quantity = 35 ) ).
     DATA(actual) = zcl_pp_work_history=>summarize( rows ).
     cl_abap_unit_assert=>assert_equals( act = actual[ 1 ]-completed exp = 0 ).
-    cl_abap_unit_assert=>assert_equals( act = actual[ 1 ]-remaining exp = 100 ).
-    cl_abap_unit_assert=>assert_equals( act = actual[ 1 ]-txn_count exp = 4 ).
+    cl_abap_unit_assert=>assert_equals( act = actual[ 1 ]-remaining exp = 80 ).
+    cl_abap_unit_assert=>assert_equals( act = actual[ 1 ]-txn_count exp = 5 ).
   ENDMETHOD.
   METHOD ancestor_scope.
     DATA roots TYPE zcl_pp_work_history=>root_keys.

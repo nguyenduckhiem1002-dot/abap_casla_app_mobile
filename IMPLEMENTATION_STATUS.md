@@ -1,6 +1,6 @@
 # Trạng thái implementation
 
-Ngày đối chiếu: **28/08/2026**. File này là bảng trạng thái ngắn; đặc tả đầy đủ nằm trong [README.md](README.md).
+Ngày đối chiếu: **08/09/2026**. File này là bảng trạng thái ngắn; đặc tả đầy đủ nằm trong [README.md](README.md).
 
 ## Đã có trong source
 
@@ -19,6 +19,8 @@ Ngày đối chiếu: **28/08/2026**. File này là bảng trạng thái ngắn;
 | Ledger | ZTB_PP_ALLOC_TXN, trạng thái POSTED, lineage | Đã có |
 | Reconciliation | getSyncStatus theo actor + SyncItemUUID | Đã có |
 | History | self/team scope, D/W/M/custom, summary/entries | Đã có |
+| Working shifts | ZTB_PP_SHIFT, timezone resolver, overnight WorkDate, snapshot ledger | Đã có; cần activate/test trên tenant |
+| Shift service | ZUI_PP_SHIFT_ADM / ZUI_PP_SHIFT_ADM_O4, read-only catalog | Đã serialize; tách riêng khỏi service admin allocation |
 | Master | versioned Công đoạn + non-overlap validation | Đã có |
 | Fiori services | User, RBAC, master, correction/audit | Đã có metadata/binding serialize |
 
@@ -36,15 +38,18 @@ Ngày đối chiếu: **28/08/2026**. File này là bảng trạng thái ngắn;
 - released status/field của I_ManufacturingOrderStatus, I_ManufacturingOrderOperation, I_WorkCenter;
 - ATC/ABAP Cloud result trên tenant;
 - IAM catalog, communication arrangement, binding publish và Launchpad mapping;
+- activation graph/package import sau khi chuyển AUTH/ROLE/WC/CD;
+- cấu hình thực tế của ca, timezone nhà máy và mã UoM SAP hợp lệ (không dùng `PC` nếu tenant không cấu hình);
 - unique constraint/index và concurrency behavior khi first-create;
 - benchmark KDF, cleanup session, rate limiting, log redaction;
 - end-to-end mobile timeout/retry trên hệ thống thật.
 
 ## Việc tiếp theo trước production
 
-1. Import/activate theo dependency order trong README.
+1. Import/activate theo dependency order trong README; không xóa/recreate bảng đã có dữ liệu.
 2. Verify CDS release/fields bằng ADT/View Browser.
-3. Chạy ATC và test metadata/action của toàn bộ OData V4 binding.
-4. Enforce/test unique business key cho operation snapshot.
-5. Chạy test matrix về lock, duplicate key, response loss và immutable lineage.
-6. Chốt policy mật khẩu; sửa code/message/test nếu yêu cầu 12 ký tự và complexity là bắt buộc.
+3. Activate/publish riêng `ZUI_PP_SHIFT_ADM_O4`, kiểm tra entity `Shifts` và value help Plant.
+4. Chạy ATC và test metadata/action của toàn bộ OData V4 binding.
+5. Enforce/test unique business key cho operation snapshot.
+6. Chạy test matrix về lock, duplicate key, response loss, immutable lineage và ca đêm.
+7. Chốt policy mật khẩu; sửa code/message/test nếu yêu cầu 12 ký tự và complexity là bắt buộc.

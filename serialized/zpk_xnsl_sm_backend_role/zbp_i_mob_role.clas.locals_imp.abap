@@ -9,11 +9,17 @@ ENDCLASS.
 CLASS lhc_mobilerole IMPLEMENTATION.
   METHOD get_global_authorizations.
     "Được bảo vệ bằng IAM app/business catalog của service quản trị.
-    result-%create = if_abap_behv=>auth-allowed.
-    result-%update = if_abap_behv=>auth-allowed.
+    IF requested_authorizations-%create = if_abap_behv=>mk-on.
+      result-%create = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%update = if_abap_behv=>mk-on.
+      result-%update = if_abap_behv=>auth-allowed.
+    ENDIF.
     "Hãy vô hiệu hóa chức danh qua Status thay vì hard-delete. Hard-delete có thể
     "làm mất liên kết lịch sử phân quyền và các tham chiếu phục vụ audit.
-    result-%delete = if_abap_behv=>auth-unauthorized.
+    IF requested_authorizations-%delete = if_abap_behv=>mk-on.
+      result-%delete = if_abap_behv=>auth-unauthorized.
+    ENDIF.
   ENDMETHOD.
 
   METHOD validateRole.
@@ -53,13 +59,28 @@ CLASS lhc_mobilerolefunc IMPLEMENTATION.
       WITH CORRESPONDING #( keys )
       RESULT DATA(assignments).
 
+    DATA function_ids TYPE RANGE OF ztb_mob_func-func_id.
+    LOOP AT assignments ASSIGNING FIELD-SYMBOL(<assignment_key>).
+      IF NOT line_exists( function_ids[ low = <assignment_key>-FuncID ] ).
+        INSERT VALUE #( sign = 'I' option = 'EQ'
+                        low = <assignment_key>-FuncID )
+          INTO TABLE function_ids.
+      ENDIF.
+    ENDLOOP.
+
+    IF function_ids IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    DATA functions TYPE SORTED TABLE OF ztb_mob_func-func_id
+      WITH UNIQUE KEY table_line.
+    SELECT FROM ztb_mob_func
+      FIELDS func_id
+      WHERE func_id IN @function_ids
+      INTO TABLE @functions.
+
     LOOP AT assignments ASSIGNING FIELD-SYMBOL(<assignment>).
-      SELECT FROM ztb_mob_func
-        FIELDS func_id
-        WHERE func_id = @<assignment>-FuncID
-        INTO TABLE @DATA(functions)
-        UP TO 1 ROWS.
-      IF functions IS INITIAL.
+      IF NOT line_exists( functions[ table_line = <assignment>-FuncID ] ).
         APPEND VALUE #( %tky = <assignment>-%tky )
           TO failed-mobilerolefunc.
         APPEND VALUE #(
@@ -88,14 +109,29 @@ CLASS lhc_mobilerolework IMPLEMENTATION.
       WITH CORRESPONDING #( keys )
       RESULT DATA(assignments).
 
+    DATA work_ids TYPE RANGE OF ztb_mob_work-work_id.
+    LOOP AT assignments ASSIGNING FIELD-SYMBOL(<assignment_key>).
+      IF NOT line_exists( work_ids[ low = <assignment_key>-WorkID ] ).
+        INSERT VALUE #( sign = 'I' option = 'EQ'
+                        low = <assignment_key>-WorkID )
+          INTO TABLE work_ids.
+      ENDIF.
+    ENDLOOP.
+
+    IF work_ids IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    DATA active_works TYPE SORTED TABLE OF ztb_mob_work-work_id
+      WITH UNIQUE KEY table_line.
+    SELECT FROM ztb_mob_work
+      FIELDS work_id
+      WHERE work_id IN @work_ids
+        AND is_active = 'A'
+      INTO TABLE @active_works.
+
     LOOP AT assignments ASSIGNING FIELD-SYMBOL(<assignment>).
-      SELECT FROM ztb_mob_work
-        FIELDS work_id
-        WHERE work_id = @<assignment>-WorkID
-          AND is_active = 'A'
-        INTO TABLE @DATA(active_works)
-        UP TO 1 ROWS.
-      IF active_works IS INITIAL.
+      IF NOT line_exists( active_works[ table_line = <assignment>-WorkID ] ).
         APPEND VALUE #( %tky = <assignment>-%tky )
           TO failed-mobilerolework.
         APPEND VALUE #(
