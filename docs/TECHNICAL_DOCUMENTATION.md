@@ -461,7 +461,10 @@ abapGit source files are not database rows. Updating a serialized source file sh
 4. Add new columns to `ZTB_PP_ALLOC_TXN` through the normal DDIC activation/migration path; preserve existing data.
 5. Create the new `ZTB_PP_SHIFT` table separately.
 6. Activate in dependency order.
-7. Publish service bindings after service definitions are active.
+7. Publish service bindings after service definitions are active. The repository
+   ignores generated `SCO2`/`SUSH` files because these contain tenant-specific
+   OData V4 `G4BA` registration and start-authorization data. Publishing each
+   binding on the destination tenant recreates those artifacts locally.
 
 Recommended activation order:
 

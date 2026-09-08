@@ -11,6 +11,8 @@
     <item>/IMPLEMENTATION_STATUS.md</item>
     <item>/src/</item>
     <item>/serialized/.gitkeep</item>
+    <item>*.sco2.xml</item>
+    <item>*.sush.xml</item>
    </IGNORE>
   </DATA>
  </asx:values>

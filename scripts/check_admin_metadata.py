@@ -91,6 +91,13 @@ def check_reserved_cds_element_names() -> None:
 def main() -> None:
     ddl_checks, test_include_checks = check_abapgit_companion_metadata()
     check_reserved_cds_element_names()
+    abapgit_config = read(".abapgit.xml")
+    for tenant_artifact in ("*.sco2.xml", "*.sush.xml"):
+        require(
+            abapgit_config,
+            f"<item>{tenant_artifact}</item>",
+            ".abapgit.xml tenant-specific OData exclusions",
+        )
     metadata_files = [
         "serialized/zpk_xnsl_sm_backend_auth/zc_mob_user_adm.ddlx.asddlxs",
         "serialized/zpk_xnsl_sm_backend_role/zc_mob_role_adm.ddlx.asddlxs",
