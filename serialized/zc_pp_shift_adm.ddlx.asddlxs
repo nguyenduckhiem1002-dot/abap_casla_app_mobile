@@ -51,7 +51,7 @@ annotate entity ZC_PP_Shift_Adm with
   @EndUserText.label: 'Múi giờ SAP'
   @UI.lineItem: [{ position: 70 }]
   @UI.identification: [{ position: 70 }]
-  TimeZone;
+  SAPTimeZone;
 
   @EndUserText.label: 'Hiệu lực từ'
   @UI.lineItem: [{ position: 80 }]

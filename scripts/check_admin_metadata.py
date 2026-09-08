@@ -78,8 +78,19 @@ def check_abapgit_companion_metadata() -> tuple[int, int]:
     return ddl_checks, test_include_checks
 
 
+def check_reserved_cds_element_names() -> None:
+    for source_path in (ROOT / "serialized").rglob("*.ddls.asddls"):
+        source = source_path.read_text(encoding="utf-8-sig")
+        if re.search(r"\bas\s+TimeZone\b|^\s*TimeZone\s*[,;]", source, re.MULTILINE):
+            raise AssertionError(
+                "Reserved CDS element name TimeZone in "
+                f"{source_path.relative_to(ROOT)}; use SAPTimeZone or ShiftTimeZone"
+            )
+
+
 def main() -> None:
     ddl_checks, test_include_checks = check_abapgit_companion_metadata()
+    check_reserved_cds_element_names()
     metadata_files = [
         "serialized/zpk_xnsl_sm_backend_auth/zc_mob_user_adm.ddlx.asddlxs",
         "serialized/zpk_xnsl_sm_backend_role/zc_mob_role_adm.ddlx.asddlxs",

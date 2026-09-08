@@ -88,7 +88,7 @@ Baseline kiểm tra local trong lần rà soát này:
 | Đơn vị tính | `I_UnitOfMeasure` hiện có | Mã SAP internal đúng cấu hình tenant; không hardcode PC/ST/PCE hoặc conversion exit classic |
 | Nhân công | `ZI_PP_WorkerRef` trên `ZTB_KB_NHANCONG` | Đây là master custom hiện hữu, không giả định WorkerID là SAP Personnel Number |
 | Work ID, chức danh, chức năng, mã công đoạn custom, ca | Các bảng/view Z đang có | Không thay bằng danh mục SAP khác chỉ vì giống tên |
-| TimeZone, BoPhan, Location, AppModule, ReasonCode | Theo hợp đồng dữ liệu thực sự của repo/tenant | Không tự bịa CDS chuẩn hoặc tập enum; xem quyết định cụ thể bên dưới |
+| SAPTimeZone, BoPhan, Location, AppModule, ReasonCode | Theo hợp đồng dữ liệu thực sự của repo/tenant | Không tự bịa CDS chuẩn hoặc tập enum; xem quyết định cụ thể bên dưới |
 
 Nguồn SAP công khai giúp chọn pattern; không chứng minh một CDS/annotation được released trên tenant cụ thể. Nếu thiếu API released, chỉ dừng hạng mục phụ thuộc đó, ghi rõ blocker; không truy cập bảng SAP chưa released để lách.
 
@@ -108,7 +108,7 @@ Các tên object trong bảng là object đang có. Hoàn thiện DDLS và DDLX 
 | CD `ZC_MD_CongDoan_Adm` / CongDoans | MaCongDoan filter có gợi ý mọi phiên bản; create vẫn cho nhập mã mới; BoPhan gợi ý giá trị custom, không khóa danh mục | Filter mã/tên/bộ phận/hiệu lực; cả ValidFrom key và ValidTo rõ ràng; label DonGiaXM/DonGiaGC, audit đầy đủ |
 | ROOT `ZC_PP_OpAlloc_Adm` / OperationAllocations | Khôi phục Plant/WorkCenter/UoM; MaCongDoan filter dùng danh mục lịch sử; ProductionOrder → dữ liệu phân bổ hiện có; Operation phụ thuộc ProductionOrder | Khôi phục filter đã mất; facet thông tin/sản lượng/audit; action correctConfirm được giữ nguyên; OperationUUID không chiếm cột chính |
 | ROOT `ZC_PP_AllocTxn_Adm` / AllocationTransactions | F4 WorkerID/FromWorkerID/ToWorkerID cùng nguồn lịch sử; Plant/WorkCenter/MaCongDoan; ShiftID có Plant; TransactionType/OriginalTransactionType/TransactionStatus/SourceChannel có mã + text | Filter chính WorkDate, Plant, ProductionOrder, WorkerID, ShiftID, TransactionType; ExecutionDate là ngày thực hiện, không đổi nhãn thành ngày làm việc; facet nghiệp vụ/nhân công/ca/lý do/audit |
-| ROOT `ZC_PP_Shift_Adm` / Shifts | Plant giữ VH; ShiftID filter có nguồn mọi phiên bản và Plant, IsActive có text A/I; không bắt dùng ca active cho xem lịch sử | Đủ 10 field Plant/ShiftID/ValidFrom/ShiftName/StartTime/EndTime/EndDayOffset/TimeZone/ValidTo/IsActive; giữ read-only, UI service riêng |
+| ROOT `ZC_PP_Shift_Adm` / Shifts | Plant giữ VH; ShiftID filter có nguồn mọi phiên bản và Plant, IsActive có text A/I; không bắt dùng ca active cho xem lịch sử | Đủ 10 field Plant/ShiftID/ValidFrom/ShiftName/StartTime/EndTime/EndDayOffset/SAPTimeZone/ValidTo/IsActive; giữ read-only, UI service riêng |
 
 Quy tắc để xử lý một property vừa là filter vừa là field tạo master: dùng help để gợi ý, không dùng validation bắt mã mới phải tồn tại trong chính danh mục. Nếu UI release không tách được hành vi mong muốn, giữ nhập tự do và filter mã/tên thay vì chặn tạo mới. Đánh dấu ngoại lệ trong coverage và nghiệm thu riêng.
 
@@ -119,7 +119,7 @@ Quy tắc để xử lý một property vừa là filter vừa là field tạo m
 - Technical UUID, sync/session/device ID, timestamp audit: label rõ, chi tiết khi cần, không tạo dropdown tải toàn bộ ledger/user/session.
 - ReasonCode hiện action chỉ yêu cầu có giá trị, chưa có master lý do. Có thể gợi ý mã đã dùng trong filter; không áp enum bắt buộc mới ở action. ReasonText luôn nhập tự do.
 - BoPhan/Location/AppModule chưa chứng minh là danh mục chuẩn đóng. Gợi ý từ bảng master phù hợp, cho nhập mới; không thêm bảng cấu hình chỉ để có F4.
-- TimeZone trên màn ca đang read-only: nhãn/giải thích đầy đủ là đủ. Value help timezone chuẩn chỉ là hạng mục sau nếu mở CRUD, cần xác minh API khi đó.
+- SAPTimeZone trên màn ca đang read-only: nhãn/giải thích đầy đủ là đủ. Value help timezone chuẩn chỉ là hạng mục sau nếu mở CRUD, cần xác minh API khi đó.
 
 ### 4.2. Dialog action phải nằm trong coverage
 

@@ -28,7 +28,7 @@ define view entity ZC_PP_Shift_Adm as select from ZI_PP_Shift
   @EndUserText.label: 'Ngày kết thúc: 0 cùng ngày, 1 hôm sau'
   EndDayOffset,
   @EndUserText.label: 'Múi giờ SAP'
-  TimeZone,
+  SAPTimeZone,
   @EndUserText.label: 'Hiệu lực đến'
   ValidTo,
   @EndUserText.label: 'Trạng thái'
