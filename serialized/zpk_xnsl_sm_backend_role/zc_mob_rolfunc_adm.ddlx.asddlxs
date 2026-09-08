@@ -1,0 +1,17 @@
+
+@Metadata.layer: #CORE
+
+@UI.headerInfo: {
+  typeName: 'Chức năng',
+  typeNamePlural: 'Chức năng',
+  title: { value: 'FuncID' }
+}
+annotate entity ZC_MOB_RolFunc_Adm with
+{
+  @UI.hidden: true
+  RoleID;
+
+  @UI.lineItem: [{ position: 10 }]
+  @EndUserText.label: 'Mã chức năng'
+  FuncID;
+}

@@ -76,6 +76,12 @@ CLASS lhc_operationallocation DEFINITION
                 text TYPE string
       CHANGING failed TYPE failed_response reported TYPE reported_response.
 
+    METHODS forward_action_failure
+      IMPORTING cid TYPE string
+                operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
+                action_reported TYPE reported_response
+      CHANGING failed TYPE failed_response reported TYPE reported_response.
+
     METHODS report_failure
       IMPORTING cid TYPE string text TYPE string
       CHANGING failed TYPE failed_response reported TYPE reported_response.
@@ -123,55 +129,25 @@ ENDCLASS.
 
 CLASS lhc_operationallocation IMPLEMENTATION.
   METHOD get_global_authorizations.
-  "API mobile không expose raw CRUD. Các domain action tự xác thực CASLA token
-  "khi request xuất phát từ mobile; projection mobile chỉ expose các static
-  "facade action có kiểm soát.
-  IF requested_authorizations-%create = if_abap_behv=>mk-on.
+    "API mobile không expose raw CRUD. Các domain action tự xác thực CASLA token
+    "khi request xuất phát từ mobile; projection mobile chỉ expose các static
+    "facade action có kiểm soát.
     result-%create = if_abap_behv=>auth-unauthorized.
-  ENDIF.
-  IF requested_authorizations-%update = if_abap_behv=>mk-on.
     result-%update = if_abap_behv=>auth-unauthorized.
-  ENDIF.
-  IF requested_authorizations-%action-initialAssign = if_abap_behv=>mk-on.
     result-%action-initialAssign = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-transfer = if_abap_behv=>mk-on.
     result-%action-transfer = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-recall = if_abap_behv=>mk-on.
     result-%action-recall = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-confirm = if_abap_behv=>mk-on.
     result-%action-confirm = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-reverse = if_abap_behv=>mk-on.
     result-%action-reverse = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-correctConfirm = if_abap_behv=>mk-on.
     result-%action-correctConfirm = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-submitInitialAssign = if_abap_behv=>mk-on.
     result-%action-submitInitialAssign = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-submitTransfer = if_abap_behv=>mk-on.
     result-%action-submitTransfer = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-submitRecall = if_abap_behv=>mk-on.
     result-%action-submitRecall = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-submitConfirm = if_abap_behv=>mk-on.
     result-%action-submitConfirm = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-submitReverse = if_abap_behv=>mk-on.
     result-%action-submitReverse = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-getSyncStatus = if_abap_behv=>mk-on.
     result-%action-getSyncStatus = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-getWorkHistory = if_abap_behv=>mk-on.
     result-%action-getWorkHistory = if_abap_behv=>auth-allowed.
-  ENDIF.
-ENDMETHOD.
+  ENDMETHOD.
 
   METHOD validateOperation.
     READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
@@ -309,7 +285,7 @@ ENDMETHOD.
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
       IF operations IS INITIAL OR input-Quantity <= 0
          OR input-ToWorkerID IS INITIAL OR input-SyncItemUUID IS INITIAL
-         OR ( input-ExecutionDate IS INITIAL AND input-ExecutedAt IS INITIAL ).
+         OR input-ExecutionDate IS INITIAL.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = 'Thiếu dữ liệu giao việc bắt buộc'
@@ -317,18 +293,6 @@ ENDMETHOD.
         CONTINUE.
       ENDIF.
       DATA(operation) = operations[ 1 ].
-      DATA(shift) = zcl_pp_shift_resolver=>resolve(
-        plant = operation-Plant shift_id = input-ShiftID
-        executed_at = input-ExecutedAt execution_date = input-ExecutionDate
-        sync_item_uuid = input-SyncItemUUID ).
-      IF shift-is_valid = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = CONV string( shift-error_code )
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-      input-ExecutionDate = shift-work_date.
       IF zcl_mob_token_validator=>has_work_scope(
            user_uuid = auth-user_uuid plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
@@ -338,8 +302,14 @@ ENDMETHOD.
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      IF input-UnitOfMeasure <> operation-UnitOfMeasure
-         OR zcl_pp_worker_validator=>is_worker_active(
+      IF input-UnitOfMeasure <> operation-UnitOfMeasure.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+                    text = 'UNIT_OF_MEASURE_MISMATCH'
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      IF zcl_pp_worker_validator=>is_worker_active(
            worker_id = input-ToWorkerID plant = operation-Plant
            work_center = operation-WorkCenter
            execution_date = input-ExecutionDate ) = abap_false.
@@ -370,7 +340,7 @@ ENDMETHOD.
 
       SELECT FROM ztb_pp_alloc_txn
         FIELDS transaction_uuid, operation_uuid, transaction_type,
-               to_worker_id, quantity, uom, execution_date, shift_id, executed_at
+               to_worker_id, quantity, uom, execution_date
         WHERE sync_item_uuid = @input-SyncItemUUID
         INTO TABLE @DATA(existing_txns)
         UP TO 2 ROWS.
@@ -388,8 +358,6 @@ ENDMETHOD.
            AND existing_txn-to_worker_id = input-ToWorkerID
            AND existing_txn-quantity = input-Quantity
            AND existing_txn-uom = input-UnitOfMeasure
-           AND existing_txn-shift_id = input-ShiftID
-           AND existing_txn-executed_at = input-ExecutedAt
            AND existing_txn-execution_date = input-ExecutionDate.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
@@ -454,8 +422,7 @@ ENDMETHOD.
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
           ( SyncItemUUID ActorUserUUID VerifiedWorkerUserUUID WorkerVerifiedAt
             InitiatorSessionID DeviceID VerificationMethod TransactionType
-             WorkerID ToWorkerID Quantity UnitOfMeasure ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt
-             ShiftEndAt ShiftTimeZone ShiftValidFrom
+            WorkerID ToWorkerID Quantity UnitOfMeasure ExecutionDate
             TransactionStatus SourceChannel )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |TXN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
@@ -464,13 +431,6 @@ ENDMETHOD.
             WorkerVerifiedAt = utclong_current( )
             InitiatorSessionID = auth-session_id DeviceID = input-DeviceID
             VerificationMethod = 'PASSWORD'
-            ShiftID = shift-shift_id
-            WorkDate = shift-work_date
-            ExecutedAt = shift-executed_at
-            ShiftStartAt = shift-shift_start_at
-            ShiftEndAt = shift-shift_end_at
-            ShiftTimeZone = shift-shift_time_zone
-            ShiftValidFrom = shift-shift_valid_from
             TransactionType = zcl_pp_txn_type=>initial_assign
             WorkerID = input-ToWorkerID ToWorkerID = input-ToWorkerID
             Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
@@ -506,7 +466,7 @@ ENDMETHOD.
       IF operations IS INITIAL OR input-Quantity <= 0
          OR input-FromWorkerID IS INITIAL OR input-ToWorkerID IS INITIAL
          OR input-FromWorkerID = input-ToWorkerID OR input-SyncItemUUID IS INITIAL
-         OR ( input-ExecutionDate IS INITIAL AND input-ExecutedAt IS INITIAL ).
+         OR input-ExecutionDate IS INITIAL.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = 'Thiếu hoặc sai dữ liệu điều chuyển'
@@ -514,18 +474,6 @@ ENDMETHOD.
         CONTINUE.
       ENDIF.
       DATA(operation) = operations[ 1 ].
-      DATA(shift) = zcl_pp_shift_resolver=>resolve(
-        plant = operation-Plant shift_id = input-ShiftID
-        executed_at = input-ExecutedAt execution_date = input-ExecutionDate
-        sync_item_uuid = input-SyncItemUUID ).
-      IF shift-is_valid = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = CONV string( shift-error_code )
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-      input-ExecutionDate = shift-work_date.
       IF zcl_mob_token_validator=>has_work_scope(
            user_uuid = auth-user_uuid plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
@@ -559,7 +507,7 @@ ENDMETHOD.
 
       SELECT FROM ztb_pp_alloc_txn
         FIELDS transaction_uuid, operation_uuid, transaction_type,
-               from_worker_id, to_worker_id, quantity, uom, execution_date, shift_id, executed_at
+               from_worker_id, to_worker_id, quantity, uom, execution_date
         WHERE sync_item_uuid = @input-SyncItemUUID
         INTO TABLE @DATA(existing_txns) UP TO 2 ROWS.
       IF lines( existing_txns ) > 1.
@@ -577,8 +525,6 @@ ENDMETHOD.
            AND existing_txn-to_worker_id = input-ToWorkerID
            AND existing_txn-quantity = input-Quantity
            AND existing_txn-uom = input-UnitOfMeasure
-           AND existing_txn-shift_id = input-ShiftID
-           AND existing_txn-executed_at = input-ExecutedAt
            AND existing_txn-execution_date = input-ExecutionDate.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
@@ -636,8 +582,7 @@ ENDMETHOD.
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
           ( SyncItemUUID ActorUserUUID VerifiedWorkerUserUUID WorkerVerifiedAt
             InitiatorSessionID DeviceID VerificationMethod TransactionType
-             FromWorkerID ToWorkerID Quantity UnitOfMeasure ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt
-             ShiftEndAt ShiftTimeZone ShiftValidFrom
+            FromWorkerID ToWorkerID Quantity UnitOfMeasure ExecutionDate
             TransactionStatus SourceChannel )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |TRN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
@@ -645,13 +590,6 @@ ENDMETHOD.
             VerifiedWorkerUserUUID = worker_auth-worker_user_uuid
             WorkerVerifiedAt = utclong_current( ) InitiatorSessionID = auth-session_id
             DeviceID = input-DeviceID VerificationMethod = 'PASSWORD'
-            ShiftID = shift-shift_id
-            WorkDate = shift-work_date
-            ExecutedAt = shift-executed_at
-            ShiftStartAt = shift-shift_start_at
-            ShiftEndAt = shift-shift_end_at
-            ShiftTimeZone = shift-shift_time_zone
-            ShiftValidFrom = shift-shift_valid_from
             TransactionType = zcl_pp_txn_type=>transfer
             FromWorkerID = input-FromWorkerID ToWorkerID = input-ToWorkerID
             Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
@@ -685,7 +623,7 @@ ENDMETHOD.
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
       IF operations IS INITIAL OR input-Quantity <= 0 OR input-WorkerID IS INITIAL
          OR input-SyncItemUUID IS INITIAL OR input-OriginalTransactionUUID IS INITIAL
-         OR ( input-ExecutionDate IS INITIAL AND input-ExecutedAt IS INITIAL ).
+         OR input-ExecutionDate IS INITIAL.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = 'Thiếu dữ liệu thu hồi bắt buộc'
@@ -693,18 +631,6 @@ ENDMETHOD.
         CONTINUE.
       ENDIF.
       DATA(operation) = operations[ 1 ].
-      DATA(shift) = zcl_pp_shift_resolver=>resolve(
-        plant = operation-Plant shift_id = input-ShiftID
-        executed_at = input-ExecutedAt execution_date = input-ExecutionDate
-        sync_item_uuid = input-SyncItemUUID ).
-      IF shift-is_valid = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = CONV string( shift-error_code )
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-      input-ExecutionDate = shift-work_date.
       IF zcl_mob_token_validator=>has_work_scope(
            user_uuid = auth-user_uuid plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
@@ -734,7 +660,7 @@ ENDMETHOD.
 
       SELECT FROM ztb_pp_alloc_txn
         FIELDS transaction_uuid, operation_uuid, original_transaction_uuid,
-               transaction_type, worker_id, quantity, uom, execution_date, shift_id, executed_at
+               transaction_type, worker_id, quantity, uom, execution_date
         WHERE sync_item_uuid = @input-SyncItemUUID
         INTO TABLE @DATA(existing_txns) UP TO 2 ROWS.
       IF lines( existing_txns ) > 1.
@@ -752,8 +678,6 @@ ENDMETHOD.
            AND existing_txn-worker_id = input-WorkerID
            AND existing_txn-quantity = input-Quantity
            AND existing_txn-uom = input-UnitOfMeasure
-           AND existing_txn-shift_id = input-ShiftID
-           AND existing_txn-executed_at = input-ExecutedAt
            AND existing_txn-execution_date = input-ExecutionDate.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
@@ -807,8 +731,7 @@ ENDMETHOD.
           ( OriginalTransactionUUID OriginalTransactionType SyncItemUUID ActorUserUUID
             VerifiedWorkerUserUUID WorkerVerifiedAt InitiatorSessionID DeviceID
             VerificationMethod TransactionType WorkerID FromWorkerID Quantity
-             UnitOfMeasure ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt ShiftEndAt ShiftTimeZone
-             ShiftValidFrom TransactionStatus SourceChannel )
+            UnitOfMeasure ExecutionDate TransactionStatus SourceChannel )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |RCL{ sy-tabix }| OriginalTransactionUUID = input-OriginalTransactionUUID
             OriginalTransactionType = root_type SyncItemUUID = input-SyncItemUUID
@@ -816,13 +739,6 @@ ENDMETHOD.
             VerifiedWorkerUserUUID = worker_auth-worker_user_uuid
             WorkerVerifiedAt = utclong_current( ) InitiatorSessionID = auth-session_id
             DeviceID = input-DeviceID VerificationMethod = 'PASSWORD'
-            ShiftID = shift-shift_id
-            WorkDate = shift-work_date
-            ExecutedAt = shift-executed_at
-            ShiftStartAt = shift-shift_start_at
-            ShiftEndAt = shift-shift_end_at
-            ShiftTimeZone = shift-shift_time_zone
-            ShiftValidFrom = shift-shift_valid_from
             TransactionType = zcl_pp_txn_type=>recall WorkerID = input-WorkerID
             FromWorkerID = input-WorkerID Quantity = input-Quantity
             UnitOfMeasure = input-UnitOfMeasure ExecutionDate = input-ExecutionDate
@@ -854,20 +770,15 @@ ENDMETHOD.
       ENDIF.
       READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE ENTITY OperationAllocation ALL FIELDS
         WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
-      DATA(operation) = VALUE #( operations[ 1 ] OPTIONAL ).
-      DATA(shift) = zcl_pp_shift_resolver=>resolve(
-        plant = operation-Plant shift_id = input-ShiftID
-        executed_at = input-ExecutedAt execution_date = input-ExecutionDate
-        sync_item_uuid = input-SyncItemUUID ).
       IF operations IS INITIAL OR input-Quantity <= 0 OR input-WorkerID IS INITIAL
-         OR input-SyncItemUUID IS INITIAL OR shift-is_valid = abap_false.
+         OR input-ExecutionDate IS INITIAL OR input-SyncItemUUID IS INITIAL.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = |CONFIRM_INPUT_INVALID { shift-error_code }|
+                    text = 'CONFIRM_INPUT_INVALID'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      input-ExecutionDate = shift-work_date.
+      DATA(operation) = operations[ 1 ].
       IF zcl_mob_token_validator=>has_work_scope(
            user_uuid = auth-user_uuid plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
@@ -877,11 +788,16 @@ ENDMETHOD.
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      IF input-UnitOfMeasure <> operation-UnitOfMeasure
-         OR zcl_pp_worker_validator=>is_worker_active(
+      IF input-UnitOfMeasure <> operation-UnitOfMeasure.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+                    text = 'UNIT_OF_MEASURE_MISMATCH'
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      IF zcl_pp_worker_validator=>is_worker_active(
            worker_id = input-WorkerID plant = operation-Plant
-           work_center = operation-WorkCenter
-           execution_date = input-ExecutionDate ) = abap_false.
+           work_center = operation-WorkCenter execution_date = input-ExecutionDate ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = 'WORKER_NOT_ALLOWED'
@@ -908,7 +824,7 @@ ENDMETHOD.
 
       SELECT FROM ztb_pp_alloc_txn
         FIELDS transaction_uuid, operation_uuid, transaction_type,
-               original_transaction_uuid, worker_id, quantity, uom, execution_date, shift_id, executed_at
+               original_transaction_uuid, worker_id, quantity, uom, execution_date
         WHERE sync_item_uuid = @input-SyncItemUUID
         INTO TABLE @DATA(existing_txns) UP TO 2 ROWS.
       IF lines( existing_txns ) > 1.
@@ -925,8 +841,6 @@ ENDMETHOD.
            AND existing_txn-worker_id = input-WorkerID
            AND existing_txn-quantity = input-Quantity
            AND existing_txn-uom = input-UnitOfMeasure
-           AND existing_txn-shift_id = input-ShiftID
-           AND existing_txn-executed_at = input-ExecutedAt
            AND existing_txn-execution_date = input-ExecutionDate
            AND existing_txn-original_transaction_uuid = input-OriginalTransactionUUID.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
@@ -993,8 +907,7 @@ ENDMETHOD.
           ( OriginalTransactionUUID OriginalTransactionType SyncItemUUID ActorUserUUID
             VerifiedWorkerUserUUID WorkerVerifiedAt InitiatorSessionID DeviceID
             VerificationMethod TransactionType WorkerID Quantity UnitOfMeasure
-             ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt ShiftEndAt ShiftTimeZone ShiftValidFrom
-             TransactionStatus SourceChannel )
+            ExecutionDate TransactionStatus SourceChannel )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |CFM{ sy-tabix }| OriginalTransactionUUID = input-OriginalTransactionUUID
             OriginalTransactionType = original_type SyncItemUUID = input-SyncItemUUID
@@ -1002,13 +915,6 @@ ENDMETHOD.
             VerifiedWorkerUserUUID = worker_auth-worker_user_uuid
             WorkerVerifiedAt = utclong_current( ) InitiatorSessionID = auth-session_id
             DeviceID = input-DeviceID VerificationMethod = 'PASSWORD'
-            ShiftID = shift-shift_id
-            WorkDate = shift-work_date
-            ExecutedAt = shift-executed_at
-            ShiftStartAt = shift-shift_start_at
-            ShiftEndAt = shift-shift_end_at
-            ShiftTimeZone = shift-shift_time_zone
-            ShiftValidFrom = shift-shift_valid_from
             TransactionType = zcl_pp_txn_type=>confirm WorkerID = input-WorkerID
             Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
             ExecutionDate = input-ExecutionDate TransactionStatus = zcl_pp_txn_type=>posted
@@ -1086,8 +992,7 @@ ENDMETHOD.
       ENDIF.
 
       SELECT FROM ztb_pp_alloc_txn
-        FIELDS transaction_uuid, worker_id, quantity, uom, execution_date,
-               shift_id, work_date, executed_at, shift_start_at, shift_end_at, shift_time_zone, shift_valid_from
+        FIELDS transaction_uuid, worker_id, quantity, uom, execution_date
         WHERE transaction_uuid = @input-TransactionUUID
           AND operation_uuid = @operation-OperationUUID
           AND transaction_type = @zcl_pp_txn_type=>confirm
@@ -1164,8 +1069,7 @@ ENDMETHOD.
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
           ( OriginalTransactionUUID OriginalTransactionType SyncItemUUID ActorUserUUID
             InitiatorSessionID DeviceID VerificationMethod TransactionType WorkerID
-             Quantity UnitOfMeasure ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt ShiftEndAt ShiftTimeZone
-             ShiftValidFrom TransactionStatus ReasonCode ReasonText
+            Quantity UnitOfMeasure ExecutionDate TransactionStatus ReasonCode ReasonText
             SourceChannel ReversalReason )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |REV{ sy-tabix }| OriginalTransactionUUID = input-TransactionUUID
@@ -1175,14 +1079,7 @@ ENDMETHOD.
             VerificationMethod = 'SESSION'
             TransactionType = zcl_pp_txn_type=>reverse WorkerID = original-worker_id
             Quantity = effective_qty UnitOfMeasure = original-uom
-            ExecutionDate = original-execution_date
-            ShiftID = original-shift_id
-            WorkDate = original-work_date
-            ExecutedAt = original-executed_at
-            ShiftStartAt = original-shift_start_at
-            ShiftEndAt = original-shift_end_at
-            ShiftTimeZone = original-shift_time_zone
-            ShiftValidFrom = original-shift_valid_from
+            ExecutionDate = cl_abap_context_info=>get_system_date( )
             TransactionStatus = zcl_pp_txn_type=>posted ReasonCode = 'USER_REVERSAL'
             ReasonText = input-Reason ReversalReason = input-Reason
             SourceChannel = zcl_pp_txn_type=>source_mobile ) ) ) ).
@@ -1206,8 +1103,7 @@ ENDMETHOD.
       ENDIF.
       DATA(operation) = operations[ 1 ].
       SELECT FROM ztb_pp_alloc_txn
-        FIELDS transaction_uuid, worker_id, quantity, uom, execution_date,
-               shift_id, work_date, executed_at, shift_start_at, shift_end_at, shift_time_zone, shift_valid_from
+        FIELDS transaction_uuid, worker_id, quantity, uom
         WHERE transaction_uuid = @input-TransactionUUID
           AND operation_uuid = @operation-OperationUUID
           AND transaction_type = @zcl_pp_txn_type=>confirm
@@ -1285,22 +1181,14 @@ ENDMETHOD.
           LastExecutionDate = cl_abap_context_info=>get_system_date( ) ) )
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
           ( OriginalTransactionUUID OriginalTransactionType TransactionType WorkerID
-             Quantity UnitOfMeasure ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt ShiftEndAt ShiftTimeZone
-             ShiftValidFrom TransactionStatus ReasonCode ReasonText
+            Quantity UnitOfMeasure ExecutionDate TransactionStatus ReasonCode ReasonText
             SourceChannel VerificationMethod )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |COR{ sy-tabix }| OriginalTransactionUUID = input-TransactionUUID
             OriginalTransactionType = zcl_pp_txn_type=>confirm
             TransactionType = zcl_pp_txn_type=>correction WorkerID = original-worker_id
             Quantity = delta UnitOfMeasure = original-uom
-            ExecutionDate = original-execution_date
-            ShiftID = original-shift_id
-            WorkDate = original-work_date
-            ExecutedAt = original-executed_at
-            ShiftStartAt = original-shift_start_at
-            ShiftEndAt = original-shift_end_at
-            ShiftTimeZone = original-shift_time_zone
-            ShiftValidFrom = original-shift_valid_from
+            ExecutionDate = cl_abap_context_info=>get_system_date( )
             TransactionStatus = zcl_pp_txn_type=>posted
             ReasonCode = input-ReasonCode ReasonText = input-ReasonText
             SourceChannel = zcl_pp_txn_type=>source_fiori
@@ -1337,10 +1225,14 @@ ENDMETHOD.
         ENTITY OperationAllocation EXECUTE initialAssign
         FROM VALUE #( ( %tky = VALUE #( OperationUUID = context-operation_uuid )
                         %param = input ) )
-        FAILED DATA(action_failed).
+        FAILED DATA(action_failed)
+        REPORTED DATA(action_reported).
       IF action_failed-operationallocation IS NOT INITIAL.
-        report_failure( EXPORTING cid = cid text = 'BUSINESS_VALIDATION_FAILED'
-                        CHANGING failed = failed reported = reported ).
+        forward_action_failure(
+          EXPORTING cid = cid
+                    operation_uuid = context-operation_uuid
+                    action_reported = action_reported
+          CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
       READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
@@ -1523,10 +1415,14 @@ ENDMETHOD.
       ENDIF.
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE ENTITY OperationAllocation EXECUTE confirm
         FROM VALUE #( ( %tky = VALUE #( OperationUUID = context-operation_uuid ) %param = input ) )
-        FAILED DATA(action_failed).
+        FAILED DATA(action_failed)
+        REPORTED DATA(action_reported).
       IF action_failed-operationallocation IS NOT INITIAL.
-        report_failure( EXPORTING cid = cid text = 'BUSINESS_VALIDATION_FAILED'
-                        CHANGING failed = failed reported = reported ).
+        forward_action_failure(
+          EXPORTING cid = cid
+                    operation_uuid = context-operation_uuid
+                    action_reported = action_reported
+          CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
       READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
@@ -1645,8 +1541,6 @@ ENDMETHOD.
         INNER JOIN ztb_pp_op_alloc AS op ON op~operation_uuid = txn~operation_uuid
         FIELDS txn~transaction_uuid, txn~transaction_type, txn~worker_id,
                txn~quantity, txn~uom, txn~execution_date,
-               txn~shift_id, txn~work_date, txn~executed_at,
-               txn~shift_start_at, txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from,
                op~production_order, op~operation_no
         WHERE txn~sync_item_uuid = @input-SyncItemUUID
           AND txn~actor_user_uuid = @auth-user_uuid
@@ -1670,13 +1564,6 @@ ENDMETHOD.
         ProductionOrder = receipt-production_order Operation = receipt-operation_no
         WorkerID = receipt-worker_id Quantity = receipt-quantity
         UnitOfMeasure = receipt-uom ExecutionDate = receipt-execution_date
-        ShiftID = receipt-shift_id
-        WorkDate = receipt-work_date
-        ExecutedAt = receipt-executed_at
-        ShiftStartAt = receipt-shift_start_at
-        ShiftEndAt = receipt-shift_end_at
-        ShiftTimeZone = receipt-shift_time_zone
-        ShiftValidFrom = receipt-shift_valid_from
         Message = 'Request đã được commit vào ledger CASLA' ) ) ).
     ENDLOOP.
   ENDMETHOD.
@@ -1690,6 +1577,36 @@ ENDMETHOD.
       %msg = new_message_with_text(
         severity = if_abap_behv_message=>severity-error text = text ) )
       TO reported-operationallocation.
+  ENDMETHOD.
+
+  METHOD forward_action_failure.
+    DATA(message_forwarded) = abap_false.
+
+    "Map instance errors to the current static action request.
+    "Do not copy the inner %tky into the outer response.
+    LOOP AT action_reported-operationallocation ASSIGNING FIELD-SYMBOL(<message>).
+      IF <message>-%tky-OperationUUID IS NOT INITIAL
+         AND <message>-%tky-OperationUUID <> operation_uuid.
+        CONTINUE.
+      ENDIF.
+      IF <message>-%msg IS NOT BOUND.
+        CONTINUE.
+      ENDIF.
+      IF <message>-%msg->m_severity <> if_abap_behv_message=>severity-error.
+        CONTINUE.
+      ENDIF.
+      APPEND VALUE #( %cid = cid %msg = <message>-%msg )
+        TO reported-operationallocation.
+      message_forwarded = abap_true.
+    ENDLOOP.
+
+    IF message_forwarded = abap_true.
+      APPEND VALUE #( %cid = cid ) TO failed-operationallocation.
+    ELSE.
+      report_failure(
+        EXPORTING cid = cid text = 'BUSINESS_VALIDATION_FAILED'
+        CHANGING failed = failed reported = reported ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD report_failure.
@@ -1718,7 +1635,7 @@ ENDMETHOD.
         DATA(history) = zcl_pp_work_history=>read(
           access_token = CONV string( input-AccessToken ) device_id = input-DeviceID
           range_code = input-RangeCode date_from = input-DateFrom date_to = input-DateTo
-          worker_id = input-WorkerID shift_id = input-ShiftID
+          worker_id = input-WorkerID
           include_entries = xsdbool( input-SummaryOnly = abap_false ) ).
       CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
         report_failure( EXPORTING cid = cid text = error->get_text( )
@@ -1741,13 +1658,6 @@ ENDMETHOD.
           TransactionCount = summary-txn_count ) )
       _Entries = VALUE #( FOR entry IN history-entries
         ( TransactionUUID = entry-transaction_uuid ExecutionDate = entry-execution_date
-          ShiftID = entry-shift_id
-          WorkDate = entry-work_date
-          ExecutedAt = entry-executed_at
-          ShiftStartAt = entry-shift_start_at
-          ShiftEndAt = entry-shift_end_at
-          ShiftTimeZone = entry-shift_time_zone
-          ShiftValidFrom = entry-shift_valid_from
           WorkerID = entry-worker_id WorkerName = entry-worker_name
           ProductionOrder = entry-production_order Operation = entry-operation_no
           Plant = entry-plant WorkCenter = entry-work_center
@@ -1755,3 +1665,4 @@ ENDMETHOD.
           UnitOfMeasure = entry-uom TransactionStatus = entry-transaction_status ) ) ) ) ).
   ENDMETHOD.
 ENDCLASS.
+

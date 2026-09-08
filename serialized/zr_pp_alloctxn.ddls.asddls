@@ -24,20 +24,6 @@ define view entity ZR_PP_AllocTxn
       quantity                  as Quantity,
       uom                       as UnitOfMeasure,
       execution_date            as ExecutionDate,
-      @EndUserText.label: 'Mã ca'
-      shift_id as ShiftID,
-      @EndUserText.label: 'Ngày làm việc'
-      work_date as WorkDate,
-      @EndUserText.label: 'Thời điểm thực hiện UTC'
-      executed_at as ExecutedAt,
-      @EndUserText.label: 'Bắt đầu ca UTC'
-      shift_start_at as ShiftStartAt,
-      @EndUserText.label: 'Kết thúc ca UTC'
-      shift_end_at as ShiftEndAt,
-      @EndUserText.label: 'Múi giờ ca'
-      shift_time_zone as ShiftTimeZone,
-      @EndUserText.label: 'Phiên bản ca hiệu lực từ'
-      shift_valid_from as ShiftValidFrom,
       transaction_status        as TransactionStatus,
       reason_code               as ReasonCode,
       reason_text               as ReasonText,

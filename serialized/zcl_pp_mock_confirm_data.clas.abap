@@ -479,3 +479,4 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
     success = xsdbool( remaining_operations IS INITIAL ).
   ENDMETHOD.
 ENDCLASS.
+

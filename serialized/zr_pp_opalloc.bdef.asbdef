@@ -121,8 +121,7 @@ authorization dependent by _Operation
                      InitiatorSessionID, DeviceID, VerificationMethod,
                      TransactionType, OriginalTransactionType, FromWorkerID,
                      ToWorkerID, WorkerID, Quantity, UnitOfMeasure,
-                     ExecutionDate, ShiftID, WorkDate, ExecutedAt, ShiftStartAt, ShiftEndAt,
-                     ShiftTimeZone, ShiftValidFrom, TransactionStatus,
+                     ExecutionDate, TransactionStatus,
                      ReasonCode, ReasonText, SourceChannel,
                      SAPConfirmationGroup, SAPConfirmationCount,
                      SAPErrorCode, SAPErrorText, ReversalReason,
@@ -150,13 +149,6 @@ authorization dependent by _Operation
     Quantity                = quantity;
     UnitOfMeasure           = uom;
     ExecutionDate           = execution_date;
-    ShiftID = shift_id;
-    WorkDate = work_date;
-    ExecutedAt = executed_at;
-    ShiftStartAt = shift_start_at;
-    ShiftEndAt = shift_end_at;
-    ShiftTimeZone = shift_time_zone;
-    ShiftValidFrom = shift_valid_from;
     TransactionStatus       = transaction_status;
     ReasonCode              = reason_code;
     ReasonText              = reason_text;
