@@ -1,6 +1,6 @@
 # Fiori Elements administration
 
-Repository cung cấp năm bề mặt quản trị IAM-protected, trong đó danh mục ca làm việc được tách thành app read-only riêng. User/Role mapping và Role/Function/Work mapping là composition child trong app cha; không tạo app rời cho từng mapping row.
+Repository cung cấp năm bề mặt quản trị IAM-protected, trong đó danh mục ca làm việc được tách thành app cấu hình riêng. User/Role mapping và Role/Function/Work mapping là composition child trong app cha; không tạo app rời cho từng mapping row.
 
 ## 1. User Administration
 
@@ -91,7 +91,7 @@ Ca đêm được xác định theo `ExecutedAt` và timezone của Plant. Ví d
 | ZUI_MOB_RBAC_ADM | SAP IAM | role/function/work administration |
 | ZUI_MD_CONGDOAN_ADM | SAP IAM | versioned master maintenance |
 | ZUI_PP_ALLOC_ADM | SAP IAM | correction + audit read |
-| ZUI_PP_SHIFT_ADM | SAP IAM | read-only working-shift catalog |
+| ZUI_PP_SHIFT_ADM | SAP IAM | working-shift configuration (create/update, deactivate) |
 
 Không thêm admin service binding vào mobile communication scenario. Không expose generic update/delete cho ZTB_PP_EMP_ALLOC hoặc ZTB_PP_ALLOC_TXN.
 

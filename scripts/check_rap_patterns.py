@@ -59,6 +59,23 @@ def main() -> None:
             "Aggregate một cột INTO @DATA(...) là scalar, không được dereference component"
         )
 
+    history_impl = object_file("zcl_pp_work_history.clas.abap").read_text(
+        encoding="utf-8-sig"
+    )
+    if "FOR ALL ENTRIES" in history_impl.upper():
+        raise SystemExit(
+            "ZCL_PP_WORK_HISTORY không được dùng FOR ALL ENTRIES; "
+            "lọc ca và scope phải dùng JOIN"
+        )
+    if history_impl.count("SELECT FROM @scope AS scope_row") != 2:
+        raise SystemExit(
+            "ZCL_PP_WORK_HISTORY phải dùng đúng hai JOIN scope cho derived/candidates"
+        )
+    if "FIELDS DISTINCT txn~transaction_uuid" not in history_impl:
+        raise SystemExit(
+            "Derived scope query phải dùng FIELDS DISTINCT để loại bản ghi trùng"
+        )
+
     for path in SERIALIZED.rglob("*.ddlx.asddlxs"):
         mde = path.read_text(encoding="utf-8-sig")
         if "@UI.facet" not in mde:

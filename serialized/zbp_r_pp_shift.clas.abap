@@ -1,0 +1,9 @@
+CLASS zbp_r_pp_shift DEFINITION
+  PUBLIC
+  ABSTRACT
+  FINAL
+  FOR BEHAVIOR OF zr_pp_shift.
+ENDCLASS.
+
+CLASS zbp_r_pp_shift IMPLEMENTATION.
+ENDCLASS.

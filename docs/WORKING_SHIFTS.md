@@ -19,7 +19,8 @@ Ví dụ tại nhà máy UTC+07:00:
 
 ### Service riêng cho ứng dụng Fiori
 
-- Consumption view: `ZC_PP_Shift_Adm` (chỉ đọc).
+- Read/value-help view: `ZI_PP_Shift`.
+- Transactional root/projection: `ZR_PP_Shift` → `ZC_PP_Shift_Adm` (managed RAP; create/update, không hard-delete).
 - Service definition: `ZUI_PP_SHIFT_ADM`.
 - Service binding: `ZUI_PP_SHIFT_ADM_O4`, OData V4 UI.
 - Main entity: `Shifts`; `PlantValueHelp` chỉ phục vụ chọn nhà máy.

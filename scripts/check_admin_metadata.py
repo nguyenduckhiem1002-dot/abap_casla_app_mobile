@@ -162,6 +162,27 @@ def main() -> None:
     for field in ("MaCongDoan", "Plant", "WorkCenter", "UnitOfMeasure"):
         require(op_admin, field, "Operation Allocation admin CDS")
 
+    shift_root = read("serialized/zr_pp_shift.ddls.asddls")
+    require(shift_root, "define root view entity ZR_PP_Shift", "Shift root CDS")
+    shift_behavior = read("serialized/zr_pp_shift.bdef.asbdef")
+    require(
+        shift_behavior,
+        "managed implementation in class zbp_r_pp_shift unique;",
+        "Shift managed behavior",
+    )
+    shift_projection = read("serialized/zc_pp_shift_adm.ddls.asddls")
+    require(
+        shift_projection,
+        "provider contract transactional_query",
+        "Shift transactional projection",
+    )
+    shift_projection_behavior = read("serialized/zc_pp_shift_adm.bdef.asbdef")
+    require(
+        shift_projection_behavior,
+        "use create;",
+        "Shift projection behavior",
+    )
+
     correction_parameter = read("serialized/za_pp_correctconfirm.ddls.asddls")
     require(
         correction_parameter,

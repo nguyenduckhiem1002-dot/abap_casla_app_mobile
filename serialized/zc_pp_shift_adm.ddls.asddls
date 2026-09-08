@@ -2,7 +2,9 @@
 @EndUserText.label: 'Danh mục ca làm việc'
 @Metadata.allowExtensions: true
 @Search.searchable: true
-define view entity ZC_PP_Shift_Adm as select from ZI_PP_Shift
+define root view entity ZC_PP_Shift_Adm
+  provider contract transactional_query
+  as projection on ZR_PP_Shift
 {
   @EndUserText.label: 'Nhà máy'
   @Consumption.valueHelpDefinition: [{ entity: { name: 'I_Plant', element: 'Plant' } }]

@@ -66,7 +66,7 @@ Fiori and IAM
   ├─ ZUI_MOB_RBAC_ADM       roles, functions and work contexts
   ├─ ZUI_MD_CONGDOAN_ADM    operation master and rates
   ├─ ZUI_PP_ALLOC_ADM       correction and allocation audit
-  └─ ZUI_PP_SHIFT_ADM       read-only working-shift catalog
+  └─ ZUI_PP_SHIFT_ADM       managed working-shift configuration
 ```
 
 The design follows five rules:
@@ -400,7 +400,7 @@ The summary counts initial assignment and transfer as assigned, recall as negati
 | `ZUI_MOB_AUTH` | Mobile authentication and session | Auth actions and results |
 | `ZUI_PP_OPALLOC` | Mobile allocation and history | `OperationAllocations`, `Shifts`, value helps |
 | `ZUI_PP_ALLOC_ADM` | Admin correction and audit | `OperationAllocations`, `AllocationTransactions`, value helps |
-| `ZUI_PP_SHIFT_ADM` | Separate read-only shift catalog app | `Shifts`, `PlantValueHelp` |
+| `ZUI_PP_SHIFT_ADM` | Separate managed shift configuration app | `Shifts`, `PlantValueHelp` |
 | `ZUI_MOB_USER_ADM` | User administration | User and related admin entities |
 | `ZUI_MOB_RBAC_ADM` | Role/function/work administration | RBAC admin entities |
 | `ZUI_MD_CONGDOAN_ADM` | Operation master administration | Operation master entities |
@@ -418,7 +418,7 @@ Main entity    Shifts
 Protocol       OData V4 UI
 ```
 
-`ZC_PP_Shift_Adm` is read-only and contains labels, line items, selection fields, a general-information facet, search for shift ID/name, plant value help and status text. It does not implement create/update/delete. The binding in Git is a deployment descriptor; it must be activated and published on the tenant before an endpoint exists.
+`ZI_PP_Shift` remains the read/value-help model. `ZR_PP_Shift` is the transactional RAP root backed by `ZTB_PP_SHIFT`; `ZC_PP_Shift_Adm` is its transactional projection. The managed behavior supports create/update and validates required fields, date ranges and overlapping active versions. Hard-delete is intentionally not exposed; administrators deactivate a version with `IsActive = 'I'`. The binding in Git is a deployment descriptor; it must be activated and published on the tenant before an endpoint exists.
 
 For a Fiori Elements List Report/Object Page, choose service `ZUI_PP_SHIFT_ADM` and main entity `Shifts`. The mobile service `ZUI_PP_OPALLOC` still exposes `ZI_PP_Shift` as `Shifts` for mobile/API compatibility; the admin correction service stays focused on allocation and audit.
 

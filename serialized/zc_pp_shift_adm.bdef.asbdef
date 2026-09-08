@@ -1,0 +1,8 @@
+projection;
+strict ( 2 );
+
+define behavior for ZC_PP_Shift_Adm alias Shift
+{
+  use create;
+  use update;
+}

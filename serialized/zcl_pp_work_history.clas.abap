@@ -421,19 +421,26 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     ENDIF.
 
     "Include derived corrections/reversals by following the original receipt chain.
-    SELECT FROM ztb_pp_alloc_txn
-      FIELDS transaction_uuid, original_transaction_uuid, worker_id
-      FOR ALL ENTRIES IN @scope
-      WHERE operation_uuid = @scope-operation_uuid
-        AND worker_id = @scope-worker_id
-        AND transaction_status = @zcl_pp_txn_type=>posted
-      INTO TABLE @DATA(derived).
+    SELECT FROM @scope AS scope_row
+      INNER JOIN ztb_pp_alloc_txn AS txn
+        ON txn~operation_uuid = scope_row~operation_uuid
+       AND txn~worker_id = scope_row~worker_id
+      FIELDS DISTINCT txn~transaction_uuid, txn~original_transaction_uuid,
+             txn~worker_id
+      WHERE txn~transaction_status = @zcl_pp_txn_type=>posted
+      INTO TABLE @DATA(derived)
+      ##itab_db_select.
     expand_roots( EXPORTING derived = derived CHANGING roots = roots ).
 
     "Bước 2: lấy mọi POSTED row của các cặp operation/worker trong scope, gồm cả
     "CONFIRM do worker ghi sau đó. Nếu thiếu các row này thì cột progress sẽ trống
     "đối với supervisor chỉ thực hiện assignment.
-    SELECT FROM ztb_pp_alloc_txn AS txn
+    SELECT FROM @scope AS scope_row
+      INNER JOIN ztb_pp_alloc_txn AS txn
+        ON txn~operation_uuid = scope_row~operation_uuid
+       AND ( txn~worker_id = scope_row~worker_id
+          OR txn~from_worker_id = scope_row~worker_id
+          OR txn~to_worker_id = scope_row~worker_id )
       INNER JOIN ztb_pp_op_alloc AS op
         ON op~operation_uuid = txn~operation_uuid
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
@@ -441,48 +448,27 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
              txn~shift_start_at, txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
-             op~production_order, op~operation_no, op~plant, op~work_center
-      FOR ALL ENTRIES IN @scope
-      WHERE txn~operation_uuid = @scope-operation_uuid
-        AND ( txn~worker_id = @scope-worker_id
-           OR txn~from_worker_id = @scope-worker_id
-           OR txn~to_worker_id = @scope-worker_id )
-        AND ( txn~work_date BETWEEN @date_from AND @date_to
+             op~production_order, op~operation_no, op~plant, op~work_center,
+             scope_row~worker_id AS report_worker_id
+      WHERE ( txn~work_date BETWEEN @date_from AND @date_to
            OR ( txn~work_date = '00000000' AND txn~execution_date BETWEEN @date_from AND @date_to ) )
         AND ( @shift_id = ' ' OR txn~shift_id = @shift_id )
         AND txn~transaction_status = @zcl_pp_txn_type=>posted
       INTO TABLE @DATA(candidates)
-      UP TO @max_scan_rows ROWS.
-    "FOR ALL ENTRIES không cho ORDER BY ở đây nên thứ tự newest-first mà app cần
-    "được áp dụng sau khi đọc dữ liệu.
+      UP TO @max_scan_rows ROWS
+      ##itab_db_select.
     LOOP AT candidates ASSIGNING FIELD-SYMBOL(<candidate>).
-      LOOP AT scope ASSIGNING FIELD-SYMBOL(<scope>)
-        WHERE operation_uuid = <candidate>-operation_uuid.
-        IF <candidate>-worker_id <> <scope>-worker_id
-           AND <candidate>-from_worker_id <> <scope>-worker_id
-           AND <candidate>-to_worker_id <> <scope>-worker_id.
-          CONTINUE.
-        ENDIF.
-        IF NOT line_exists( roots[
-             transaction_uuid = <candidate>-transaction_uuid
-             worker_id = <scope>-worker_id ] )
-           AND NOT line_exists( roots[
-             transaction_uuid = <candidate>-original_transaction_uuid
-             worker_id = <scope>-worker_id ] ).
-          "Derived row phải trỏ về root assignment/transfer. Rule này ngăn booking
-          "của supervisor khác trên cùng operation/worker lọt vào số liệu hiện tại.
-          CONTINUE.
-        ENDIF.
-        APPEND CORRESPONDING #( <candidate> ) TO result
-          ASSIGNING FIELD-SYMBOL(<result_row>).
-        <result_row>-report_worker_id = <scope>-worker_id.
-        IF lines( result ) >= max_scan_rows.
-          EXIT.
-        ENDIF.
-      ENDLOOP.
-      IF lines( result ) >= max_scan_rows.
-        EXIT.
+      IF NOT line_exists( roots[
+           transaction_uuid = <candidate>-transaction_uuid
+           worker_id = <candidate>-report_worker_id ] )
+         AND NOT line_exists( roots[
+           transaction_uuid = <candidate>-original_transaction_uuid
+           worker_id = <candidate>-report_worker_id ] ).
+        "Derived row phải trỏ về root assignment/transfer. Rule này ngăn booking
+        "của supervisor khác trên cùng operation/worker lọt vào số liệu hiện tại.
+        CONTINUE.
       ENDIF.
+      APPEND CORRESPONDING #( <candidate> ) TO result.
     ENDLOOP.
     SORT result BY execution_date DESCENDING transaction_uuid report_worker_id.
   ENDMETHOD.

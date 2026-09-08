@@ -15,7 +15,7 @@ Tài liệu dành cho agent triển khai tiếp, bao gồm Luna 5.6. Thực hi�
 - Đây là các commit có sẵn trong repository local, chưa xác minh remote có commit mới hơn trong lần lập kế hoạch này. Trước khi code lại, kiểm tra HEAD/diff; nếu cần cập nhật remote thì xử lý working tree an toàn trước, không tự stash/reset hoặc ghi đè.
 - Không restore nguyên file từ commit cũ. Chỉ đưa lại annotation đã xác nhận đúng vào object ở package hiện tại, rồi kiểm tra với logic mới.
 - Không đổi key/type/alias OData hiện hữu, không chuyển package, không xóa/tạo lại bảng, không chạy seed hay xóa dữ liệu để phục vụ metadata.
-- Giữ `ZUI_PP_SHIFT_ADM` và binding riêng, danh mục ca vẫn read-only. Thêm value help ca vào service khác không đồng nghĩa gộp app ca vào app sản lượng.
+- Giữ `ZUI_PP_SHIFT_ADM` và binding riêng cho cấu hình ca. `ZI_PP_Shift` phục vụ read/value-help; `ZR_PP_Shift`/`ZC_PP_Shift_Adm` phục vụ transactional create/update. Thêm value help ca vào service khác không đồng nghĩa gộp app ca vào app sản lượng.
 - Không thay đổi logic phân công, confirm/correct/reverse, ca đêm, offline timestamp, quyền quản lý/nhân công. Chỉ tối ưu validator liên quan trực tiếp tới màn admin nếu bảo toàn hành vi và có test.
 
 Workspace lúc rà soát: `G:\Android\abap_casla_app_mobile`. Các đường dẫn bên dưới tính từ workspace này.
@@ -108,7 +108,7 @@ Các tên object trong bảng là object đang có. Hoàn thiện DDLS và DDLX 
 | CD `ZC_MD_CongDoan_Adm` / CongDoans | MaCongDoan filter có gợi ý mọi phiên bản; create vẫn cho nhập mã mới; BoPhan gợi ý giá trị custom, không khóa danh mục | Filter mã/tên/bộ phận/hiệu lực; cả ValidFrom key và ValidTo rõ ràng; label DonGiaXM/DonGiaGC, audit đầy đủ |
 | ROOT `ZC_PP_OpAlloc_Adm` / OperationAllocations | Khôi phục Plant/WorkCenter/UoM; MaCongDoan filter dùng danh mục lịch sử; ProductionOrder → dữ liệu phân bổ hiện có; Operation phụ thuộc ProductionOrder | Khôi phục filter đã mất; facet thông tin/sản lượng/audit; action correctConfirm được giữ nguyên; OperationUUID không chiếm cột chính |
 | ROOT `ZC_PP_AllocTxn_Adm` / AllocationTransactions | F4 WorkerID/FromWorkerID/ToWorkerID cùng nguồn lịch sử; Plant/WorkCenter/MaCongDoan; ShiftID có Plant; TransactionType/OriginalTransactionType/TransactionStatus/SourceChannel có mã + text | Filter chính WorkDate, Plant, ProductionOrder, WorkerID, ShiftID, TransactionType; ExecutionDate là ngày thực hiện, không đổi nhãn thành ngày làm việc; facet nghiệp vụ/nhân công/ca/lý do/audit |
-| ROOT `ZC_PP_Shift_Adm` / Shifts | Plant giữ VH; ShiftID filter có nguồn mọi phiên bản và Plant, IsActive có text A/I; không bắt dùng ca active cho xem lịch sử | Đủ 10 field Plant/ShiftID/ValidFrom/ShiftName/StartTime/EndTime/EndDayOffset/SAPTimeZone/ValidTo/IsActive; giữ read-only, UI service riêng |
+| ROOT `ZC_PP_Shift_Adm` / Shifts | Plant giữ VH; ShiftID filter có nguồn mọi phiên bản và Plant, IsActive có text A/I; không bắt dùng ca active cho xem lịch sử | Đủ 10 field Plant/ShiftID/ValidFrom/ShiftName/StartTime/EndTime/EndDayOffset/SAPTimeZone/ValidTo/IsActive; managed create/update, không hard-delete, UI service riêng |
 
 Quy tắc để xử lý một property vừa là filter vừa là field tạo master: dùng help để gợi ý, không dùng validation bắt mã mới phải tồn tại trong chính danh mục. Nếu UI release không tách được hành vi mong muốn, giữ nhập tự do và filter mã/tên thay vì chặn tạo mới. Đánh dấu ngoại lệ trong coverage và nghiệm thu riêng.
 
@@ -119,7 +119,7 @@ Quy tắc để xử lý một property vừa là filter vừa là field tạo m
 - Technical UUID, sync/session/device ID, timestamp audit: label rõ, chi tiết khi cần, không tạo dropdown tải toàn bộ ledger/user/session.
 - ReasonCode hiện action chỉ yêu cầu có giá trị, chưa có master lý do. Có thể gợi ý mã đã dùng trong filter; không áp enum bắt buộc mới ở action. ReasonText luôn nhập tự do.
 - BoPhan/Location/AppModule chưa chứng minh là danh mục chuẩn đóng. Gợi ý từ bảng master phù hợp, cho nhập mới; không thêm bảng cấu hình chỉ để có F4.
-- SAPTimeZone trên màn ca đang read-only: nhãn/giải thích đầy đủ là đủ. Value help timezone chuẩn chỉ là hạng mục sau nếu mở CRUD, cần xác minh API khi đó.
+- SAPTimeZone trên màn ca là field cấu hình; value help timezone chuẩn chỉ là hạng mục sau nếu mở hỗ trợ chọn trực tiếp, cần xác minh API khi đó.
 
 ### 4.2. Dialog action phải nằm trong coverage
 
