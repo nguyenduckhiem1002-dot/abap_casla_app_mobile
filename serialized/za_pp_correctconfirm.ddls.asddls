@@ -2,7 +2,7 @@
 define abstract entity ZA_PP_CorrectConfirm
 {
   @EndUserText.label: 'Mã giao dịch xác nhận'
-  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_ConfirmTxn_VH', element: 'TransactionUUID' },
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_CONFIRM_TXN_VH', element: 'TransactionUUID' },
     additionalBinding: [{ localElement: 'UnitOfMeasure', element: 'UnitOfMeasure', usage: #RESULT }] }]
   TransactionUUID : sysuuid_x16;
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'

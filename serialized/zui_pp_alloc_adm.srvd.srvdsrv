@@ -8,7 +8,7 @@ define service ZUI_PP_ALLOC_ADM {
   expose ZI_PP_Worker_Hist_VH as WorkerHistoryValueHelp;
   expose ZI_MD_CongDoan_VH as OperationValueHelp;
   expose ZI_MD_CongDoan_Hist_VH as OperationHistoryValueHelp;
-  expose ZI_PP_ConfirmTxn_VH as ConfirmTransactionValueHelp;
+  expose ZI_PP_CONFIRM_TXN_VH as ConfirmTransactionValueHelp;
   expose ZI_PP_Shift as ShiftValueHelp;
   expose ZC_PP_OpAlloc_Adm as OperationAllocations;
   expose ZC_PP_AllocTxn_Adm as AllocationTransactions;

@@ -148,7 +148,7 @@ Không mở thêm action mobile ở admin chỉ để tăng số lượng nút. 
 8. Code list nhỏ: Role/Work A/I, 6 transaction types, POSTED, MOBILE/FIORI/SYSTEM đã xác minh từ validator và `zcl_pp_txn_type`. Account Status phải đọc hết nguồn tạo/khóa/đăng nhập trước khi chốt, không dùng nhầm enum của Role. Nguồn enum phải cung cấp đủ mã ngay cả khi chưa có dữ liệu; không DISTINCT từ bảng giao dịch làm danh mục chuẩn.
 9. Nếu repo/tenant không có code-list CDS phù hợp, dùng custom entity read-only nhỏ với query provider từ constant whitelist. Implement filter/count/sort/paging đúng framework và kiểm chứng trong Fiori. Chỉ dùng cho enum nhỏ, không dùng custom query ABAP để tải master/ledger lớn vào memory. Không tạo bảng cấu hình mới trong hạng mục này.
 
-Tên provider mới dự kiến (chưa tồn tại, cần kiểm tra collision trước khi tạo): `ZI_PP_WorkerHist_VH`, `ZI_MD_CongDoanHist_VH`, `ZI_PP_OrderAdm_VH`, `ZI_PP_OperationAdm_VH`, `ZI_PP_ConfirmTxn_VH`. Không đổi tên provider hiện hữu. Với master filter gợi ý inactive, chỉ thêm wrapper khi FE không thể reuse entity master an toàn.
+Tên provider mới dự kiến (chưa tồn tại, cần kiểm tra collision trước khi tạo): `ZI_PP_WorkerHist_VH`, `ZI_MD_CongDoanHist_VH`, `ZI_PP_OrderAdm_VH`, `ZI_PP_OperationAdm_VH`, `ZI_PP_CONFIRM_TXN_VH`. Không đổi tên provider hiện hữu. Với master filter gợi ý inactive, chỉ thêm wrapper khi FE không thể reuse entity master an toàn.
 
 ### 5.2. Service phải đồng bộ
 

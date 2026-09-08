@@ -8,6 +8,7 @@
     <DESCRIPT>Kiểm tra token ứng dụng di động</DESCRIPT>
     <STATE>1</STATE>
     <CLSCCINCL>X</CLSCCINCL>
+    <WITH_UNIT_TESTS>X</WITH_UNIT_TESTS>
     <FIXPT>X</FIXPT>
     <UNICODE>X</UNICODE>
    </VSEOCLASS>

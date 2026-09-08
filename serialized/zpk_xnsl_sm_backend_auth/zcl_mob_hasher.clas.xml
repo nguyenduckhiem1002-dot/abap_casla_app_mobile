@@ -8,6 +8,7 @@
     <DESCRIPT>Băm và kiểm tra dữ liệu bảo mật</DESCRIPT>
     <STATE>1</STATE>
     <CLSCCINCL>X</CLSCCINCL>
+    <WITH_UNIT_TESTS>X</WITH_UNIT_TESTS>
     <FIXPT>X</FIXPT>
     <UNICODE>X</UNICODE>
    </VSEOCLASS>

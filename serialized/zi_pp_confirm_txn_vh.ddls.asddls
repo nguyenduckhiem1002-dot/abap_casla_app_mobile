@@ -1,7 +1,7 @@
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'Tra cứu giao dịch xác nhận'
 @Search.searchable: true
-define view entity ZI_PP_ConfirmTxn_VH
+define view entity ZI_PP_CONFIRM_TXN_VH
   as select from ztb_pp_alloc_txn as txn
     inner join ztb_pp_op_alloc as op
       on op.operation_uuid = txn.operation_uuid

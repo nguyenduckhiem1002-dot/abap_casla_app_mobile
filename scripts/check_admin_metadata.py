@@ -37,7 +37,49 @@ def check_value_help_exposure(service: str, consumers: tuple[str, ...]) -> int:
     return checked
 
 
+def check_abapgit_companion_metadata() -> tuple[int, int]:
+    """Catch source/XML mismatches that abaplint cannot see during import."""
+    ddl_checks = 0
+    for source_path in (ROOT / "serialized").rglob("*.ddls.asddls"):
+        xml_path = source_path.with_suffix(".xml")
+        if not xml_path.is_file():
+            continue
+        source = source_path.read_text(encoding="utf-8-sig")
+        xml = xml_path.read_text(encoding="utf-8-sig")
+        entity_match = re.search(
+            r"\bdefine\s+(?:root\s+)?view\s+entity\s+([A-Za-z0-9_/]+)",
+            source,
+            flags=re.IGNORECASE,
+        )
+        ddl_match = re.search(r"<DDLNAME>([^<]+)</DDLNAME>", xml)
+        if entity_match and ddl_match:
+            if entity_match.group(1).upper() != ddl_match.group(1).upper():
+                raise AssertionError(
+                    "CDS entity name does not match DDL source name: "
+                    f"{source_path.relative_to(ROOT)} "
+                    f"({entity_match.group(1)} != {ddl_match.group(1)})"
+                )
+            ddl_checks += 1
+
+    test_include_checks = 0
+    for test_path in (ROOT / "serialized").rglob("*.clas.testclasses.abap"):
+        xml_name = test_path.name.replace(".clas.testclasses.abap", ".clas.xml")
+        xml_path = test_path.with_name(xml_name)
+        if not xml_path.is_file():
+            raise AssertionError(
+                f"Missing class XML for test include: {test_path.relative_to(ROOT)}"
+            )
+        require(
+            xml_path.read_text(encoding="utf-8-sig"),
+            "<WITH_UNIT_TESTS>X</WITH_UNIT_TESTS>",
+            str(xml_path.relative_to(ROOT)),
+        )
+        test_include_checks += 1
+    return ddl_checks, test_include_checks
+
+
 def main() -> None:
+    ddl_checks, test_include_checks = check_abapgit_companion_metadata()
     metadata_files = [
         "serialized/zpk_xnsl_sm_backend_auth/zc_mob_user_adm.ddlx.asddlxs",
         "serialized/zpk_xnsl_sm_backend_role/zc_mob_role_adm.ddlx.asddlxs",
@@ -128,7 +170,8 @@ def main() -> None:
 
     print(
         f"Admin metadata guard passed: {len(metadata_files)} MDEs, "
-        f"{exposure_checks} value-help exposures and 4 history providers"
+        f"{exposure_checks} value-help exposures, 4 history providers, "
+        f"{ddl_checks} DDL source names and {test_include_checks} test includes"
     )
 
 
