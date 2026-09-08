@@ -1,10 +1,14 @@
 managed implementation in class zbp_r_pp_shift unique;
 strict ( 2 );
+with draft;
 
 define behavior for ZR_PP_Shift alias Shift
 persistent table ztb_pp_shift
+draft table ztd_pp_shift
 lock master
+total etag LastChangedAt
 authorization master ( global )
+etag master LocalLastChangedAt
 {
   create;
   update;
@@ -12,22 +16,38 @@ authorization master ( global )
   field ( mandatory : create, readonly : update ) Plant, ShiftID, ValidFrom;
   field ( mandatory : create ) ShiftName, StartTime, EndTime, EndDayOffset,
                               SAPTimeZone, ValidTo, IsActive;
+  field ( readonly ) CreatedBy, CreatedAt, LastChangedBy, LastChangedAt,
+                     LocalLastChangedAt;
 
   validation validateShift on save
   { create; update; field Plant, ShiftID, ValidFrom, ShiftName, StartTime,
                              EndTime, EndDayOffset, SAPTimeZone, ValidTo, IsActive; }
 
+  draft action Edit;
+  draft action Activate optimized;
+  draft action Discard;
+  draft action Resume;
+  draft determine action Prepare
+  {
+    validation validateShift;
+  }
+
   mapping for ztb_pp_shift
   {
-    Plant       = plant;
-    ShiftID     = shift_id;
-    ValidFrom   = valid_from;
-    ShiftName   = shift_name;
-    StartTime   = start_time;
-    EndTime     = end_time;
-    EndDayOffset = end_day_offset;
-    SAPTimeZone = time_zone;
-    ValidTo     = valid_to;
-    IsActive    = is_active;
+    Plant              = plant;
+    ShiftID            = shift_id;
+    ValidFrom          = valid_from;
+    ShiftName          = shift_name;
+    StartTime          = start_time;
+    EndTime            = end_time;
+    EndDayOffset       = end_day_offset;
+    SAPTimeZone        = time_zone;
+    ValidTo            = valid_to;
+    IsActive           = is_active;
+    CreatedBy          = created_by;
+    CreatedAt          = created_at;
+    LastChangedBy      = last_changed_by;
+    LastChangedAt      = last_changed_at;
+    LocalLastChangedAt = local_last_changed_at;
   }
 }

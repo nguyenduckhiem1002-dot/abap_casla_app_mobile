@@ -20,7 +20,7 @@ Ví dụ tại nhà máy UTC+07:00:
 ### Service riêng cho ứng dụng Fiori
 
 - Read/value-help view: `ZI_PP_Shift`.
-- Transactional root/projection: `ZR_PP_Shift` → `ZC_PP_Shift_Adm` (managed RAP; create/update, không hard-delete).
+- Transactional root/projection: `ZR_PP_Shift` → `ZC_PP_Shift_Adm` (managed RAP draft; create/update, không hard-delete).
 - Service definition: `ZUI_PP_SHIFT_ADM`.
 - Service binding: `ZUI_PP_SHIFT_ADM_O4`, OData V4 UI.
 - Main entity: `Shifts`; `PlantValueHelp` chỉ phục vụ chọn nhà máy.
@@ -31,7 +31,8 @@ Activate consumption view và metadata, service definition, rồi binding trong 
 Publish binding trên tenant đích và lấy URL thực tế từ binding; trạng thái publish
 không được coi là đã triển khai chỉ vì có file trong Git.
 Khi tạo app Fiori elements List Report/Object Page, chọn service riêng này và
-main entity `Shifts`. App hiện chỉ xem dữ liệu, không có create/update/delete.
+main entity `Shifts`. App cho phép tạo/sửa trong draft, sau đó Save để activate hoặc
+Discard để bỏ thay đổi. Không expose hard-delete; dùng `IsActive = 'I'` để ngừng hiệu lực.
 
 Service mobile cũ vẫn expose `ZI_PP_Shift` để giữ value help và tương thích API;
 app ca làm việc mới không phụ thuộc vào các entity phân bổ đó.
@@ -39,6 +40,10 @@ Không xóa hay tạo lại bảng để thêm service này; dữ liệu ca hi�
 
 ZTB_PP_SHIFT có khóa CLIENT/PLANT/SHIFT_ID/VALID_FROM, cùng SHIFT_NAME,
 START_TIME, END_TIME, END_DAY_OFFSET (0 hoặc 1), TIME_ZONE, VALID_TO, IS_ACTIVE (A/I).
+Năm trường audit managed RAP là CREATED_BY, CREATED_AT, LAST_CHANGED_BY,
+LAST_CHANGED_AT và LOCAL_LAST_CHANGED_AT. `ZTD_PP_SHIFT` lưu bản nháp và chứa
+standard include `SYCH_BDL_DRAFT_ADMIN_INC`. `LastChangedAt` là total ETag;
+`LocalLastChangedAt` là entity ETag để kiểm soát cập nhật đồng thời.
 TIME_ZONE phải là khóa múi giờ SAP được cấu hình trong tenant, không phải tự điền chuỗi IANA.
 Ca cùng ngày phải có giờ kết thúc lớn hơn giờ bắt đầu; ca qua ngày dài tối đa 24 giờ.
 
@@ -128,10 +133,10 @@ app cần phân biệt chỉ tiêu kỳ với số dư thực tế từ bảng p
 
 ## Triển khai và kiểm chứng
 
-1. Activate ZTB_PP_SHIFT và phần mở rộng ZTB_PP_ALLOC_TXN.
-2. Activate ZI_PP_Shift, ZR_PP_AllocTxn, abstract entities thay đổi và BDEF ZR_PP_OpAlloc.
-3. Activate ZCL_PP_SHIFT_RESOLVER, ZCL_PP_WORK_HISTORY và behavior implementation.
-4. Activate admin projection/metadata và hai service definitions; cập nhật binding/metadata app.
+1. Activate `ZTB_PP_SHIFT`, `ZTD_PP_SHIFT` và phần mở rộng `ZTB_PP_ALLOC_TXN`.
+2. Activate `ZI_PP_Shift`, `ZR_PP_Shift`, `ZR_PP_AllocTxn`, abstract entities thay đổi và các BDEF root.
+3. Activate behavior pool `ZBP_R_PP_SHIFT`, `ZCL_PP_SHIFT_RESOLVER`, `ZCL_PP_WORK_HISTORY` và behavior implementation phân bổ.
+4. Activate projection behavior, admin projection/metadata và hai service definitions; cập nhật binding/metadata app.
 5. Chạy ABAP Unit cho ZCL_PP_SHIFT_RESOLVER và ZCL_PP_WORK_HISTORY trong ADT.
 6. Khởi tạo cấu hình đúng nhà máy/múi giờ, thử GET Shifts rồi thử các thời điểm trong bảng ví dụ.
 7. Xác nhận offline, retry cùng khóa, đổi timestamp khi retry, hủy/điều chỉnh ngày hôm sau

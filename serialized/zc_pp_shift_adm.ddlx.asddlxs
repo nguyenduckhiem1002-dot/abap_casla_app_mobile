@@ -69,4 +69,24 @@ annotate entity ZC_PP_Shift_Adm with
   @UI.identification: [{ position: 100 }]
   @UI.selectionField: [{ position: 50 }]
   IsActive;
+
+  @EndUserText.label: 'Người tạo'
+  @UI.identification: [{ position: 110 }]
+  CreatedBy;
+
+  @EndUserText.label: 'Thời điểm tạo'
+  @UI.identification: [{ position: 120 }]
+  CreatedAt;
+
+  @EndUserText.label: 'Người thay đổi cuối cùng'
+  @UI.identification: [{ position: 130 }]
+  LastChangedBy;
+
+  @EndUserText.label: 'Thời điểm thay đổi cuối cùng'
+  @UI.identification: [{ position: 140 }]
+  LastChangedAt;
+
+  @EndUserText.label: 'Thời điểm thay đổi cục bộ cuối cùng'
+  @UI.hidden: true
+  LocalLastChangedAt;
 }

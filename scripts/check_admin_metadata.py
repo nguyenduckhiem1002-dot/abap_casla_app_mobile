@@ -164,12 +164,45 @@ def main() -> None:
 
     shift_root = read("serialized/zr_pp_shift.ddls.asddls")
     require(shift_root, "define root view entity ZR_PP_Shift", "Shift root CDS")
+    for marker in (
+        "@Semantics.user.createdBy: true",
+        "@Semantics.systemDateTime.createdAt: true",
+        "@Semantics.user.lastChangedBy: true",
+        "@Semantics.systemDateTime.lastChangedAt: true",
+        "@Semantics.systemDateTime.localInstanceLastChangedAt: true",
+    ):
+        require(shift_root, marker, "Shift root audit semantics")
+
+    shift_table = read("serialized/ztb_pp_shift.tabl.xml")
+    for field in (
+        "CREATED_BY",
+        "CREATED_AT",
+        "LAST_CHANGED_BY",
+        "LAST_CHANGED_AT",
+        "LOCAL_LAST_CHANGED_AT",
+    ):
+        require(shift_table, f"<FIELDNAME>{field}</FIELDNAME>", "Shift table audit fields")
+
+    shift_draft_table = read("serialized/ztd_pp_shift.tabl.xml")
+    require(
+        shift_draft_table,
+        "<PRECFIELD>SYCH_BDL_DRAFT_ADMIN_INC</PRECFIELD>",
+        "Shift draft administration include",
+    )
     shift_behavior = read("serialized/zr_pp_shift.bdef.asbdef")
     require(
         shift_behavior,
         "managed implementation in class zbp_r_pp_shift unique;",
         "Shift managed behavior",
     )
+    for marker in (
+        "with draft;",
+        "draft table ztd_pp_shift",
+        "total etag LastChangedAt",
+        "etag master LocalLastChangedAt",
+        "draft action Activate optimized;",
+    ):
+        require(shift_behavior, marker, "Shift managed draft behavior")
     shift_projection = read("serialized/zc_pp_shift_adm.ddls.asddls")
     require(
         shift_projection,
@@ -177,6 +210,11 @@ def main() -> None:
         "Shift transactional projection",
     )
     shift_projection_behavior = read("serialized/zc_pp_shift_adm.bdef.asbdef")
+    require(
+        shift_projection_behavior,
+        "use draft;",
+        "Shift projection draft behavior",
+    )
     require(
         shift_projection_behavior,
         "use create;",

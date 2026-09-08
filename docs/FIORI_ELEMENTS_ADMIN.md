@@ -75,7 +75,8 @@ Original CONFIRM không bị sửa. Nếu đã có REVERSE thì correction bị 
 - Service: ZUI_PP_SHIFT_ADM
 - Binding: ZUI_PP_SHIFT_ADM_O4
 - Entity chính: Shifts / ZC_PP_Shift_Adm
-- Quyền: chỉ đọc danh mục ca, lọc theo Plant, ShiftID, hiệu lực và trạng thái.
+- Quyền: tạo/sửa theo managed draft, Save/Discard, lọc theo Plant, ShiftID, hiệu lực và trạng thái; không hard-delete.
+- Audit: hiển thị người/thời điểm tạo và thay đổi cuối; ETag dùng các timestamp chuẩn RAP để chống ghi đè đồng thời.
 
 Ca đêm được xác định theo `ExecutedAt` và timezone của Plant. Ví dụ 22:00 ngày
 07/09 đến 06:00 ngày 08/09 vẫn có `WorkDate = 07/09` cho các xác nhận lúc

@@ -41,8 +41,8 @@ The solution records a CASLA-specific allocation ledger. It does not create a st
 | RBAC and work context | Implemented | Create roles, functions and work assignments |
 | Production allocation ledger | Implemented | Activate tables, CDS and behavior in order |
 | SAP operation guard | Implemented against released CDS names used by source | Verify released views and fields in target tenant |
-| Shift configuration | Table, read CDS, resolver and setup template implemented | Fill plant/time-zone constants and create records |
-| Separate shift Fiori service | Service definition, UI CDS and metadata included | Activate and publish service binding |
+| Shift configuration | Active/draft tables, managed RAP BO, read CDS, resolver and setup template implemented | Activate in dependency order, fill plant/time-zone data and test draft save |
+| Separate shift Fiori service | Transactional UI CDS, metadata, service definition and binding included | Activate and publish service binding |
 | Fiori admin correction | Implemented in behavior and admin projection | Assign IAM/catalog authorization |
 | ABAP Unit tests | Test classes written | Run in ADT on target SAP |
 | Runtime integration tests | Not executable from this repository | Run with a real OData binding and tenant data |
@@ -314,7 +314,7 @@ The facade calls RAP actions in local mode and reads the receipt through EML. It
 
 ### 10.1 Configuration model
 
-`ZTB_PP_SHIFT` is a separate configuration table with key `CLIENT + PLANT + SHIFT_ID + VALID_FROM` and the following fields:
+`ZTB_PP_SHIFT` is a separate configuration table with key `CLIENT + PLANT + SHIFT_ID + VALID_FROM`. Besides the business fields below, it contains the managed RAP audit fields `CREATED_BY`, `CREATED_AT`, `LAST_CHANGED_BY`, `LAST_CHANGED_AT` and `LOCAL_LAST_CHANGED_AT`. Draft state is persisted separately in `ZTD_PP_SHIFT` with `SYCH_BDL_DRAFT_ADMIN_INC`.
 
 | Field | Rule |
 | --- | --- |
@@ -418,7 +418,7 @@ Main entity    Shifts
 Protocol       OData V4 UI
 ```
 
-`ZI_PP_Shift` remains the read/value-help model. `ZR_PP_Shift` is the transactional RAP root backed by `ZTB_PP_SHIFT`; `ZC_PP_Shift_Adm` is its transactional projection. The managed behavior supports create/update and validates required fields, date ranges and overlapping active versions. Hard-delete is intentionally not exposed; administrators deactivate a version with `IsActive = 'I'`. The binding in Git is a deployment descriptor; it must be activated and published on the tenant before an endpoint exists.
+`ZI_PP_Shift` remains the read/value-help model. `ZR_PP_Shift` is the managed-draft transactional RAP root backed by `ZTB_PP_SHIFT` and draft table `ZTD_PP_SHIFT`; `ZC_PP_Shift_Adm` is its transactional projection. The behavior uses `LastChangedAt` as total ETag and `LocalLastChangedAt` as entity ETag, supports create/update with Edit, Activate, Discard, Resume and Prepare, and validates required fields, date ranges and overlapping active versions. Hard-delete is intentionally not exposed; administrators deactivate a version with `IsActive = 'I'`. The binding in Git is a deployment descriptor; it must be activated and published on the tenant before an endpoint exists.
 
 For a Fiori Elements List Report/Object Page, choose service `ZUI_PP_SHIFT_ADM` and main entity `Shifts`. The mobile service `ZUI_PP_OPALLOC` still exposes `ZI_PP_Shift` as `Shifts` for mobile/API compatibility; the admin correction service stays focused on allocation and audit.
 
@@ -459,7 +459,7 @@ abapGit source files are not database rows. Updating a serialized source file sh
 2. Review the abapGit object list. Do not approve deletion of a live table merely because a source serialization changed.
 3. Keep object name, package, object type and source path stable. A rename or object-type change can appear as delete plus insert.
 4. Add new columns to `ZTB_PP_ALLOC_TXN` through the normal DDIC activation/migration path; preserve existing data.
-5. Create the new `ZTB_PP_SHIFT` table separately.
+5. Create `ZTB_PP_SHIFT` and its managed-draft table `ZTD_PP_SHIFT` separately.
 6. Activate in dependency order.
 7. Publish service bindings after service definitions are active. The repository
    ignores generated `SCO2`/`SUSH` files because these contain tenant-specific
@@ -469,7 +469,7 @@ abapGit source files are not database rows. Updating a serialized source file sh
 Recommended activation order:
 
 ```text
-1. Existing DDIC tables and ZTB_PP_SHIFT
+1. Existing DDIC tables, ZTB_PP_SHIFT and ZTD_PP_SHIFT
 2. Interface CDS and value-help CDS
 3. Root/consumption CDS projections
 4. Abstract action parameters and result entities

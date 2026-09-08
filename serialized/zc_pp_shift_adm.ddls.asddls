@@ -34,5 +34,15 @@ define root view entity ZC_PP_Shift_Adm
   @EndUserText.label: 'Hiệu lực đến'
   ValidTo,
   @EndUserText.label: 'Trạng thái'
-  IsActive
+  IsActive,
+  @EndUserText.label: 'Người tạo'
+  CreatedBy,
+  @EndUserText.label: 'Thời điểm tạo'
+  CreatedAt,
+  @EndUserText.label: 'Người thay đổi cuối cùng'
+  LastChangedBy,
+  @EndUserText.label: 'Thời điểm thay đổi cuối cùng'
+  LastChangedAt,
+  @EndUserText.label: 'Thời điểm thay đổi cục bộ cuối cùng'
+  LocalLastChangedAt
 }
