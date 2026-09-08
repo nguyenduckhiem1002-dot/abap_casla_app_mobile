@@ -463,8 +463,29 @@ abapGit source files are not database rows. Updating a serialized source file sh
 6. Activate in dependency order.
 7. Publish service bindings after service definitions are active. The repository
    ignores generated `SCO2`/`SUSH` files because these contain tenant-specific
-   OData V4 `G4BA` registration and start-authorization data. Publishing each
-   binding on the destination tenant recreates those artifacts locally.
+   OData V4 `G4BA` registration and start-authorization data. Publish the local
+   service endpoint on the destination tenant, then verify its authorization
+   configuration separately; publication alone does not establish that the
+   required permissions or customized authorization defaults are present.
+8. In the service binding editor, open **Maintain Authorization Default Values**
+   and review the required authorization objects and values. Use **Synchronize**
+   where appropriate to add missing objects from the authorization context;
+   it does not remove existing objects. Preserve or reapply any intentionally
+   customized defaults required on the destination tenant.
+9. For business-user access, verify the IAM app, business catalog and assigned
+   business role. For communication-user access, verify the communication
+   scenario and arrangement, including the assigned user and required service.
+   Test the endpoint using the intended user to confirm the required operations
+   are authorized and unauthorized operations are rejected.
+
+See [SAP: Editing Authorization Default Values](https://help.sap.com/docs/sap-btp-abap-environment/abap-environment/editing-default-authorization-values)
+for synchronization behavior and the relationship between service defaults and
+IAM app authorizations.
+
+The repository must not contain `*.sco2.xml` or `*.sush.xml` files. After the
+change is committed and pushed, refresh the abapGit repository index, pull again,
+and confirm that the import list contains no `G4BA` object. The remaining
+`*.srvb.xml` files are the service-binding source definitions and must be retained.
 
 Recommended activation order:
 

@@ -88,9 +88,25 @@ def check_reserved_cds_element_names() -> None:
             )
 
 
+def check_tenant_generated_artifacts() -> None:
+    """G4BA/SUSH files are tenant-generated and unsupported by some abapGit clients."""
+    generated = [
+        path
+        for path in (ROOT / "serialized").rglob("*")
+        if path.is_file()
+        and (path.name.endswith(".sco2.xml") or path.name.endswith(".sush.xml"))
+    ]
+    if generated:
+        names = ", ".join(path.name for path in generated)
+        raise AssertionError(
+            "Tenant-generated G4BA/SUSH artifacts must not be committed: " + names
+        )
+
+
 def main() -> None:
     ddl_checks, test_include_checks = check_abapgit_companion_metadata()
     check_reserved_cds_element_names()
+    check_tenant_generated_artifacts()
     abapgit_config = read(".abapgit.xml")
     for tenant_artifact in ("*.sco2.xml", "*.sush.xml"):
         require(
