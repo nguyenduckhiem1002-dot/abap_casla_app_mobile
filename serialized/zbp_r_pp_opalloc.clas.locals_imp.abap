@@ -32,6 +32,33 @@ CLASS lhc_operationallocation DEFINITION
            END OF worker_balance,
            worker_balances TYPE STANDARD TABLE OF worker_balance WITH EMPTY KEY.
 
+    TYPES: BEGIN OF lineage_transaction,
+             transaction_uuid          TYPE ztb_pp_alloc_txn-transaction_uuid,
+             original_transaction_uuid TYPE ztb_pp_alloc_txn-original_transaction_uuid,
+             transaction_type          TYPE ztb_pp_alloc_txn-transaction_type,
+             worker_id                 TYPE ztb_pp_alloc_txn-worker_id,
+             from_worker_id            TYPE ztb_pp_alloc_txn-from_worker_id,
+             to_worker_id              TYPE ztb_pp_alloc_txn-to_worker_id,
+             quantity                  TYPE ztb_pp_alloc_txn-quantity,
+             uom                       TYPE ztb_pp_alloc_txn-uom,
+             transaction_status        TYPE ztb_pp_alloc_txn-transaction_status,
+           END OF lineage_transaction,
+           lineage_transactions TYPE HASHED TABLE OF lineage_transaction
+                                 WITH UNIQUE KEY transaction_uuid.
+
+    TYPES: BEGIN OF lineage_result,
+             is_valid                TYPE abap_bool,
+             error_code              TYPE c LENGTH 40,
+             source_transaction_type TYPE ztb_pp_alloc_txn-transaction_type,
+             usable_quantity          TYPE ztb_pp_alloc_txn-quantity,
+           END OF lineage_result.
+
+    TYPES: BEGIN OF balance_result,
+             is_valid   TYPE abap_bool,
+             error_code TYPE c LENGTH 40,
+             balance    TYPE worker_balance,
+           END OF balance_result.
+
     TYPES: BEGIN OF sync_receipt,
              transaction_uuid          TYPE ztb_pp_alloc_txn-transaction_uuid,
              operation_uuid            TYPE ztb_pp_alloc_txn-operation_uuid,
@@ -128,6 +155,20 @@ CLASS lhc_operationallocation DEFINITION
     METHODS read_worker_balances
       IMPORTING operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
       RETURNING VALUE(result) TYPE worker_balances.
+
+    METHODS validate_worker_balance
+      IMPORTING balances          TYPE worker_balances
+                worker_identifier TYPE ztb_pp_alloc_txn-worker_id
+                quantity          TYPE ztb_pp_alloc_txn-quantity
+                uom               TYPE ztb_pp_alloc_txn-uom
+      RETURNING VALUE(result) TYPE balance_result.
+
+    METHODS get_usable_txn_qty
+      IMPORTING operation_uuid          TYPE ztb_pp_op_alloc-operation_uuid
+                original_transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid
+                worker_id               TYPE ztb_pp_alloc_txn-worker_id
+                uom                     TYPE ztb_pp_alloc_txn-uom
+      RETURNING VALUE(result) TYPE lineage_result.
 
     METHODS find_persisted_sync_receipts
       IMPORTING sync_item_uuid TYPE ztb_pp_alloc_txn-sync_item_uuid
@@ -602,6 +643,126 @@ ENDMETHOD.
         remaining_qty = allocation-RemainingQuantity
         uom = allocation-UnitOfMeasure ) TO result.
     ENDLOOP.
+  ENDMETHOD.
+
+  " Kiểm tra worker có đúng một balance và còn đủ số lượng tổng hay không.
+  METHOD validate_worker_balance.
+    DATA(worker_balances) = balances.
+    DELETE worker_balances WHERE worker_id <> worker_identifier.
+    IF lines( worker_balances ) <> 1.
+      result-error_code = COND string(
+        WHEN lines( worker_balances ) > 1
+        THEN 'WORKER_BALANCE_DUPLICATE'
+        ELSE 'CONFIRM_QUANTITY_EXCEEDED' ).
+      RETURN.
+    ENDIF.
+
+    result-balance = worker_balances[ 1 ].
+    IF result-balance-uom <> uom
+       OR result-balance-remaining_qty < quantity.
+      result-error_code = 'CONFIRM_QUANTITY_EXCEEDED'.
+      RETURN.
+    ENDIF.
+    result-is_valid = abap_true.
+  ENDMETHOD.
+
+  " Tính số lượng còn dùng được của đúng transaction gốc, không dùng balance tổng
+  " của worker để thay thế kiểm tra lineage.
+  METHOD get_usable_txn_qty.
+    READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+      ENTITY OperationAllocation BY \_Transactions
+        FIELDS ( TransactionUUID OriginalTransactionUUID TransactionType
+                 WorkerID FromWorkerID ToWorkerID Quantity UnitOfMeasure
+                 TransactionStatus )
+        WITH VALUE #( ( %key-OperationUUID = operation_uuid ) )
+        RESULT DATA(transactions).
+
+    DATA(lineage_rows) = VALUE lineage_transactions( ).
+    LOOP AT transactions INTO DATA(transaction)
+      WHERE TransactionStatus = zcl_pp_txn_type=>posted.
+      INSERT VALUE #( transaction_uuid = transaction-TransactionUUID
+        original_transaction_uuid = transaction-OriginalTransactionUUID
+        transaction_type = transaction-TransactionType
+        worker_id = transaction-WorkerID
+        from_worker_id = transaction-FromWorkerID
+        to_worker_id = transaction-ToWorkerID
+        quantity = transaction-Quantity
+        uom = transaction-UnitOfMeasure
+        transaction_status = transaction-TransactionStatus ) INTO TABLE lineage_rows.
+    ENDLOOP.
+
+    DATA(root) = VALUE lineage_transaction(
+      lineage_rows[ transaction_uuid = original_transaction_uuid ] OPTIONAL ).
+    IF root IS INITIAL
+       OR root-transaction_status <> zcl_pp_txn_type=>posted
+       OR root-uom <> uom
+       OR root-quantity <= 0.
+      result-error_code = 'ORIGINAL_TRANSACTION_INVALID'.
+      RETURN.
+    ENDIF.
+
+    IF ( root-transaction_type = zcl_pp_txn_type=>transfer
+         AND root-to_worker_id <> worker_id )
+       OR ( root-transaction_type <> zcl_pp_txn_type=>transfer
+            AND root-worker_id <> worker_id
+            AND root-to_worker_id <> worker_id ).
+      result-error_code = 'ORIGINAL_TRANSACTION_WORKER_MISMATCH'.
+      RETURN.
+    ENDIF.
+
+    IF root-transaction_type <> zcl_pp_txn_type=>initial_assign
+       AND root-transaction_type <> zcl_pp_txn_type=>transfer
+       AND root-transaction_type <> zcl_pp_txn_type=>allocation_adjustment.
+      result-error_code = 'ORIGINAL_TRANSACTION_TYPE_INVALID'.
+      RETURN.
+    ENDIF.
+    result-source_transaction_type = root-transaction_type.
+
+    DATA lineage_ids TYPE SORTED TABLE OF ztb_pp_alloc_txn-transaction_uuid
+                     WITH UNIQUE KEY table_line.
+    INSERT root-transaction_uuid INTO TABLE lineage_ids.
+
+    DATA(lineage_changed) = abap_true.
+    WHILE lineage_changed = abap_true.
+      lineage_changed = abap_false.
+      LOOP AT lineage_rows ASSIGNING FIELD-SYMBOL(<lineage_row>).
+        IF <lineage_row>-original_transaction_uuid IS INITIAL
+           OR NOT line_exists( lineage_ids[
+                table_line = <lineage_row>-original_transaction_uuid ] )
+           OR line_exists( lineage_ids[
+                table_line = <lineage_row>-transaction_uuid ] ).
+          CONTINUE.
+        ENDIF.
+        INSERT <lineage_row>-transaction_uuid INTO TABLE lineage_ids.
+        lineage_changed = abap_true.
+      ENDLOOP.
+    ENDWHILE.
+
+    result-usable_quantity = root-quantity.
+    LOOP AT lineage_rows ASSIGNING <lineage_row>.
+      IF <lineage_row>-transaction_uuid = root-transaction_uuid
+         OR NOT line_exists( lineage_ids[
+              table_line = <lineage_row>-transaction_uuid ] ).
+        CONTINUE.
+      ENDIF.
+      CASE <lineage_row>-transaction_type.
+        WHEN zcl_pp_txn_type=>confirm OR zcl_pp_txn_type=>recall.
+          result-usable_quantity = result-usable_quantity
+                                - <lineage_row>-quantity.
+        WHEN zcl_pp_txn_type=>correction.
+          "Correction là delta của confirmation: delta âm trả lại capacity.
+          result-usable_quantity = result-usable_quantity
+                                - <lineage_row>-quantity.
+        WHEN zcl_pp_txn_type=>reverse.
+          result-usable_quantity = result-usable_quantity
+                                + <lineage_row>-quantity.
+      ENDCASE.
+    ENDLOOP.
+
+    IF result-usable_quantity < 0.
+      result-usable_quantity = 0.
+    ENDIF.
+    result-is_valid = abap_true.
   ENDMETHOD.
 
   " Tìm receipt đã commit theo SyncItemUUID để xử lý retry theo cơ chế idempotent.
@@ -1186,7 +1347,8 @@ ENDMETHOD.
          OR root_transaction-OperationUUID <> operation-OperationUUID
          OR root_transaction-TransactionStatus <> zcl_pp_txn_type=>posted
          OR ( root_type <> zcl_pp_txn_type=>initial_assign
-           AND root_type <> zcl_pp_txn_type=>transfer )
+           AND root_type <> zcl_pp_txn_type=>transfer
+           AND root_type <> zcl_pp_txn_type=>allocation_adjustment )
          OR ( root_transaction-WorkerID <> input-WorkerID
               AND root_transaction-ToWorkerID <> input-WorkerID )
          OR balance IS INITIAL OR balance-uom <> input-UnitOfMeasure
@@ -1194,6 +1356,19 @@ ENDMETHOD.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = 'RECALL_NOT_ALLOWED'
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      DATA(lineage) = get_usable_txn_qty(
+        operation_uuid = operation-OperationUUID
+        original_transaction_uuid = input-OriginalTransactionUUID
+        worker_id = input-WorkerID
+        uom = input-UnitOfMeasure ).
+      IF lineage-is_valid = abap_false
+         OR input-Quantity > lineage-usable_quantity.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+                    text = 'RECALL_ORIGINAL_QUANTITY_EXCEEDED'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1344,42 +1519,36 @@ ENDMETHOD.
       ENDIF.
 
       DATA(worker_balances) = read_worker_balances( operation-OperationUUID ).
-      DELETE worker_balances WHERE worker_id <> input-WorkerID.
-      IF lines( worker_balances ) > 1.
+      DATA(balance_check) = validate_worker_balance(
+        balances = worker_balances
+        worker_identifier = input-WorkerID
+        quantity = input-Quantity
+        uom = input-UnitOfMeasure ).
+      IF balance_check-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORKER_BALANCE_DUPLICATE'
+                    text = CONV string( balance_check-error_code )
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      DATA(balance) = VALUE worker_balance( worker_balances[ 1 ] OPTIONAL ).
-      IF balance IS INITIAL OR balance-uom <> input-UnitOfMeasure
-         OR balance-remaining_qty < input-Quantity.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'CONFIRM_QUANTITY_EXCEEDED'
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
+      DATA(balance) = balance_check-balance.
 
-      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
-        ENTITY AllocationTransaction
-          FIELDS ( OperationUUID TransactionType TransactionStatus
-                   WorkerID ToWorkerID )
-          WITH VALUE #(
-            ( %key-TransactionUUID = input-OriginalTransactionUUID ) )
-          RESULT DATA(original_transactions).
-      DATA(original_transaction) = VALUE #( original_transactions[ 1 ] OPTIONAL ).
-      IF original_transaction IS INITIAL
-         OR original_transaction-OperationUUID <> operation-OperationUUID
-         OR original_transaction-TransactionStatus <> zcl_pp_txn_type=>posted
-         OR ( original_transaction-TransactionType <> zcl_pp_txn_type=>initial_assign
-              AND original_transaction-TransactionType <> zcl_pp_txn_type=>transfer )
-         OR ( original_transaction-WorkerID <> input-WorkerID
-              AND original_transaction-ToWorkerID <> input-WorkerID ).
+      DATA(lineage) = get_usable_txn_qty(
+        operation_uuid = operation-OperationUUID
+        original_transaction_uuid = input-OriginalTransactionUUID
+        worker_id = input-WorkerID
+        uom = input-UnitOfMeasure ).
+      IF lineage-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = 'CONFIRM_ORIGINAL_TRANSACTION_INVALID'
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      IF input-Quantity > lineage-usable_quantity.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+                    text = 'CONFIRM_ORIGINAL_QUANTITY_EXCEEDED'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1394,7 +1563,7 @@ ENDMETHOD.
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      DATA(original_type) = original_transaction-TransactionType.
+      DATA(original_type) = lineage-source_transaction_type.
 
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY EmployeeAllocation UPDATE FIELDS
@@ -1620,7 +1789,7 @@ ENDMETHOD.
       ENDIF.
       DATA(operation) = operations[ 1 ].
       SELECT FROM ztb_pp_alloc_txn
-        FIELDS transaction_uuid, worker_id, quantity, uom, execution_date,
+        FIELDS transaction_uuid, original_transaction_uuid, worker_id, quantity, uom, execution_date,
                shift_id, work_date, executed_at, shift_start_at, shift_end_at, shift_time_zone, shift_valid_from
         WHERE transaction_uuid = @input-TransactionUUID
           AND operation_uuid = @operation-OperationUUID
@@ -1666,6 +1835,27 @@ ENDMETHOD.
       IF delta = 0.
         APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         CONTINUE.
+      ENDIF.
+      IF delta > 0.
+        DATA(lineage) = get_usable_txn_qty(
+          operation_uuid = operation-OperationUUID
+          original_transaction_uuid = original-original_transaction_uuid
+          worker_id = original-worker_id
+          uom = original-uom ).
+        IF lineage-is_valid = abap_false.
+          report_instance_failure(
+            EXPORTING operation_uuid = <key>-%tky-OperationUUID
+                      text = 'CORRECTION_ORIGINAL_TRANSACTION_INVALID'
+            CHANGING failed = failed reported = reported ).
+          CONTINUE.
+        ENDIF.
+        IF delta > lineage-usable_quantity.
+          report_instance_failure(
+            EXPORTING operation_uuid = <key>-%tky-OperationUUID
+                      text = 'CORRECTION_ORIGINAL_QUANTITY_EXCEEDED'
+            CHANGING failed = failed reported = reported ).
+          CONTINUE.
+        ENDIF.
       ENDIF.
       DATA(worker_balances) = read_worker_balances( operation-OperationUUID ).
       DELETE worker_balances WHERE worker_id <> original-worker_id.
