@@ -92,6 +92,8 @@ CLASS zcl_pp_work_history DEFINITION
                 date_from       TYPE d
                 date_to         TYPE d
                 worker_id       TYPE ztb_pp_alloc_txn-worker_id OPTIONAL
+                production_order TYPE ztb_pp_op_alloc-production_order OPTIONAL
+                operation_no    TYPE ztb_pp_op_alloc-operation_no OPTIONAL
                 shift_id TYPE ztb_pp_shift-shift_id OPTIONAL
                 include_entries TYPE abap_bool DEFAULT abap_true
       RETURNING VALUE(result)   TYPE history
@@ -166,6 +168,8 @@ CLASS zcl_pp_work_history DEFINITION
                 date_from     TYPE d
                 date_to       TYPE d
                 shift_id TYPE ztb_pp_shift-shift_id
+                production_order TYPE ztb_pp_op_alloc-production_order OPTIONAL
+                operation_no TYPE ztb_pp_op_alloc-operation_no OPTIONAL
       RETURNING VALUE(result) TYPE ledger_rows.
 
     CLASS-METHODS select_team
@@ -174,6 +178,8 @@ CLASS zcl_pp_work_history DEFINITION
                 date_from     TYPE d
                 date_to       TYPE d
                 shift_id TYPE ztb_pp_shift-shift_id
+                production_order TYPE ztb_pp_op_alloc-production_order OPTIONAL
+                operation_no TYPE ztb_pp_op_alloc-operation_no OPTIONAL
       RETURNING VALUE(result) TYPE ledger_rows.
 
     CLASS-METHODS summarize
@@ -230,6 +236,37 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       RETURN.
     ENDIF.
 
+    IF ( production_order IS INITIAL AND operation_no IS NOT INITIAL )
+       OR ( production_order IS NOT INITIAL AND operation_no IS INITIAL ).
+      result-error_code = 'OPERATION_FILTER_INCOMPLETE'.
+      RETURN.
+    ENDIF.
+
+    DATA(history_func) = COND ztb_mob_func-func_id(
+      WHEN result-scope_code = scope_team THEN func_team
+      ELSE func_self ).
+    IF production_order IS NOT INITIAL AND operation_no IS NOT INITIAL.
+      SELECT FROM ztb_pp_op_alloc
+        FIELDS plant, work_center
+        WHERE production_order = @production_order
+          AND operation_no = @operation_no
+        INTO TABLE @DATA(operation_scopes).
+      IF operation_scopes IS INITIAL.
+        result-error_code = 'OPERATION_NOT_FOUND'.
+        RETURN.
+      ENDIF.
+      LOOP AT operation_scopes ASSIGNING FIELD-SYMBOL(<operation_scope>).
+        IF zcl_mob_token_validator=>has_func_op_scope(
+             user_uuid = auth-user_uuid
+             func_id = history_func
+             plant = <operation_scope>-plant
+             work_center = <operation_scope>-work_center ) = abap_false.
+          result-error_code = 'WORK_CONTEXT_NOT_ALLOWED'.
+          RETURN.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
     DATA range_error TYPE failure_code.
     resolve_range(
       EXPORTING range_code = range_code
@@ -249,11 +286,15 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       WHEN result-scope_code = scope_self
       THEN select_self( worker = worker_filter
                         date_from = result-date_from
-                        date_to = result-date_to shift_id = shift_id )
+                        date_to = result-date_to shift_id = shift_id
+                        production_order = production_order
+                        operation_no = operation_no )
       ELSE select_team( user_uuid = auth-user_uuid
                         worker = worker_filter
                         date_from = result-date_from
-                        date_to = result-date_to shift_id = shift_id ) ).
+                        date_to = result-date_to shift_id = shift_id
+                        production_order = production_order
+                        operation_no = operation_no ) ).
 
     result-entry_count = lines( rows ).
     result-is_truncated = xsdbool( result-entry_count >= max_scan_rows ).
@@ -351,6 +392,8 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       WHERE ( txn~work_date BETWEEN @date_from AND @date_to
            OR ( txn~work_date = '00000000' AND txn~execution_date BETWEEN @date_from AND @date_to ) )
         AND ( @shift_id = ' ' OR txn~shift_id = @shift_id )
+        AND ( @production_order = ' ' OR op~production_order = @production_order )
+        AND ( @operation_no = ' ' OR op~operation_no = @operation_no )
         AND txn~transaction_status = @zcl_pp_txn_type=>posted
         AND ( txn~worker_id = @worker
            OR txn~from_worker_id = @worker
@@ -368,19 +411,23 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     "trong ledger: row thuộc scope vì supervisor đã book assignment, không phải
     "vì Work Center hiện tại trong master data. Nhân công chuyển team vẫn còn
     "xuất hiện trong lịch sử của team cũ.
-    SELECT DISTINCT transaction_uuid, operation_uuid, worker_id,
-                    from_worker_id, to_worker_id
-      FROM ztb_pp_alloc_txn
-      WHERE actor_user_uuid = @user_uuid
-        AND transaction_type IN ( @zcl_pp_txn_type=>initial_assign,
+    SELECT DISTINCT txn~transaction_uuid, txn~operation_uuid, txn~worker_id,
+                    txn~from_worker_id, txn~to_worker_id
+      FROM ztb_pp_alloc_txn AS txn
+      INNER JOIN ztb_pp_op_alloc AS op
+        ON op~operation_uuid = txn~operation_uuid
+      WHERE txn~actor_user_uuid = @user_uuid
+        AND txn~transaction_type IN ( @zcl_pp_txn_type=>initial_assign,
                                   @zcl_pp_txn_type=>transfer )
-        AND transaction_status = @zcl_pp_txn_type=>posted
-        AND ( work_date <= @date_to AND work_date <> '00000000'
-           OR ( work_date = '00000000' AND execution_date <= @date_to ) )
+        AND txn~transaction_status = @zcl_pp_txn_type=>posted
+        AND ( txn~work_date <= @date_to AND txn~work_date <> '00000000'
+           OR ( txn~work_date = '00000000' AND txn~execution_date <= @date_to ) )
+        AND ( @production_order = ' ' OR op~production_order = @production_order )
+        AND ( @operation_no = ' ' OR op~operation_no = @operation_no )
         AND ( @worker = ' '
-           OR worker_id = @worker
-           OR from_worker_id = @worker
-           OR to_worker_id = @worker )
+           OR txn~worker_id = @worker
+           OR txn~from_worker_id = @worker
+           OR txn~to_worker_id = @worker )
       INTO TABLE @DATA(booked).
     IF booked IS INITIAL.
       RETURN.
@@ -453,11 +500,20 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       WHERE ( txn~work_date BETWEEN @date_from AND @date_to
            OR ( txn~work_date = '00000000' AND txn~execution_date BETWEEN @date_from AND @date_to ) )
         AND ( @shift_id = ' ' OR txn~shift_id = @shift_id )
+        AND ( @production_order = ' ' OR op~production_order = @production_order )
+        AND ( @operation_no = ' ' OR op~operation_no = @operation_no )
         AND txn~transaction_status = @zcl_pp_txn_type=>posted
       INTO TABLE @DATA(candidates)
       UP TO @max_scan_rows ROWS
       ##itab_db_select.
     LOOP AT candidates ASSIGNING FIELD-SYMBOL(<candidate>).
+      "Điều chỉnh phân bổ do admin tạo không có root assignment của supervisor;
+      "scope operation/worker đã được xác lập ở bước 1 nên vẫn phải đưa row này
+      "vào báo cáo team để số giao và số còn lại phản ánh đúng snapshot.
+      IF <candidate>-transaction_type = zcl_pp_txn_type=>allocation_adjustment.
+        APPEND CORRESPONDING #( <candidate> ) TO result.
+        CONTINUE.
+      ENDIF.
       IF NOT line_exists( roots[
            transaction_uuid = <candidate>-transaction_uuid
            worker_id = <candidate>-report_worker_id ] )
@@ -537,6 +593,14 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
           add_quantity( EXPORTING worker = <row>-report_worker_id
                                   uom = <row>-uom
                                   completed = <row>-quantity * -1
+                        CHANGING summaries = result ).
+        WHEN zcl_pp_txn_type=>allocation_adjustment.
+          IF <row>-worker_id <> <row>-report_worker_id.
+            CONTINUE.
+          ENDIF.
+          add_quantity( EXPORTING worker = <row>-report_worker_id
+                                  uom = <row>-uom
+                                  assigned = <row>-quantity
                         CHANGING summaries = result ).
         WHEN OTHERS.
           "Transaction type chưa biết vẫn được tính số transaction nhưng không cộng

@@ -1,0 +1,11 @@
+@EndUserText.label: 'Quản trị phân bổ sản lượng theo nhân công'
+define service ZUI_PP_EMP_ALLOC_ADM {
+  expose ZC_PP_EmpAlloc_Adm as EmployeeAllocations;
+  expose ZC_PP_OpAlloc_Adm as OperationAllocations;
+  expose ZC_PP_AllocTxn_Adm as AllocationTransactions;
+  expose I_Plant as PlantValueHelp;
+  expose I_UnitOfMeasure as UnitValueHelp;
+  expose ZI_MOB_WorkCenter_VH as WorkCenterValueHelp;
+  expose ZI_PP_Worker_Hist_VH as WorkerValueHelp;
+  expose ZI_PP_Shift as ShiftValueHelp;
+}

@@ -65,6 +65,22 @@ CLASS zcl_mob_token_validator DEFINITION
                 plant TYPE ztb_mob_work-plant
                 work_center TYPE ztb_mob_work-workcenter
       RETURNING VALUE(result) TYPE abap_bool.
+    "Function và vị trí Plant/Work Center phải được cấp bởi cùng một role.
+    CLASS-METHODS has_func_op_scope
+      IMPORTING user_uuid TYPE sysuuid_x16
+                func_id TYPE ztb_mob_func-func_id
+                plant TYPE ztb_mob_work-plant
+                work_center TYPE ztb_mob_work-workcenter
+      RETURNING VALUE(result) TYPE abap_bool.
+    "Kiểm tra tài khoản công nhân và vị trí Plant/Work Center qua role active. Hiệu lực ngày,
+    "Plant và Work Center của master nhân công vẫn do zcl_pp_worker_validator
+    "kiểm tra để tái sử dụng CDS đã có và tránh đọc trực tiếp bảng đối tác.
+    CLASS-METHODS has_worker_op_scope
+      IMPORTING user_uuid TYPE sysuuid_x16
+                worker_id TYPE ztb_mob_user-worker_id
+                plant TYPE ztb_mob_work-plant
+                work_center TYPE ztb_mob_work-workcenter
+      RETURNING VALUE(result) TYPE abap_bool.
     CLASS-METHODS has_function
       IMPORTING user_uuid TYPE sysuuid_x16
                 func_id TYPE ztb_mob_func-func_id
@@ -156,6 +172,61 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       INTO TABLE @DATA(scopes)
       UP TO 1 ROWS.
     result = xsdbool( scopes IS NOT INITIAL ).
+  ENDMETHOD.
+
+  METHOD has_func_op_scope.
+    IF user_uuid IS INITIAL OR func_id IS INITIAL OR plant IS INITIAL
+       OR work_center IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM ztb_mob_usr_rol AS assignment
+      INNER JOIN ztb_mob_role AS role_hdr
+        ON role_hdr~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_fnc AS role_func
+        ON role_func~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_wrk AS role_work
+        ON role_work~role_id = assignment~role_id
+      INNER JOIN ztb_mob_work AS work
+        ON work~work_id = role_work~work_id
+      FIELDS role_hdr~role_id
+      WHERE assignment~user_uuid = @user_uuid
+        AND role_hdr~status = 'A'
+        AND role_func~func_id = @func_id
+        AND work~is_active = 'A'
+        AND work~plant = @plant
+        AND work~workcenter = @work_center
+      INTO TABLE @DATA(grants)
+      UP TO 1 ROWS.
+    result = xsdbool( grants IS NOT INITIAL ).
+  ENDMETHOD.
+
+  METHOD has_worker_op_scope.
+    IF user_uuid IS INITIAL OR worker_id IS INITIAL OR plant IS INITIAL
+       OR work_center IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM ztb_mob_user AS account
+      INNER JOIN ztb_mob_usr_rol AS assignment
+        ON assignment~user_uuid = account~user_uuid
+      INNER JOIN ztb_mob_role AS role_hdr
+        ON role_hdr~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_wrk AS role_work
+        ON role_work~role_id = assignment~role_id
+      INNER JOIN ztb_mob_work AS work
+        ON work~work_id = role_work~work_id
+      FIELDS account~user_uuid
+      WHERE account~user_uuid = @user_uuid
+        AND account~worker_id = @worker_id
+        AND account~status = 'A'
+        AND role_hdr~status = 'A'
+        AND work~is_active = 'A'
+        AND work~plant = @plant
+        AND work~workcenter = @work_center
+      INTO TABLE @DATA(grants)
+      UP TO 1 ROWS.
+    result = xsdbool( grants IS NOT INITIAL ).
   ENDMETHOD.
 
   METHOD has_function.

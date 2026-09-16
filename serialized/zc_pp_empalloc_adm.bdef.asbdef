@@ -1,0 +1,10 @@
+projection;
+strict ( 2 );
+
+define behavior for ZC_PP_EmpAlloc_Adm alias EmployeeAllocation
+{
+  use association _Operation;
+
+  // Chỉ cho phép gọi action nghiệp vụ; không cho update trực tiếp số dư.
+  use action adjustAllocation;
+}

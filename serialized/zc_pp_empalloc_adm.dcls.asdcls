@@ -1,0 +1,5 @@
+@EndUserText.label: 'Đọc quản trị phân bổ theo nhân công - bảo vệ bằng IAM'
+@MappingRole: true
+define role ZC_PP_EMPALLOC_ADM {
+  grant select on ZC_PP_EmpAlloc_Adm;
+}

@@ -8,7 +8,8 @@ CLASS zcl_pp_txn_type DEFINITION
       recall         TYPE ztb_pp_alloc_txn-transaction_type VALUE 'RECALL',
       confirm        TYPE ztb_pp_alloc_txn-transaction_type VALUE 'CONFIRM',
       reverse        TYPE ztb_pp_alloc_txn-transaction_type VALUE 'REVERSE',
-      correction     TYPE ztb_pp_alloc_txn-transaction_type VALUE 'CORRECTION'.
+      correction     TYPE ztb_pp_alloc_txn-transaction_type VALUE 'CORRECTION',
+      allocation_adjustment TYPE ztb_pp_alloc_txn-transaction_type VALUE 'ALLOC_ADJUST'.
 
     "Ledger và thay đổi nghiệp vụ được persist cùng một RAP LUW.
     "Trạng thái network/pending/transport failure thuộc hàng đợi phía mobile,

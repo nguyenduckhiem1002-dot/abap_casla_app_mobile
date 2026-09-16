@@ -113,7 +113,17 @@ CLASS lhc_operationallocation DEFINITION
       IMPORTING
         production_order TYPE ztb_pp_op_alloc-production_order
         operation_no     TYPE ztb_pp_op_alloc-operation_no
+        user_uuid        TYPE sysuuid_x16
+        func_id          TYPE ztb_mob_func-func_id
       RETURNING VALUE(value) TYPE operation_context.
+
+    METHODS is_worker_allowed
+      IMPORTING user_uuid TYPE sysuuid_x16
+                worker_id TYPE ztb_pp_alloc_txn-worker_id
+                plant TYPE ztb_mob_work-plant
+                work_center TYPE ztb_mob_work-workcenter
+                execution_date TYPE d
+      RETURNING VALUE(result) TYPE abap_bool.
 
     METHODS read_worker_balances
       IMPORTING operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
@@ -147,11 +157,201 @@ ENDCLASS.
 CLASS lhc_employeeallocation DEFINITION
   INHERITING FROM cl_abap_behavior_handler.
   PRIVATE SECTION.
+    METHODS adjustAllocation FOR MODIFY
+      IMPORTING keys FOR ACTION EmployeeAllocation~adjustAllocation
+      RESULT result.
+
     METHODS validateBalance FOR VALIDATE ON SAVE
       IMPORTING keys FOR EmployeeAllocation~validateBalance.
 ENDCLASS.
 
 CLASS lhc_employeeallocation IMPLEMENTATION.
+
+  " Điều chỉnh số lượng giao của một công nhân, cập nhật snapshot và ghi ledger audit.
+  METHOD adjustAllocation.
+    DATA new_initial_quantity TYPE ztb_pp_emp_alloc-initial_assigned_qty.
+    DATA new_remaining_quantity TYPE ztb_pp_emp_alloc-remaining_qty.
+
+    LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
+      DATA(input) = <key>-%param.
+
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY EmployeeAllocation ALL FIELDS
+        WITH VALUE #( ( %tky = <key>-%tky ) )
+        RESULT DATA(allocations).
+      IF lines( allocations ) <> 1.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-employeeallocation.
+        APPEND VALUE #(
+          %tky = <key>-%tky
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = 'Không tìm thấy phân bổ nhân công' ) )
+          TO reported-employeeallocation.
+        CONTINUE.
+      ENDIF.
+
+      DATA(allocation) = allocations[ 1 ].
+      DATA(execution_date) = COND d(
+        WHEN input-ExecutionDate IS INITIAL
+        THEN cl_abap_context_info=>get_system_date( )
+        ELSE input-ExecutionDate ).
+      IF input-AdjustmentQuantity = 0
+         OR input-UnitOfMeasure IS INITIAL
+         OR input-ReasonCode IS INITIAL
+         OR input-ReasonText IS INITIAL.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-employeeallocation.
+        APPEND VALUE #(
+          %tky = <key>-%tky
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = 'Thiếu số lượng điều chỉnh, đơn vị tính hoặc lý do' ) )
+          TO reported-employeeallocation.
+        CONTINUE.
+      ENDIF.
+
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation ALL FIELDS
+        WITH VALUE #( ( OperationUUID = allocation-OperationUUID ) )
+        RESULT DATA(operations).
+      IF lines( operations ) <> 1.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-employeeallocation.
+        APPEND VALUE #(
+          %tky = <key>-%tky
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = 'Không tìm thấy công đoạn của phân bổ' ) )
+          TO reported-employeeallocation.
+        CONTINUE.
+      ENDIF.
+
+      DATA(operation) = operations[ 1 ].
+      IF input-UnitOfMeasure <> allocation-UnitOfMeasure
+         OR input-UnitOfMeasure <> operation-UnitOfMeasure.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-employeeallocation.
+        APPEND VALUE #(
+          %tky = <key>-%tky
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = 'Đơn vị tính điều chỉnh không khớp' ) )
+          TO reported-employeeallocation.
+        CONTINUE.
+      ENDIF.
+
+      IF input-ShiftID IS NOT INITIAL.
+        SELECT FROM ztb_pp_shift
+          FIELDS shift_id, valid_from, time_zone
+          WHERE plant = @operation-Plant
+            AND shift_id = @input-ShiftID
+            AND is_active = 'A'
+            AND valid_from <= @execution_date
+            AND valid_to >= @execution_date
+          INTO TABLE @DATA(shifts)
+          UP TO 2 ROWS.
+        IF lines( shifts ) <> 1.
+          APPEND VALUE #( %tky = <key>-%tky ) TO failed-employeeallocation.
+          APPEND VALUE #(
+            %tky = <key>-%tky
+            %msg = new_message_with_text(
+              severity = if_abap_behv_message=>severity-error
+              text = 'Ca làm việc không hợp lệ tại nhà máy và ngày đã chọn' ) )
+            TO reported-employeeallocation.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
+
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation BY \_Employees
+        FIELDS ( InitialAssignedQuantity CompletedQuantity RemainingQuantity )
+        WITH VALUE #( ( %key-OperationUUID = allocation-OperationUUID ) )
+        RESULT DATA(operation_allocations).
+      DATA(total_allocated) = REDUCE ztb_pp_emp_alloc-remaining_qty(
+        INIT total = CONV ztb_pp_emp_alloc-remaining_qty( 0 )
+        FOR current IN operation_allocations
+        NEXT total = total + current-RemainingQuantity + current-CompletedQuantity ).
+      IF input-AdjustmentQuantity > 0
+         AND total_allocated + input-AdjustmentQuantity > operation-OperationQuantity.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-employeeallocation.
+        APPEND VALUE #(
+          %tky = <key>-%tky
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = 'Tổng sản lượng giao vượt sản lượng công đoạn' ) )
+          TO reported-employeeallocation.
+        CONTINUE.
+      ENDIF.
+
+      new_initial_quantity = allocation-InitialAssignedQuantity
+                           + input-AdjustmentQuantity.
+      new_remaining_quantity = allocation-RemainingQuantity
+                             + input-AdjustmentQuantity.
+      IF new_initial_quantity < 0 OR new_remaining_quantity < 0.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-employeeallocation.
+        APPEND VALUE #(
+          %tky = <key>-%tky
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = 'Không thể giảm thấp hơn số lượng đã giao hoặc đã xác nhận' ) )
+          TO reported-employeeallocation.
+        CONTINUE.
+      ENDIF.
+
+      DATA(executed_at) = utclong_current( ).
+      DATA(shift_valid_from) = VALUE ztb_pp_shift-valid_from(
+        shifts[ 1 ]-valid_from OPTIONAL ).
+      DATA(shift_time_zone) = VALUE ztb_pp_shift-time_zone(
+        shifts[ 1 ]-time_zone OPTIONAL ).
+
+      MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY EmployeeAllocation UPDATE FIELDS
+          ( InitialAssignedQuantity RemainingQuantity LastExecutionDate LastSyncAt )
+        WITH VALUE #( ( EmployeeAllocationUUID = allocation-EmployeeAllocationUUID
+          InitialAssignedQuantity = new_initial_quantity
+          RemainingQuantity = new_remaining_quantity
+          LastExecutionDate = execution_date
+          LastSyncAt = executed_at ) )
+        ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
+          ( TransactionType WorkerID Quantity UnitOfMeasure ExecutionDate
+            ShiftID WorkDate ExecutedAt ShiftTimeZone ShiftValidFrom
+            TransactionStatus ReasonCode ReasonText SourceChannel VerificationMethod )
+        WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
+          ( %cid = |ADJ{ sy-tabix }|
+            TransactionType = zcl_pp_txn_type=>allocation_adjustment
+            WorkerID = allocation-WorkerID
+            Quantity = input-AdjustmentQuantity
+            UnitOfMeasure = allocation-UnitOfMeasure
+            ExecutionDate = execution_date
+            ShiftID = input-ShiftID
+            WorkDate = execution_date
+            ExecutedAt = executed_at
+            ShiftTimeZone = shift_time_zone
+            ShiftValidFrom = shift_valid_from
+            TransactionStatus = zcl_pp_txn_type=>posted
+            ReasonCode = input-ReasonCode
+            ReasonText = input-ReasonText
+            SourceChannel = zcl_pp_txn_type=>source_fiori
+            VerificationMethod = 'IAM' ) ) ) )
+        FAILED DATA(modify_failed).
+      IF modify_failed-employeeallocation IS NOT INITIAL
+         OR modify_failed-operationallocation IS NOT INITIAL
+         OR modify_failed-allocationtransaction IS NOT INITIAL.
+        APPEND VALUE #( %tky = <key>-%tky ) TO failed-employeeallocation.
+        APPEND VALUE #(
+          %tky = <key>-%tky
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error
+            text = 'Không thể lưu điều chỉnh sản lượng và ledger' ) )
+          TO reported-employeeallocation.
+        CONTINUE.
+      ENDIF.
+
+      allocation-InitialAssignedQuantity = new_initial_quantity.
+      allocation-RemainingQuantity = new_remaining_quantity.
+      allocation-LastExecutionDate = execution_date.
+      APPEND VALUE #( %tky = <key>-%tky %param = allocation ) TO result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  " Kiểm tra số dư còn lại của từng phân công theo công thức cộng/trừ sản lượng.
   METHOD validateBalance.
     READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
       ENTITY EmployeeAllocation
@@ -185,6 +385,8 @@ CLASS lhc_employeeallocation IMPLEMENTATION.
 ENDCLASS.
 
 CLASS lhc_operationallocation IMPLEMENTATION.
+
+  " Cấp quyền RAP ở mức global; quyền nghiệp vụ cụ thể được kiểm tra trong từng action.
   METHOD get_global_authorizations.
   "API mobile không expose raw CRUD. Các domain action tự xác thực CASLA token
   "khi request xuất phát từ mobile; projection mobile chỉ expose các static
@@ -236,6 +438,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   ENDIF.
 ENDMETHOD.
 
+  " Kiểm tra dữ liệu snapshot công đoạn trước khi ghi vào cơ sở dữ liệu.
   METHOD validateOperation.
     READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
       ENTITY OperationAllocation
@@ -263,12 +466,21 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Đọc công đoạn sống từ SAP, kiểm tra phạm vi quyền rồi lấy hoặc tạo snapshot công đoạn.
   METHOD ensure_operation.
     DATA(live) = zcl_pp_operation_guard=>resolve(
       production_order = production_order
       operation_no = operation_no ).
     IF live-is_valid = abap_false.
       value-error_code = live-error_code.
+      RETURN.
+    ENDIF.
+    IF zcl_mob_token_validator=>has_func_op_scope(
+         user_uuid = user_uuid
+         func_id = func_id
+         plant = live-plant
+         work_center = live-work_center ) = abap_false.
+      value-error_code = 'WORK_CONTEXT_NOT_ALLOWED'.
       RETURN.
     ENDIF.
     DATA(cached_context) = VALUE operation_context(
@@ -352,6 +564,22 @@ ENDMETHOD.
     INSERT value INTO TABLE operation_cache.
   ENDMETHOD.
 
+  " Kiểm tra công nhân thuộc đúng Plant/Work Center và còn hiệu lực trong master nhân công.
+  METHOD is_worker_allowed.
+    result = xsdbool(
+      zcl_mob_token_validator=>has_worker_op_scope(
+        user_uuid = user_uuid
+        worker_id = worker_id
+        plant = plant
+        work_center = work_center ) = abap_true
+      AND zcl_pp_worker_validator=>is_worker_active(
+        worker_id = worker_id
+        plant = plant
+        work_center = work_center
+        execution_date = execution_date ) = abap_true ).
+  ENDMETHOD.
+
+  " Đọc số dư phân công từ transactional buffer để các action cùng request thấy dữ liệu mới nhất.
   METHOD read_worker_balances.
     "EML reads the RAP transactional buffer, including balances changed earlier
     "in the same request. Open SQL would only see the persisted database state.
@@ -376,6 +604,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Tìm receipt đã commit theo SyncItemUUID để xử lý retry theo cơ chế idempotent.
   METHOD find_persisted_sync_receipts.
     "A retry after a completed request must be recognizable even when SAP no
     "longer permits a new posting for the manufacturing operation.
@@ -393,6 +622,7 @@ ENDMETHOD.
       UP TO 2 ROWS.
   ENDMETHOD.
 
+  " Đọc receipt của công đoạn trong transactional buffer theo SyncItemUUID.
   METHOD read_operation_sync_receipts.
     READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
       ENTITY OperationAllocation BY \_Transactions
@@ -421,6 +651,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Xử lý giao sản lượng ban đầu cho công nhân, gồm ca, UoM, quyền và ledger.
   METHOD initialAssign.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -469,8 +700,9 @@ ENDMETHOD.
         CONTINUE.
       ENDIF.
       input-ExecutionDate = shift-work_date.
-      IF zcl_mob_token_validator=>has_work_scope(
-           user_uuid = auth-user_uuid plant = operation-Plant
+      IF zcl_mob_token_validator=>has_func_op_scope(
+           user_uuid = auth-user_uuid func_id = func_initial_assign
+           plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -478,11 +710,7 @@ ENDMETHOD.
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      IF input-UnitOfMeasure <> operation-UnitOfMeasure
-         OR zcl_pp_worker_validator=>is_worker_active(
-              worker_id = input-ToWorkerID plant = operation-Plant
-              work_center = operation-WorkCenter
-              execution_date = input-ExecutionDate ) = abap_false.
+      IF input-UnitOfMeasure <> operation-UnitOfMeasure.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = COND string(
@@ -503,10 +731,18 @@ ENDMETHOD.
             CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
-      IF worker_auth-is_valid = abap_false.
+      IF worker_auth-is_valid = abap_false
+         OR is_worker_allowed(
+              user_uuid = worker_auth-worker_user_uuid
+              worker_id = input-ToWorkerID
+              plant = operation-Plant work_center = operation-WorkCenter
+              execution_date = input-ExecutionDate ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORKER_AUTH_FAILED'
+                    text = COND string(
+                      WHEN worker_auth-is_valid = abap_false
+                      THEN 'WORKER_AUTH_FAILED'
+                      ELSE 'WORKER_NOT_ALLOWED' )
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -618,6 +854,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Xử lý điều chuyển sản lượng giữa hai công nhân và cập nhật các số dư liên quan.
   METHOD transfer.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -664,8 +901,9 @@ ENDMETHOD.
         CONTINUE.
       ENDIF.
       input-ExecutionDate = shift-work_date.
-      IF zcl_mob_token_validator=>has_work_scope(
-           user_uuid = auth-user_uuid plant = operation-Plant
+      IF zcl_mob_token_validator=>has_func_op_scope(
+           user_uuid = auth-user_uuid func_id = func_transfer
+           plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -684,11 +922,7 @@ ENDMETHOD.
           CONTINUE.
       ENDTRY.
       IF worker_auth-is_valid = abap_false
-         OR input-UnitOfMeasure <> operation-UnitOfMeasure
-         OR zcl_pp_worker_validator=>is_worker_active(
-              worker_id = input-ToWorkerID plant = operation-Plant
-              work_center = operation-WorkCenter
-              execution_date = input-ExecutionDate ) = abap_false.
+         OR input-UnitOfMeasure <> operation-UnitOfMeasure.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = COND string(
@@ -697,6 +931,17 @@ ENDMETHOD.
                       WHEN input-UnitOfMeasure <> operation-UnitOfMeasure
                       THEN 'UNIT_OF_MEASURE_MISMATCH'
                       ELSE 'WORKER_NOT_ALLOWED' )
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      IF is_worker_allowed(
+           user_uuid = worker_auth-worker_user_uuid
+           worker_id = input-ToWorkerID
+           plant = operation-Plant work_center = operation-WorkCenter
+           execution_date = input-ExecutionDate ) = abap_false.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+                    text = 'WORKER_NOT_ALLOWED'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -801,6 +1046,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Xử lý thu hồi sản lượng đã giao và ghi nhận giao dịch ledger tương ứng.
   METHOD recall.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -846,8 +1092,9 @@ ENDMETHOD.
         CONTINUE.
       ENDIF.
       input-ExecutionDate = shift-work_date.
-      IF zcl_mob_token_validator=>has_work_scope(
-           user_uuid = auth-user_uuid plant = operation-Plant
+      IF zcl_mob_token_validator=>has_func_op_scope(
+           user_uuid = auth-user_uuid func_id = func_recall
+           plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -869,6 +1116,17 @@ ENDMETHOD.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = 'WORKER_AUTH_FAILED'
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      IF is_worker_allowed(
+           user_uuid = worker_auth-worker_user_uuid
+           worker_id = input-WorkerID
+           plant = operation-Plant work_center = operation-WorkCenter
+           execution_date = input-ExecutionDate ) = abap_false.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+                    text = 'WORKER_NOT_ALLOWED'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -976,6 +1234,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Xử lý xác nhận sản lượng của công nhân sau khi kiểm tra giao dịch gốc và quyền.
   METHOD confirm.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -1014,8 +1273,9 @@ ENDMETHOD.
         CONTINUE.
       ENDIF.
       input-ExecutionDate = shift-work_date.
-      IF zcl_mob_token_validator=>has_work_scope(
-           user_uuid = auth-user_uuid plant = operation-Plant
+      IF zcl_mob_token_validator=>has_func_op_scope(
+           user_uuid = auth-user_uuid func_id = func_confirm
+           plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -1023,11 +1283,7 @@ ENDMETHOD.
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      IF input-UnitOfMeasure <> operation-UnitOfMeasure
-         OR zcl_pp_worker_validator=>is_worker_active(
-              worker_id = input-WorkerID plant = operation-Plant
-              work_center = operation-WorkCenter
-              execution_date = input-ExecutionDate ) = abap_false.
+      IF input-UnitOfMeasure <> operation-UnitOfMeasure.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = COND string(
@@ -1127,6 +1383,17 @@ ENDMETHOD.
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
+      IF is_worker_allowed(
+           user_uuid = worker_auth-worker_user_uuid
+           worker_id = input-WorkerID
+           plant = operation-Plant work_center = operation-WorkCenter
+           execution_date = input-ExecutionDate ) = abap_false.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+                    text = 'WORKER_NOT_ALLOWED'
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
       DATA(original_type) = original_transaction-TransactionType.
 
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
@@ -1164,6 +1431,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Đảo một giao dịch xác nhận đã ghi nhận và hoàn trả số dư phù hợp.
   METHOD reverse.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -1196,8 +1464,9 @@ ENDMETHOD.
         CONTINUE.
       ENDIF.
       DATA(operation) = operations[ 1 ].
-      IF zcl_mob_token_validator=>has_work_scope(
-           user_uuid = auth-user_uuid plant = operation-Plant
+      IF zcl_mob_token_validator=>has_func_op_scope(
+           user_uuid = auth-user_uuid func_id = func_reverse
+           plant = operation-Plant
            work_center = operation-WorkCenter ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -1334,6 +1603,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Điều chỉnh sản lượng của giao dịch xác nhận bằng một giao dịch correction mới.
   METHOD correctConfirm.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -1450,6 +1720,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Facade static action: xác thực token, resolve công đoạn rồi gọi action giao ban đầu.
   METHOD submitInitialAssign.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -1468,8 +1739,11 @@ ENDMETHOD.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      DATA(context) = ensure_operation( production_order = input-ProductionOrder
-                                        operation_no = input-Operation ).
+      DATA(context) = ensure_operation(
+        production_order = input-ProductionOrder
+        operation_no = input-Operation
+        user_uuid = auth-user_uuid
+        func_id = func_initial_assign ).
       IF context-is_valid = abap_false.
         report_failure( EXPORTING cid = cid text = CONV string( context-error_code )
                         CHANGING failed = failed reported = reported ).
@@ -1518,6 +1792,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Facade static action: xác thực token, resolve công đoạn rồi gọi action điều chuyển.
   METHOD submitTransfer.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -1536,8 +1811,11 @@ ENDMETHOD.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      DATA(context) = ensure_operation( production_order = input-ProductionOrder
-                                        operation_no = input-Operation ).
+      DATA(context) = ensure_operation(
+        production_order = input-ProductionOrder
+        operation_no = input-Operation
+        user_uuid = auth-user_uuid
+        func_id = func_transfer ).
       IF context-is_valid = abap_false.
         report_failure( EXPORTING cid = cid text = CONV string( context-error_code )
                         CHANGING failed = failed reported = reported ).
@@ -1584,6 +1862,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Facade static action: xác thực token, resolve công đoạn rồi gọi action thu hồi.
   METHOD submitRecall.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -1602,8 +1881,11 @@ ENDMETHOD.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      DATA(context) = ensure_operation( production_order = input-ProductionOrder
-                                        operation_no = input-Operation ).
+      DATA(context) = ensure_operation(
+        production_order = input-ProductionOrder
+        operation_no = input-Operation
+        user_uuid = auth-user_uuid
+        func_id = func_recall ).
       IF context-is_valid = abap_false.
         report_failure( EXPORTING cid = cid text = CONV string( context-error_code )
                         CHANGING failed = failed reported = reported ).
@@ -1650,6 +1932,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Facade static action: xác thực token, resolve công đoạn và xử lý xác nhận idempotent.
   METHOD submitConfirm.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -1665,6 +1948,16 @@ ENDMETHOD.
       ENDTRY.
       IF auth-is_valid = abap_false.
         report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      DATA(context) = ensure_operation(
+        production_order = input-ProductionOrder
+        operation_no = input-Operation
+        user_uuid = auth-user_uuid
+        func_id = func_confirm ).
+      IF context-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( context-error_code )
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1699,13 +1992,6 @@ ENDMETHOD.
           report_failure( EXPORTING cid = cid text = 'IDEMPOTENCY_KEY_REUSED'
                           CHANGING failed = failed reported = reported ).
         ENDIF.
-        CONTINUE.
-      ENDIF.
-      DATA(context) = ensure_operation( production_order = input-ProductionOrder
-                                        operation_no = input-Operation ).
-      IF context-is_valid = abap_false.
-        report_failure( EXPORTING cid = cid text = CONV string( context-error_code )
-                        CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE ENTITY OperationAllocation EXECUTE confirm
@@ -1749,6 +2035,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Facade static action: xác thực token, resolve công đoạn rồi gọi action đảo giao dịch.
   METHOD submitReverse.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -1767,8 +2054,11 @@ ENDMETHOD.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      DATA(context) = ensure_operation( production_order = input-ProductionOrder
-                                        operation_no = input-Operation ).
+      DATA(context) = ensure_operation(
+        production_order = input-ProductionOrder
+        operation_no = input-Operation
+        user_uuid = auth-user_uuid
+        func_id = func_reverse ).
       IF context-is_valid = abap_false.
         report_failure( EXPORTING cid = cid text = CONV string( context-error_code )
                         CHANGING failed = failed reported = reported ).
@@ -1815,6 +2105,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Tra cứu trạng thái đồng bộ đã commit của một SyncItemUUID.
   METHOD getSyncStatus.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
@@ -1877,6 +2168,7 @@ ENDMETHOD.
     ENDLOOP.
   ENDMETHOD.
 
+  " Đưa lỗi nghiệp vụ vào failed và reported của instance RAP.
   METHOD report_instance_failure.
     APPEND VALUE #(
       %tky = VALUE #( OperationUUID = operation_uuid ) )
@@ -1888,6 +2180,7 @@ ENDMETHOD.
       TO reported-operationallocation.
   ENDMETHOD.
 
+  " Chuyển lỗi từ bound action ra kết quả của static facade action.
   METHOD forward_action_failure.
     DATA(message_forwarded) = abap_false.
 
@@ -1918,6 +2211,7 @@ ENDMETHOD.
     ENDIF.
   ENDMETHOD.
 
+  " Đưa lỗi của static action vào failed và reported theo CID tương ứng.
   METHOD report_failure.
     APPEND VALUE #( %cid = cid ) TO failed-operationallocation.
     APPEND VALUE #( %cid = cid
@@ -1926,6 +2220,7 @@ ENDMETHOD.
       TO reported-operationallocation.
   ENDMETHOD.
 
+  " Xác thực token, đọc lịch sử theo quyền, ca, lệnh sản xuất và công đoạn rồi trả kết quả.
   METHOD getWorkHistory.
     IF keys IS INITIAL.
       RETURN.
@@ -1944,7 +2239,9 @@ ENDMETHOD.
         DATA(history) = zcl_pp_work_history=>read(
           access_token = CONV string( input-AccessToken ) device_id = input-DeviceID
           range_code = input-RangeCode date_from = input-DateFrom date_to = input-DateTo
-          worker_id = input-WorkerID shift_id = input-ShiftID
+          worker_id = input-WorkerID
+          production_order = input-ProductionOrder operation_no = input-Operation
+          shift_id = input-ShiftID
           include_entries = xsdbool( input-SummaryOnly = abap_false ) ).
       CATCH cx_abap_message_digest zcx_mob_config INTO DATA(error).
         report_failure( EXPORTING cid = cid text = error->get_text( )

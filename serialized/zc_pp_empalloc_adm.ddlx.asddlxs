@@ -1,0 +1,102 @@
+@Metadata.layer: #CORE
+@UI: {
+  headerInfo: {
+    typeName: 'Phân bổ nhân công',
+    typeNamePlural: 'Phân bổ sản lượng theo nhân công',
+    title: { value: 'WorkerID' },
+    description: { value: 'ProductionOrder' }
+  }
+}
+annotate entity ZC_PP_EmpAlloc_Adm with
+{
+  @UI.facet: [{
+    id: 'General',
+    purpose: #STANDARD,
+    type: #IDENTIFICATION_REFERENCE,
+    label: 'Thông tin phân bổ sản lượng',
+    position: 10
+  }]
+
+  @UI.hidden: true
+  @UI.identification: [{ position: 90 }]
+  EmployeeAllocationUUID;
+
+  @UI.lineItem: [{ position: 10, label: 'Lệnh sản xuất' }]
+  @UI.identification: [{ position: 10, label: 'Lệnh sản xuất' }]
+  @UI.selectionField: [{ position: 10 }]
+  ProductionOrder;
+
+  @UI.lineItem: [{ position: 20, label: 'Công đoạn' }]
+  @UI.identification: [{ position: 20, label: 'Công đoạn' }]
+  @UI.selectionField: [{ position: 20 }]
+  Operation;
+
+  @UI.lineItem: [{ position: 30, label: 'Mã công đoạn' }]
+  @UI.identification: [{ position: 30, label: 'Mã công đoạn' }]
+  @UI.selectionField: [{ position: 30 }]
+  MaCongDoan;
+
+  @UI.lineItem: [{ position: 40, label: 'Nhà máy' }]
+  @UI.identification: [{ position: 40, label: 'Nhà máy' }]
+  @UI.selectionField: [{ position: 40 }]
+  Plant;
+
+  @UI.lineItem: [{ position: 50, label: 'Trung tâm làm việc' }]
+  @UI.identification: [{ position: 50, label: 'Trung tâm làm việc' }]
+  @UI.selectionField: [{ position: 50 }]
+  WorkCenter;
+
+  @UI.lineItem: [
+    { position: 60, label: 'Mã nhân công' },
+    { type: #FOR_ACTION, dataAction: 'adjustAllocation', label: 'Điều chỉnh sản lượng giao', position: 5 }
+  ]
+  @UI.identification: [{ position: 60, label: 'Mã nhân công' }]
+  @UI.selectionField: [{ position: 60 }]
+  WorkerID;
+
+  @UI.lineItem: [{ position: 70, label: 'Giao ban đầu' }]
+  @UI.identification: [{ position: 70, label: 'Giao ban đầu' }]
+  InitialAssignedQuantity;
+
+  @UI.lineItem: [{ position: 80, label: 'Nhận điều chuyển' }]
+  @UI.identification: [{ position: 80, label: 'Nhận điều chuyển' }]
+  TransferredInQuantity;
+
+  @UI.lineItem: [{ position: 90, label: 'Điều chuyển đi' }]
+  @UI.identification: [{ position: 90, label: 'Điều chuyển đi' }]
+  TransferredOutQuantity;
+
+  @UI.lineItem: [{ position: 100, label: 'Đã thu hồi' }]
+  @UI.identification: [{ position: 100, label: 'Đã thu hồi' }]
+  RecalledQuantity;
+
+  @UI.lineItem: [{ position: 110, label: 'Đã xác nhận' }]
+  @UI.identification: [{ position: 110, label: 'Đã xác nhận' }]
+  CompletedQuantity;
+
+  @UI.lineItem: [{ position: 120, label: 'Còn lại' }]
+  @UI.identification: [{ position: 120, label: 'Còn lại' }]
+  RemainingQuantity;
+
+  @UI.lineItem: [{ position: 130, label: 'ĐVT' }]
+  @UI.identification: [{ position: 130, label: 'ĐVT' }]
+  UnitOfMeasure;
+
+  @UI.identification: [{ position: 140, label: 'Ngày thực hiện cuối' }]
+  LastExecutionDate;
+
+  @UI.identification: [{ position: 150, label: 'Lần đồng bộ cuối' }]
+  LastSyncAt;
+
+  @UI.hidden: true
+  CreatedBy;
+
+  @UI.hidden: true
+  CreatedAt;
+
+  @UI.hidden: true
+  LastChangedBy;
+
+  @UI.hidden: true
+  LocalLastChangedAt;
+}

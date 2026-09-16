@@ -80,6 +80,10 @@ etag master LocalLastChangedAt
 {
   update;
 
+  // Admin điều chỉnh phần sản lượng giao bằng action có kiểm soát. Không expose
+  // update tổng quát ở projection admin để mọi thay đổi đều ghi audit ledger.
+  action adjustAllocation parameter ZA_PP_AdjustAllocation result [1] $self;
+
   field ( numbering : managed, readonly ) EmployeeAllocationUUID;
   field ( readonly ) OperationUUID, CreatedBy, CreatedAt,
                      LastChangedBy, LocalLastChangedAt;
