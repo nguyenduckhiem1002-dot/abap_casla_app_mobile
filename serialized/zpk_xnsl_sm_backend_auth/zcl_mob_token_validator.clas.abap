@@ -71,6 +71,14 @@ CLASS zcl_mob_token_validator DEFINITION
                 func_id TYPE ztb_mob_func-func_id
                 plant TYPE ztb_mob_work-plant
                 work_center TYPE ztb_mob_work-workcenter
+                work_id TYPE ztb_mob_work-work_id OPTIONAL
+      RETURNING VALUE(result) TYPE abap_bool.
+    "Kiểm tra function và WorkID thuộc cùng một role, dùng khi chưa có
+    "operation để suy ra Plant/Work Center.
+    CLASS-METHODS has_func_work_scope
+      IMPORTING user_uuid TYPE sysuuid_x16
+                func_id TYPE ztb_mob_func-func_id
+                work_id TYPE ztb_mob_work-work_id
       RETURNING VALUE(result) TYPE abap_bool.
     "Kiểm tra tài khoản công nhân và vị trí Plant/Work Center qua role active. Hiệu lực ngày,
     "Plant và Work Center của master nhân công vẫn do zcl_pp_worker_validator
@@ -80,6 +88,7 @@ CLASS zcl_mob_token_validator DEFINITION
                 worker_id TYPE ztb_mob_user-worker_id
                 plant TYPE ztb_mob_work-plant
                 work_center TYPE ztb_mob_work-workcenter
+                work_id TYPE ztb_mob_work-work_id OPTIONAL
       RETURNING VALUE(result) TYPE abap_bool.
     CLASS-METHODS has_function
       IMPORTING user_uuid TYPE sysuuid_x16
@@ -196,6 +205,32 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
         AND work~is_active = 'A'
         AND work~plant = @plant
         AND work~workcenter = @work_center
+        AND ( @work_id IS INITIAL OR work~work_id = @work_id )
+      INTO TABLE @DATA(grants)
+      UP TO 1 ROWS.
+    result = xsdbool( grants IS NOT INITIAL ).
+  ENDMETHOD.
+
+  METHOD has_func_work_scope.
+    IF user_uuid IS INITIAL OR func_id IS INITIAL OR work_id IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM ztb_mob_usr_rol AS assignment
+      INNER JOIN ztb_mob_role AS role_hdr
+        ON role_hdr~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_fnc AS role_func
+        ON role_func~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_wrk AS role_work
+        ON role_work~role_id = assignment~role_id
+      INNER JOIN ztb_mob_work AS work
+        ON work~work_id = role_work~work_id
+      FIELDS role_hdr~role_id
+      WHERE assignment~user_uuid = @user_uuid
+        AND role_hdr~status = 'A'
+        AND role_func~func_id = @func_id
+        AND work~work_id = @work_id
+        AND work~is_active = 'A'
       INTO TABLE @DATA(grants)
       UP TO 1 ROWS.
     result = xsdbool( grants IS NOT INITIAL ).
@@ -224,6 +259,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
         AND work~is_active = 'A'
         AND work~plant = @plant
         AND work~workcenter = @work_center
+        AND ( @work_id IS INITIAL OR work~work_id = @work_id )
       INTO TABLE @DATA(grants)
       UP TO 1 ROWS.
     result = xsdbool( grants IS NOT INITIAL ).

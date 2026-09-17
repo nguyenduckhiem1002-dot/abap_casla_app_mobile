@@ -20,6 +20,9 @@ define view entity ZR_PP_AllocTxn
       from_worker_id            as FromWorkerID,
       to_worker_id              as ToWorkerID,
       worker_id                 as WorkerID,
+      @EndUserText.label: 'Vị trí làm việc'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Work_Hist_VH', element: 'WorkID' } }]
+      work_id                   as WorkID,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       quantity                  as Quantity,
       uom                       as UnitOfMeasure,

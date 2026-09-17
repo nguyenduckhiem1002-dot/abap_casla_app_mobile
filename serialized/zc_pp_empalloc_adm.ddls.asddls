@@ -8,6 +8,9 @@ define view entity ZC_PP_EmpAlloc_Adm
   @EndUserText.label: 'Mã phân bổ'
   key EmployeeAllocationUUID,
 
+  @EndUserText.label: 'Mã định danh công đoạn'
+  OperationUUID,
+
   @EndUserText.label: 'Lệnh sản xuất'
   _Operation.ProductionOrder as ProductionOrder,
 

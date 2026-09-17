@@ -13,6 +13,8 @@ etag master LocalLastChangedAt
   field ( numbering : managed, readonly ) OperationUUID;
   field ( mandatory ) ProductionOrder, Operation, MaCongDoan, Plant, WorkCenter,
                       OperationQuantity, UnitOfMeasure;
+  field ( readonly ) TotalAssignedQuantity, TotalRecalledQuantity,
+                     TotalCompletedQuantity, TotalRemainingQuantity;
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy,
                      LocalLastChangedAt;
 
@@ -26,10 +28,6 @@ etag master LocalLastChangedAt
   action recall parameter ZA_PP_Recall result [1] $self;
   action confirm parameter ZA_PP_Confirm result [1] $self;
   action reverse parameter ZA_PP_Reverse result [1] $self;
-
-  // Action điều chỉnh có kiểm soát chỉ dành cho IAM/Fiori. Mỗi lần điều chỉnh
-  // sẽ append CORRECTION vào ledger; projection mobile không expose action này.
-  action correctConfirm parameter ZA_PP_CorrectConfirm result [1] $self;
 
   // Static facade dành cho mobile. Mỗi handler xác thực token/session/device,
   // resolve công đoạn SAP live rồi mới gọi command nghiệp vụ nội bộ.
@@ -80,8 +78,8 @@ etag master LocalLastChangedAt
 {
   update;
 
-  // Admin điều chỉnh phần sản lượng giao bằng action có kiểm soát. Không expose
-  // update tổng quát ở projection admin để mọi thay đổi đều ghi audit ledger.
+  // Admin điều chỉnh giao/thu hồi/xác nhận bằng một action có kiểm soát. Không
+  // expose update tổng quát ở projection admin để mọi thay đổi đều ghi ledger.
   action adjustAllocation parameter ZA_PP_AdjustAllocation result [1] $self;
 
   field ( numbering : managed, readonly ) EmployeeAllocationUUID;
@@ -124,7 +122,7 @@ authorization dependent by _Operation
                      VerifiedWorkerUserUUID, WorkerVerifiedAt,
                      InitiatorSessionID, DeviceID, VerificationMethod,
                      TransactionType, OriginalTransactionType, FromWorkerID,
-                     ToWorkerID, WorkerID, Quantity, UnitOfMeasure,
+                     ToWorkerID, WorkerID, WorkID, Quantity, UnitOfMeasure,
                      ExecutionDate, ShiftID, WorkDate, ExecutedAt, ShiftStartAt, ShiftEndAt,
                      ShiftTimeZone, ShiftValidFrom, TransactionStatus,
                      ReasonCode, ReasonText, SourceChannel,
@@ -151,6 +149,7 @@ authorization dependent by _Operation
     FromWorkerID            = from_worker_id;
     ToWorkerID              = to_worker_id;
     WorkerID                = worker_id;
+    WorkID                  = work_id;
     Quantity                = quantity;
     UnitOfMeasure           = uom;
     ExecutionDate           = execution_date;

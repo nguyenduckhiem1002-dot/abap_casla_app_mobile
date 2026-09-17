@@ -9,21 +9,30 @@
 }
 annotate entity ZC_PP_OpAlloc_Adm with
 {
-  @UI.facet: [{
-    id: 'General',
-    purpose: #STANDARD,
-    type: #IDENTIFICATION_REFERENCE,
-    label: 'Thông tin công đoạn sản xuất',
-    position: 10
-  }]
+  @UI.facet: [
+    {
+      id: 'General',
+      purpose: #STANDARD,
+      type: #IDENTIFICATION_REFERENCE,
+      label: 'Thông tin công đoạn sản xuất',
+      position: 10
+    },
+    {
+      id: 'Employees',
+      purpose: #STANDARD,
+      type: #LINEITEM_REFERENCE,
+      label: 'Phân bổ theo nhân công',
+      position: 20,
+      targetElement: '_Employees'
+    }
+  ]
 
   @EndUserText.label: 'Mã định danh công đoạn'
   @UI.identification: [{ position: 90 }]
   OperationUUID;
 
   @UI.lineItem: [
-    { position: 10, label: 'Lệnh sản xuất' },
-    { type: #FOR_ACTION, dataAction: 'correctConfirm', label: 'Điều chỉnh xác nhận', position: 5 }
+    { position: 10, label: 'Lệnh sản xuất' }
   ]
   @UI.identification: [ { position: 10, label: 'Lệnh sản xuất' } ]
   @UI.selectionField: [{ position: 10 }]
@@ -58,29 +67,49 @@ annotate entity ZC_PP_OpAlloc_Adm with
   @EndUserText.label: 'Sản lượng công đoạn'
   OperationQuantity;
 
-  @UI.lineItem: [ { position: 70, label: 'ĐVT' } ]
+  @UI.lineItem: [ { position: 65, label: 'Tổng đã giao cho nhân công' } ]
+  @UI.identification: [{ position: 65 }]
+  @EndUserText.label: 'Tổng đã giao cho nhân công'
+  TotalAssignedQuantity;
+
+  @UI.lineItem: [ { position: 70, label: 'Tổng đã thu hồi' } ]
   @UI.identification: [{ position: 70 }]
+  @EndUserText.label: 'Tổng đã thu hồi'
+  TotalRecalledQuantity;
+
+  @UI.lineItem: [ { position: 75, label: 'Tổng đã xác nhận' } ]
+  @UI.identification: [{ position: 75 }]
+  @EndUserText.label: 'Tổng đã xác nhận'
+  TotalCompletedQuantity;
+
+  @UI.lineItem: [ { position: 80, label: 'Tổng còn lại' } ]
+  @UI.identification: [{ position: 80 }]
+  @EndUserText.label: 'Tổng còn lại'
+  TotalRemainingQuantity;
+
+  @UI.lineItem: [ { position: 90, label: 'ĐVT' } ]
+  @UI.identification: [{ position: 90 }]
   @EndUserText.label: 'Đơn vị tính'
   UnitOfMeasure;
 
-  @UI.lineItem: [ { position: 80, label: 'Trạng thái' } ]
-  @UI.identification: [{ position: 80 }]
+  @UI.lineItem: [ { position: 100, label: 'Trạng thái' } ]
+  @UI.identification: [{ position: 100 }]
   @EndUserText.label: 'Trạng thái công đoạn'
   OperationStatus;
 
   @EndUserText.label: 'Người tạo'
-  @UI.identification: [{ position: 100 }]
+  @UI.identification: [{ position: 110 }]
   CreatedBy;
 
   @EndUserText.label: 'Thời điểm tạo'
-  @UI.identification: [{ position: 110 }]
+  @UI.identification: [{ position: 120 }]
   CreatedAt;
 
   @EndUserText.label: 'Người thay đổi cuối'
-  @UI.identification: [{ position: 120 }]
+  @UI.identification: [{ position: 130 }]
   LastChangedBy;
 
   @EndUserText.label: 'Thời điểm cập nhật bản ghi'
-  @UI.identification: [{ position: 130 }]
+  @UI.identification: [{ position: 140 }]
   LocalLastChangedAt;
 }

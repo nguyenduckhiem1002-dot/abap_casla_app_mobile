@@ -3,6 +3,9 @@ define abstract entity ZA_PP_Transfer
 {
   ProductionOrder : abap.char(12);
   Operation : abap.char(4);
+  @EndUserText.label: 'Vị trí làm việc'
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Work_Hist_VH', element: 'WorkID' } }]
+  WorkID : abap.char(30);
   FromWorkerID : abap.char(8);
   ToWorkerID : abap.char(8);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'

@@ -1,12 +1,15 @@
-@EndUserText.label: 'Tham số điều chỉnh sản lượng giao'
+@EndUserText.label: 'Tham số điều chỉnh sản lượng'
 define abstract entity ZA_PP_AdjustAllocation
 {
-  @EndUserText.label: 'Chênh lệch sản lượng giao'
+  @EndUserText.label: 'Loại điều chỉnh (ASSIGN/RECALL/CONFIRM)'
+  AdjustmentType : abap.char(10);
+
+  @EndUserText.label: 'Số lượng mới'
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
-  AdjustmentQuantity : abap.quan(15,3);
+  TargetQuantity : abap.quan(15,3);
 
   @EndUserText.label: 'Đơn vị tính'
-  @Consumption.valueHelpDefinition: [{ entity: { name: 'I_UnitOfMeasure', element: 'UnitOfMeasure' } }]
+  @UI.hidden: true
   UnitOfMeasure : abap.unit(3);
 
   @EndUserText.label: 'Mã lý do'

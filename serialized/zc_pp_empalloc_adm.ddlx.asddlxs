@@ -48,7 +48,7 @@ annotate entity ZC_PP_EmpAlloc_Adm with
 
   @UI.lineItem: [
     { position: 60, label: 'Mã nhân công' },
-    { type: #FOR_ACTION, dataAction: 'adjustAllocation', label: 'Điều chỉnh sản lượng giao', position: 5 }
+    { type: #FOR_ACTION, dataAction: 'adjustAllocation', label: 'Điều chỉnh sản lượng', position: 5 }
   ]
   @UI.identification: [{ position: 60, label: 'Mã nhân công' }]
   @UI.selectionField: [{ position: 60 }]

@@ -41,6 +41,9 @@ define root view entity ZC_PP_AllocTxn_Adm
   @EndUserText.label: 'Mã nhân công'
   @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Worker_Hist_VH', element: 'WorkerID' } }]
       txn.worker_id                 as WorkerID,
+  @EndUserText.label: 'Vị trí làm việc'
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Work_Hist_VH', element: 'WorkID' } }]
+      txn.work_id                   as WorkID,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   @EndUserText.label: 'Số lượng'
       txn.quantity                  as Quantity,

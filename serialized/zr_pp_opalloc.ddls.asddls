@@ -4,6 +4,9 @@ define root view entity ZR_PP_OpAlloc
   as select from ztb_pp_op_alloc
   composition [0..*] of ZR_PP_EmpAlloc as _Employees
   composition [0..*] of ZR_PP_AllocTxn as _Transactions
+  association [0..1] to ZI_PP_EmpAlloc_Agg as _EmployeeAllocationSummary
+    on $projection.OperationUUID = _EmployeeAllocationSummary.OperationUUID
+   and $projection.UnitOfMeasure = _EmployeeAllocationSummary.UnitOfMeasure
 {
   key operation_uuid        as OperationUUID,
       production_order      as ProductionOrder,
@@ -13,6 +16,18 @@ define root view entity ZR_PP_OpAlloc
       work_center           as WorkCenter,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       operation_qty         as OperationQuantity,
+      @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+      _EmployeeAllocationSummary.TotalAssignedQuantity
+        as TotalAssignedQuantity,
+      @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+      _EmployeeAllocationSummary.TotalRecalledQuantity
+        as TotalRecalledQuantity,
+      @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+      _EmployeeAllocationSummary.TotalCompletedQuantity
+        as TotalCompletedQuantity,
+      @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+      _EmployeeAllocationSummary.TotalRemainingQuantity
+        as TotalRemainingQuantity,
       uom                   as UnitOfMeasure,
       operation_status      as OperationStatus,
       @Semantics.user.createdBy: true
@@ -24,5 +39,6 @@ define root view entity ZR_PP_OpAlloc
       @Semantics.systemDateTime.localInstanceLastChangedAt: true
       local_last_changed_at as LocalLastChangedAt,
       _Employees,
-      _Transactions
+      _Transactions,
+      _EmployeeAllocationSummary
 }

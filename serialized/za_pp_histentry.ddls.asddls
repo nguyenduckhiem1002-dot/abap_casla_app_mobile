@@ -13,10 +13,22 @@ define abstract entity ZA_PP_HistEntry {
   ProductionOrder : abap.char(12);
   @EndUserText.label: 'Công đoạn lệnh sản xuất'
   Operation : abap.char(4);
+  @EndUserText.label: 'Tên công đoạn'
+  OperationName : abap.string;
+  @EndUserText.label: 'Đơn hàng bán'
+  SalesOrder : abap.string;
+  @EndUserText.label: 'Mục đơn hàng bán'
+  SalesOrderItem : abap.string;
+  @EndUserText.label: 'Sản phẩm'
+  Product : abap.string;
+  @EndUserText.label: 'Tên sản phẩm'
+  ProductName : abap.string;
   @EndUserText.label: 'Nhà máy'
   Plant : abap.char(4);
   @EndUserText.label: 'Trung tâm làm việc'
   WorkCenter : abap.char(8);
+  @EndUserText.label: 'Vị trí làm việc'
+  WorkID : abap.char(30);
   @EndUserText.label: 'Loại giao dịch'
   TransactionType : abap.char(20);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'

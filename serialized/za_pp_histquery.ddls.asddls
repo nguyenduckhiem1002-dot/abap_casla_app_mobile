@@ -6,6 +6,9 @@ define abstract entity ZA_PP_HistQuery {
   DateFrom : abap.dats;
   DateTo : abap.dats;
   WorkerID : abap.char(8);
+  @EndUserText.label: 'Vị trí làm việc'
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Work_Hist_VH', element: 'WorkID' } }]
+  WorkID : abap.char(30);
   @EndUserText.label: 'Lệnh sản xuất'
   ProductionOrder : abap.char(12);
   @EndUserText.label: 'Công đoạn'

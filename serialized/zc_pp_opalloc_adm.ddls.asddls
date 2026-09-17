@@ -23,6 +23,14 @@ define root view entity ZC_PP_OpAlloc_Adm
       WorkCenter,
   @EndUserText.label: 'Sản lượng công đoạn'
       OperationQuantity,
+  @EndUserText.label: 'Tổng đã giao cho nhân công'
+  TotalAssignedQuantity,
+  @EndUserText.label: 'Tổng đã thu hồi'
+  TotalRecalledQuantity,
+  @EndUserText.label: 'Tổng đã xác nhận'
+  TotalCompletedQuantity,
+  @EndUserText.label: 'Tổng còn lại'
+  TotalRemainingQuantity,
   @EndUserText.label: 'Đơn vị tính'
   @Consumption.valueHelpDefinition: [{ entity: { name: 'I_UnitOfMeasure', element: 'UnitOfMeasure' } }]
       UnitOfMeasure,
@@ -35,5 +43,7 @@ define root view entity ZC_PP_OpAlloc_Adm
   @EndUserText.label: 'Người thay đổi cuối'
       LastChangedBy,
   @EndUserText.label: 'Thời điểm cập nhật bản ghi'
-      LocalLastChangedAt
+      LocalLastChangedAt,
+
+  _Employees : redirected to composition child ZC_PP_EmpAlloc_Adm
 }

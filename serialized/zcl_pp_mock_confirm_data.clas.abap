@@ -446,6 +446,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
         transaction_type = zcl_pp_txn_type=>initial_assign
         to_worker_id = operator-worker_id
         worker_id = operator-worker_id
+        work_id = context-work_id
         quantity = '100.000'
         uom = demo_uom
         execution_date = today
@@ -468,6 +469,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
         transaction_type = zcl_pp_txn_type=>confirm
         original_transaction_type = zcl_pp_txn_type=>initial_assign
         worker_id = operator-worker_id
+        work_id = context-work_id
         quantity = '25.000'
         uom = demo_uom
         execution_date = today
