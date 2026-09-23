@@ -19,6 +19,21 @@ CLASS lhc_operationallocation DEFINITION
            operation_contexts TYPE SORTED TABLE OF operation_context
                               WITH UNIQUE KEY production_order operation_no.
 
+    TYPES: BEGIN OF work_operation_context,
+             is_valid            TYPE abap_bool,
+             error_code          TYPE c LENGTH 40,
+             work_name           TYPE ztb_mob_work-work_name,
+             work_bo_phan        TYPE ztb_mob_work-bo_phan,
+             location            TYPE ztb_mob_work-location,
+             operation_name      TYPE ztb_md_congdoan-ten_congdoan,
+              operation_bo_phan   TYPE ztb_md_congdoan-bo_phan,
+            END OF work_operation_context.
+
+    TYPES: BEGIN OF worker_access_result,
+             is_valid   TYPE abap_bool,
+             error_code TYPE c LENGTH 40,
+           END OF worker_access_result.
+
     TYPES: BEGIN OF worker_balance,
              employee_allocation_uuid TYPE ztb_pp_emp_alloc-emp_alloc_uuid,
              worker_id                TYPE ztb_pp_emp_alloc-worker_id,
@@ -132,6 +147,9 @@ CLASS lhc_operationallocation DEFINITION
     METHODS getWorkHistory FOR MODIFY
       IMPORTING keys FOR ACTION OperationAllocation~getWorkHistory
       RESULT result.
+    METHODS checkOperationAccess FOR MODIFY
+      IMPORTING keys FOR ACTION OperationAllocation~checkOperationAccess
+      RESULT result.
 
     METHODS ensure_operation
       IMPORTING
@@ -140,16 +158,27 @@ CLASS lhc_operationallocation DEFINITION
         user_uuid        TYPE sysuuid_x16
         func_id          TYPE ztb_mob_func-func_id
         work_id          TYPE ztb_mob_work-work_id OPTIONAL
+        effective_date   TYPE d OPTIONAL
       RETURNING VALUE(value) TYPE operation_context.
 
-    METHODS is_worker_allowed
+    METHODS check_work_operation_context
+      IMPORTING
+        work_id       TYPE ztb_mob_work-work_id
+        plant         TYPE ztb_mob_work-plant
+        work_center   TYPE ztb_mob_work-workcenter
+        ma_congdoan   TYPE ztb_md_congdoan-ma_congdoan
+        effective_date TYPE d
+      RETURNING VALUE(result) TYPE work_operation_context.
+
+    METHODS check_worker_access
       IMPORTING user_uuid TYPE sysuuid_x16
                 worker_id TYPE ztb_pp_alloc_txn-worker_id
                 plant TYPE ztb_mob_work-plant
                 work_center TYPE ztb_mob_work-workcenter
                 work_id TYPE ztb_mob_work-work_id
-                execution_date TYPE d
-      RETURNING VALUE(result) TYPE abap_bool.
+                ma_congdoan TYPE ztb_md_congdoan-ma_congdoan
+                effective_date TYPE d
+       RETURNING VALUE(result) TYPE worker_access_result.
 
     METHODS read_worker_balances
       IMPORTING operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
@@ -383,7 +412,7 @@ CLASS lhc_employeeallocation IMPLEMENTATION.
       ENDIF.
 
       DATA(calculation) = calculate_adjustment(
-        adjustment_type = input-AdjustmentType
+        adjustment_type = CONV string( input-AdjustmentType )
         target_quantity = input-TargetQuantity
         initial_quantity = allocation-InitialAssignedQuantity
         recalled_quantity = allocation-RecalledQuantity
@@ -628,13 +657,28 @@ ENDMETHOD.
       value-error_code = live-error_code.
       RETURN.
     ENDIF.
+    DATA(context_date) = COND d(
+      WHEN effective_date IS INITIAL THEN cl_abap_context_info=>get_system_date( )
+      ELSE effective_date ).
     IF zcl_mob_token_validator=>has_func_op_scope(
          user_uuid = user_uuid
          func_id = func_id
          plant = live-plant
          work_center = live-work_center
-         work_id = work_id ) = abap_false.
-      value-error_code = 'WORK_CONTEXT_NOT_ALLOWED'.
+         work_id = work_id
+         ma_congdoan = live-ma_congdoan
+         effective_date = context_date ) = abap_false.
+      value-error_code = 'MANAGER_OPERATION_NOT_ALLOWED'.
+      RETURN.
+    ENDIF.
+    DATA(work_operation_context) = check_work_operation_context(
+      work_id = work_id
+      plant = live-plant
+      work_center = live-work_center
+      ma_congdoan = live-ma_congdoan
+      effective_date = context_date ).
+    IF work_operation_context-is_valid = abap_false.
+      value-error_code = work_operation_context-error_code.
       RETURN.
     ENDIF.
     DATA(cached_context) = VALUE operation_context(
@@ -718,20 +762,86 @@ ENDMETHOD.
     INSERT value INTO TABLE operation_cache.
   ENDMETHOD.
 
-  " Kiểm tra công nhân thuộc đúng Plant/Work Center và còn hiệu lực trong master nhân công.
-  METHOD is_worker_allowed.
-    result = xsdbool(
-      zcl_mob_token_validator=>has_worker_op_scope(
-        user_uuid = user_uuid
-        worker_id = worker_id
-        plant = plant
-        work_center = work_center
-        work_id = work_id ) = abap_true
-      AND zcl_pp_worker_validator=>is_worker_active(
-        worker_id = worker_id
-        plant = plant
-        work_center = work_center
-        execution_date = execution_date ) = abap_true ).
+  " Đối chiếu vị trí làm việc với công đoạn theo Plant, Work Center và bộ phận.
+  " Master công đoạn phải có đúng một phiên bản hiệu lực tại ngày làm việc.
+  METHOD check_work_operation_context.
+    SELECT FROM ztb_mob_work
+      FIELDS work_id, work_name, plant, workcenter, bo_phan, location
+      WHERE work_id = @work_id
+        AND is_active = 'A'
+      INTO TABLE @DATA(work_contexts)
+      UP TO 2 ROWS.
+    IF work_contexts IS INITIAL.
+      result-error_code = 'WORK_NOT_FOUND'.
+      RETURN.
+    ENDIF.
+
+    DATA(work_context) = work_contexts[ 1 ].
+    IF work_context-plant <> plant
+       OR work_context-workcenter <> work_center.
+      result-error_code = 'WORK_OPERATION_MISMATCH'.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM ztb_md_congdoan
+      FIELDS ma_congdoan, ten_congdoan, bo_phan
+      WHERE ma_congdoan = @ma_congdoan
+        AND bo_phan = @work_context-bo_phan
+        AND valid_from <= @effective_date
+        AND valid_to >= @effective_date
+      INTO TABLE @DATA(operation_masters)
+      UP TO 2 ROWS.
+    IF operation_masters IS INITIAL.
+      result-error_code = 'OPERATION_MASTER_NOT_FOUND'.
+      RETURN.
+    ENDIF.
+    IF lines( operation_masters ) > 1.
+      result-error_code = 'OPERATION_MASTER_AMBIGUOUS'.
+      RETURN.
+    ENDIF.
+
+    DATA(operation_master) = operation_masters[ 1 ].
+    IF work_context-bo_phan IS INITIAL
+       OR operation_master-bo_phan IS INITIAL
+       OR work_context-bo_phan <> operation_master-bo_phan.
+      result-error_code = 'OPERATION_DEPARTMENT_MISMATCH'.
+      RETURN.
+    ENDIF.
+
+    result = VALUE #(
+      is_valid = abap_true
+      work_name = work_context-work_name
+      work_bo_phan = work_context-bo_phan
+      location = work_context-location
+      operation_name = operation_master-ten_congdoan
+      operation_bo_phan = operation_master-bo_phan ).
+  ENDMETHOD.
+
+  " Kiểm tra công nhân theo đúng thứ tự để mobile phân biệt được nguyên nhân lỗi:
+  " tài khoản/role không có quyền tại công đoạn hay phân công nhân công hết hiệu lực.
+  METHOD check_worker_access.
+    IF zcl_mob_token_validator=>has_worker_op_scope(
+         user_uuid = user_uuid
+         worker_id = worker_id
+         plant = plant
+         work_center = work_center
+         work_id = work_id
+         ma_congdoan = ma_congdoan
+         effective_date = effective_date ) = abap_false.
+      result-error_code = 'WORKER_OPERATION_NOT_ALLOWED'.
+      RETURN.
+    ENDIF.
+
+    IF zcl_pp_worker_validator=>is_worker_active(
+         worker_id = worker_id
+         plant = plant
+         work_center = work_center
+         execution_date = effective_date ) = abap_false.
+      result-error_code = 'WORKER_ASSIGNMENT_EXPIRED'.
+      RETURN.
+    ENDIF.
+
+    result-is_valid = abap_true.
   ENDMETHOD.
 
   " Đọc số dư phân công từ transactional buffer để các action cùng request thấy dữ liệu mới nhất.
@@ -981,20 +1091,19 @@ ENDMETHOD.
            user_uuid = auth-user_uuid func_id = func_initial_assign
            plant = operation-Plant
            work_center = operation-WorkCenter
-           work_id = input-WorkID ) = abap_false.
+           work_id = input-WorkID
+           ma_congdoan = operation-MaCongDoan
+           effective_date = shift-work_date ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORK_CONTEXT_NOT_ALLOWED'
+                    text = 'MANAGER_OPERATION_NOT_ALLOWED'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
       IF input-UnitOfMeasure <> operation-UnitOfMeasure.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = COND string(
-                      WHEN input-UnitOfMeasure <> operation-UnitOfMeasure
-                      THEN 'UNIT_OF_MEASURE_MISMATCH'
-                      ELSE 'WORKER_NOT_ALLOWED' )
+                    text = 'UNIT_OF_MEASURE_MISMATCH'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1009,19 +1118,21 @@ ENDMETHOD.
             CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
-      IF worker_auth-is_valid = abap_false
-         OR is_worker_allowed(
-              user_uuid = worker_auth-worker_user_uuid
-              worker_id = input-ToWorkerID
-              plant = operation-Plant work_center = operation-WorkCenter
-              work_id = input-WorkID
-              execution_date = input-ExecutionDate ) = abap_false.
+      DATA(worker_access) = COND worker_access_result(
+        WHEN worker_auth-is_valid = abap_false
+        THEN VALUE #( error_code = 'WORKER_AUTH_FAILED' )
+        ELSE check_worker_access(
+          user_uuid = worker_auth-worker_user_uuid
+          worker_id = input-ToWorkerID
+          plant = operation-Plant
+          work_center = operation-WorkCenter
+          work_id = input-WorkID
+          ma_congdoan = operation-MaCongDoan
+          effective_date = input-ExecutionDate ) ).
+      IF worker_access-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = COND string(
-                      WHEN worker_auth-is_valid = abap_false
-                      THEN 'WORKER_AUTH_FAILED'
-                      ELSE 'WORKER_NOT_ALLOWED' )
+                    text = CONV string( worker_access-error_code )
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1186,10 +1297,12 @@ ENDMETHOD.
            user_uuid = auth-user_uuid func_id = func_transfer
            plant = operation-Plant
            work_center = operation-WorkCenter
-           work_id = input-WorkID ) = abap_false.
+           work_id = input-WorkID
+           ma_congdoan = operation-MaCongDoan
+           effective_date = shift-work_date ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORK_CONTEXT_NOT_ALLOWED'
+                    text = 'MANAGER_OPERATION_NOT_ALLOWED'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1210,21 +1323,22 @@ ENDMETHOD.
                     text = COND string(
                       WHEN worker_auth-is_valid = abap_false
                       THEN 'WORKER_AUTH_FAILED'
-                      WHEN input-UnitOfMeasure <> operation-UnitOfMeasure
-                      THEN 'UNIT_OF_MEASURE_MISMATCH'
-                      ELSE 'WORKER_NOT_ALLOWED' )
+                      ELSE 'UNIT_OF_MEASURE_MISMATCH' )
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      IF is_worker_allowed(
-           user_uuid = worker_auth-worker_user_uuid
-           worker_id = input-ToWorkerID
-           plant = operation-Plant work_center = operation-WorkCenter
-           work_id = input-WorkID
-           execution_date = input-ExecutionDate ) = abap_false.
+      DATA(worker_access) = check_worker_access(
+        user_uuid = worker_auth-worker_user_uuid
+        worker_id = input-ToWorkerID
+        plant = operation-Plant
+        work_center = operation-WorkCenter
+        work_id = input-WorkID
+        ma_congdoan = operation-MaCongDoan
+        effective_date = input-ExecutionDate ).
+      IF worker_access-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORKER_NOT_ALLOWED'
+                    text = CONV string( worker_access-error_code )
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1382,10 +1496,12 @@ ENDMETHOD.
            user_uuid = auth-user_uuid func_id = func_recall
            plant = operation-Plant
            work_center = operation-WorkCenter
-           work_id = input-WorkID ) = abap_false.
+           work_id = input-WorkID
+           ma_congdoan = operation-MaCongDoan
+           effective_date = shift-work_date ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORK_CONTEXT_NOT_ALLOWED'
+                    text = 'MANAGER_OPERATION_NOT_ALLOWED'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1406,15 +1522,18 @@ ENDMETHOD.
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      IF is_worker_allowed(
-           user_uuid = worker_auth-worker_user_uuid
-           worker_id = input-WorkerID
-           plant = operation-Plant work_center = operation-WorkCenter
-           work_id = input-WorkID
-           execution_date = input-ExecutionDate ) = abap_false.
+      DATA(worker_access) = check_worker_access(
+        user_uuid = worker_auth-worker_user_uuid
+        worker_id = input-WorkerID
+        plant = operation-Plant
+        work_center = operation-WorkCenter
+        work_id = input-WorkID
+        ma_congdoan = operation-MaCongDoan
+        effective_date = input-ExecutionDate ).
+      IF worker_access-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORKER_NOT_ALLOWED'
+                    text = CONV string( worker_access-error_code )
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1581,20 +1700,19 @@ ENDMETHOD.
            user_uuid = auth-user_uuid func_id = func_confirm
            plant = operation-Plant
            work_center = operation-WorkCenter
-           work_id = input-WorkID ) = abap_false.
+           work_id = input-WorkID
+           ma_congdoan = operation-MaCongDoan
+           effective_date = shift-work_date ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORK_CONTEXT_NOT_ALLOWED'
+                        text = 'MANAGER_OPERATION_NOT_ALLOWED'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
       IF input-UnitOfMeasure <> operation-UnitOfMeasure.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = COND string(
-                      WHEN input-UnitOfMeasure <> operation-UnitOfMeasure
-                      THEN 'UNIT_OF_MEASURE_MISMATCH'
-                      ELSE 'WORKER_NOT_ALLOWED' )
+                    text = 'UNIT_OF_MEASURE_MISMATCH'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1683,15 +1801,18 @@ ENDMETHOD.
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-      IF is_worker_allowed(
-           user_uuid = worker_auth-worker_user_uuid
-           worker_id = input-WorkerID
-           plant = operation-Plant work_center = operation-WorkCenter
-           work_id = input-WorkID
-           execution_date = input-ExecutionDate ) = abap_false.
+      DATA(worker_access) = check_worker_access(
+        user_uuid = worker_auth-worker_user_uuid
+        worker_id = input-WorkerID
+        plant = operation-Plant
+        work_center = operation-WorkCenter
+        work_id = input-WorkID
+        ma_congdoan = operation-MaCongDoan
+        effective_date = input-ExecutionDate ).
+      IF worker_access-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORKER_NOT_ALLOWED'
+                    text = CONV string( worker_access-error_code )
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1770,10 +1891,12 @@ ENDMETHOD.
            user_uuid = auth-user_uuid func_id = func_reverse
            plant = operation-Plant
            work_center = operation-WorkCenter
-           work_id = input-WorkID ) = abap_false.
+           work_id = input-WorkID
+           ma_congdoan = operation-MaCongDoan
+           effective_date = cl_abap_context_info=>get_system_date( ) ) = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORK_CONTEXT_NOT_ALLOWED'
+                        text = 'MANAGER_OPERATION_NOT_ALLOWED'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1940,7 +2063,8 @@ ENDMETHOD.
         operation_no = input-Operation
         user_uuid = auth-user_uuid
         func_id = func_initial_assign
-        work_id = input-WorkID ).
+        work_id = input-WorkID
+        effective_date = input-ExecutionDate ).
       IF context-is_valid = abap_false.
         report_failure( EXPORTING cid = cid text = CONV string( context-error_code )
                         CHANGING failed = failed reported = reported ).
@@ -2013,7 +2137,8 @@ ENDMETHOD.
         operation_no = input-Operation
         user_uuid = auth-user_uuid
         func_id = func_transfer
-        work_id = input-WorkID ).
+        work_id = input-WorkID
+        effective_date = input-ExecutionDate ).
       IF context-is_valid = abap_false.
         report_failure( EXPORTING cid = cid text = CONV string( context-error_code )
                         CHANGING failed = failed reported = reported ).
@@ -2084,7 +2209,8 @@ ENDMETHOD.
         operation_no = input-Operation
         user_uuid = auth-user_uuid
         func_id = func_recall
-        work_id = input-WorkID ).
+        work_id = input-WorkID
+        effective_date = input-ExecutionDate ).
       IF context-is_valid = abap_false.
         report_failure( EXPORTING cid = cid text = CONV string( context-error_code )
                         CHANGING failed = failed reported = reported ).
@@ -2155,7 +2281,8 @@ ENDMETHOD.
         operation_no = input-Operation
         user_uuid = auth-user_uuid
         func_id = func_confirm
-        work_id = input-WorkID ).
+        work_id = input-WorkID
+        effective_date = input-ExecutionDate ).
       IF context-is_valid = abap_false.
         report_failure( EXPORTING cid = cid text = CONV string( context-error_code )
                         CHANGING failed = failed reported = reported ).
@@ -2489,5 +2616,159 @@ ENDMETHOD.
           Plant = entry-plant WorkCenter = entry-work_center WorkID = entry-work_id
           TransactionType = entry-transaction_type Quantity = entry-quantity
           UnitOfMeasure = entry-uom TransactionStatus = entry-transaction_status ) ) ) ) ).
+  ENDMETHOD.
+
+  " Pre-check lúc quét QR: xác thực quyền quản lý và trả snapshot sản lượng.
+  " Snapshot đọc từ ZTB_PP_EMP_ALLOC; action giao việc vẫn kiểm tra lại khi commit.
+  METHOD checkOperationAccess.
+    DATA initial_assigned TYPE ztb_pp_emp_alloc-initial_assigned_qty.
+    DATA transferred_in TYPE ztb_pp_emp_alloc-transferred_in_qty.
+    DATA transferred_out TYPE ztb_pp_emp_alloc-transferred_out_qty.
+    DATA recalled TYPE ztb_pp_emp_alloc-recalled_qty.
+    DATA completed TYPE ztb_pp_emp_alloc-completed_qty.
+    DATA remaining TYPE ztb_pp_emp_alloc-remaining_qty.
+
+    LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
+      DATA(input) = <key>-%param.
+      DATA(cid) = CONV string( <key>-%cid ).
+      CLEAR: initial_assigned, transferred_in, transferred_out,
+             recalled, completed, remaining.
+
+      TRY.
+          DATA(auth) = zcl_mob_token_validator=>validate_token(
+            token = CONV string( input-AccessToken )
+            device_id = input-DeviceID ).
+        CATCH cx_abap_message_digest zcx_mob_config.
+          report_failure( EXPORTING cid = cid text = 'AUTH_FAILED'
+                          CHANGING failed = failed reported = reported ).
+          CONTINUE.
+      ENDTRY.
+      IF auth-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( auth-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
+      IF input-ProductionOrder IS INITIAL
+         OR input-Operation IS INITIAL
+         OR input-WorkID IS INITIAL
+         OR input-ShiftID IS INITIAL.
+        report_failure( EXPORTING cid = cid text = 'OPERATION_ACCESS_INPUT_REQUIRED'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
+      DATA(live) = zcl_pp_operation_guard=>resolve(
+        production_order = input-ProductionOrder
+        operation_no = input-Operation ).
+      IF live-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( live-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
+      DATA(executed_at) = COND utclong(
+        WHEN input-ExecutedAt IS INITIAL THEN utclong_current( )
+        ELSE input-ExecutedAt ).
+      DATA(shift) = zcl_pp_shift_resolver=>resolve(
+        plant = live-plant
+        shift_id = input-ShiftID
+        executed_at = executed_at
+        execution_date = VALUE #( ) ).
+      IF shift-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid text = CONV string( shift-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
+      IF zcl_mob_token_validator=>has_func_op_scope(
+           user_uuid = auth-user_uuid
+           func_id = func_initial_assign
+           plant = live-plant
+           work_center = live-work_center
+           work_id = input-WorkID
+           ma_congdoan = live-ma_congdoan
+           effective_date = shift-work_date ) = abap_false.
+        report_failure( EXPORTING cid = cid text = 'MANAGER_OPERATION_NOT_ALLOWED'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
+      DATA(work_operation_context) = check_work_operation_context(
+        work_id = input-WorkID
+        plant = live-plant
+        work_center = live-work_center
+        ma_congdoan = live-ma_congdoan
+        effective_date = shift-work_date ).
+      IF work_operation_context-is_valid = abap_false.
+        report_failure( EXPORTING cid = cid
+                          text = CONV string( work_operation_context-error_code )
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
+      SELECT FROM ztb_pp_op_alloc
+        FIELDS operation_uuid
+        WHERE production_order = @input-ProductionOrder
+          AND operation_no = @input-Operation
+        INTO TABLE @DATA(snapshots)
+        UP TO 2 ROWS.
+      IF lines( snapshots ) > 1.
+        report_failure( EXPORTING cid = cid text = 'OPERATION_SNAPSHOT_DUPLICATE'
+                        CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
+      DATA(operation_uuid) = VALUE sysuuid_x16( snapshots[ 1 ]-operation_uuid OPTIONAL ).
+
+      IF operation_uuid IS NOT INITIAL.
+        SELECT FROM ztb_pp_emp_alloc
+          FIELDS SUM( initial_assigned_qty ) AS initial_assigned,
+                 SUM( transferred_in_qty ) AS transferred_in,
+                 SUM( transferred_out_qty ) AS transferred_out,
+                 SUM( recalled_qty ) AS recalled,
+                 SUM( completed_qty ) AS completed,
+                 SUM( remaining_qty ) AS remaining
+          WHERE operation_uuid = @operation_uuid
+            AND uom = @live-uom
+          INTO @DATA(totals).
+        initial_assigned = totals-initial_assigned.
+        transferred_in = totals-transferred_in.
+        transferred_out = totals-transferred_out.
+        recalled = totals-recalled.
+        completed = totals-completed.
+        remaining = totals-remaining.
+      ENDIF.
+
+      DATA(current_assigned) = remaining + completed.
+      DATA(unassigned) = live-operation_qty - current_assigned.
+      result = VALUE #( BASE result ( %cid = cid %param = VALUE #(
+        IsAllowed = abap_true
+        Message = 'Có quyền thao tác'
+        ProductionOrder = live-production_order
+        Operation = live-operation_no
+        MaCongDoan = live-ma_congdoan
+        Plant = live-plant
+        WorkCenter = live-work_center
+        WorkID = input-WorkID
+        WorkName = work_operation_context-work_name
+        WorkBoPhan = work_operation_context-work_bo_phan
+        Location = work_operation_context-location
+        OperationName = work_operation_context-operation_name
+        OperationBoPhan = work_operation_context-operation_bo_phan
+        OperationQuantity = live-operation_qty
+        InitialAssignedQuantity = initial_assigned
+        TransferredInQuantity = transferred_in
+        TransferredOutQuantity = transferred_out
+        RecalledQuantity = recalled
+        CompletedQuantity = completed
+        RemainingQuantity = remaining
+        CurrentAssignedQuantity = current_assigned
+        UnassignedQuantity = unassigned
+        UnitOfMeasure = live-uom
+        ShiftID = shift-shift_id
+        WorkDate = shift-work_date
+        ExecutedAt = shift-executed_at ) ) ).
+    ENDLOOP.
   ENDMETHOD.
 ENDCLASS.

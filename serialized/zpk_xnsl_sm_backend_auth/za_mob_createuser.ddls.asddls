@@ -1,5 +1,5 @@
 @EndUserText.label: 'Tham số tạo tài khoản di động'
-define abstract entity ZA_MOB_CreateUser {
+define root abstract entity ZA_MOB_CreateUser {
   @EndUserText.label: 'Tên đăng nhập'
   Username : abap.char(80);
   @EndUserText.label: 'Mật khẩu'

@@ -19,4 +19,7 @@ define behavior for ZC_PP_OpAlloc alias OperationAllocation
 
   // Báo cáo chỉ đọc và luôn bị giới hạn theo token/session hiện tại.
   use action getWorkHistory;
+
+  // Mobile dùng khi quét QR để hiển thị quyền và sản lượng hiện tại.
+  use action checkOperationAccess;
 }

@@ -43,6 +43,7 @@ annotate entity ZC_MOB_Work_Adm with
   @EndUserText.label: 'Bộ phận'
   @UI.lineItem: [{ position: 50 }]
   @UI.identification: [{ position: 50 }]
+  @UI.hidden: true
   BoPhan;
 
   @EndUserText.label: 'Địa điểm'

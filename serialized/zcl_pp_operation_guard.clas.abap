@@ -56,16 +56,36 @@ CLASS zcl_pp_operation_guard IMPLEMENTATION.
       RETURN.
     ENDIF.
 
+    "Use the custom reuse view because it resolves the effective work center
+    "from the operation/header and exposes the operation standard text code.
+    SELECT FROM ZI_MFGORD_OPER_WC
+      FIELDS ManufacturingOrder,
+             MfgOrderOperation,
+             WorkCenterInternalID,
+             OperationStandardTextCode,
+             OpPlannedTotalQuantity,
+             OperationUnit
+      WHERE ManufacturingOrder = @production_order
+        AND MfgOrderOperation = @operation_no
+      INTO TABLE @DATA(operation_workcenters)
+      UP TO 2 ROWS.
+
+    IF lines( operation_workcenters ) <> 1.
+      value-error_code = COND #(
+        WHEN operation_workcenters IS INITIAL
+          THEN 'MANUFACTURING_OPERATION_NOT_FOUND'
+        ELSE 'MANUFACTURING_OPERATION_AMBIGUOUS' ).
+      RETURN.
+    ENDIF.
+
+    DATA(operation_workcenter) = operation_workcenters[ 1 ].
+
     SELECT FROM I_ManufacturingOrderOperation
       FIELDS ManufacturingOrder,
              ManufacturingOrderOperation_2,
              Plant,
-             WorkCenterInternalID,
              OperationControlProfile,
-             OperationIsToBeDeleted,
-             OperationStandardTextCode,
-             OperationUnit,
-             OpPlannedTotalQuantity
+             OperationIsToBeDeleted
       WHERE ManufacturingOrder = @production_order
         AND ManufacturingOrderOperation_2 = @operation_no
       INTO TABLE @DATA(operations)
@@ -103,14 +123,14 @@ CLASS zcl_pp_operation_guard IMPLEMENTATION.
       value-error_code = 'OPERATION_MARKED_FOR_DELETION'.
       RETURN.
     ENDIF.
-    IF operation-OperationStandardTextCode IS INITIAL.
+    IF operation_workcenter-OperationStandardTextCode IS INITIAL.
       value-error_code = 'OPERATION_STANDARD_TEXT_REQUIRED'.
       RETURN.
     ENDIF.
-    IF operation-OpPlannedTotalQuantity <= 0
-       OR operation-OperationUnit IS INITIAL
+    IF operation_workcenter-OpPlannedTotalQuantity <= 0
+       OR operation_workcenter-OperationUnit IS INITIAL
        OR operation-Plant IS INITIAL
-       OR operation-WorkCenterInternalID IS INITIAL.
+       OR operation_workcenter-WorkCenterInternalID IS INITIAL.
       value-error_code = 'OPERATION_MASTER_DATA_INCOMPLETE'.
       RETURN.
     ENDIF.
@@ -118,7 +138,7 @@ CLASS zcl_pp_operation_guard IMPLEMENTATION.
     SELECT FROM I_WorkCenter
       FIELDS WorkCenter
       WHERE Plant = @operation-Plant
-        AND WorkCenterInternalID = @operation-WorkCenterInternalID
+        AND WorkCenterInternalID = @operation_workcenter-WorkCenterInternalID
       INTO TABLE @DATA(work_centers)
       UP TO 2 ROWS.
 
@@ -131,9 +151,9 @@ CLASS zcl_pp_operation_guard IMPLEMENTATION.
 
     value-plant = operation-Plant.
     value-work_center = work_centers[ 1 ]-WorkCenter.
-    value-operation_qty = operation-OpPlannedTotalQuantity.
-    value-uom = operation-OperationUnit.
-    value-ma_congdoan = operation-OperationStandardTextCode.
+    value-operation_qty = operation_workcenter-OpPlannedTotalQuantity.
+    value-uom = operation_workcenter-OperationUnit.
+    value-ma_congdoan = operation_workcenter-OperationStandardTextCode.
     value-is_valid = abap_true.
   ENDMETHOD.
 ENDCLASS.

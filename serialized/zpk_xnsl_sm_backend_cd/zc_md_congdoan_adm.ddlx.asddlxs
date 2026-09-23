@@ -28,6 +28,21 @@ annotate entity ZC_MD_CongDoan_Adm with
   @EndUserText.label: 'Bộ phận'
   BoPhan;
 
+  @UI.lineItem: [ { position: 35, label: 'Tên vị trí làm việc' } ]
+  @UI.identification: [ { position: 35, label: 'Tên vị trí làm việc' } ]
+  @EndUserText.label: 'Tên vị trí làm việc'
+  WorkName;
+
+  @UI.lineItem: [ { position: 36, label: 'Nhà máy' } ]
+  @UI.identification: [ { position: 36, label: 'Nhà máy' } ]
+  @EndUserText.label: 'Nhà máy'
+  Plant;
+
+  @UI.lineItem: [ { position: 37, label: 'Trung tâm làm việc' } ]
+  @UI.identification: [ { position: 37, label: 'Trung tâm làm việc' } ]
+  @EndUserText.label: 'Trung tâm làm việc'
+  WorkCenter;
+
   @UI.lineItem: [ { position: 40, label: 'Đơn giá XM' } ]
   @UI.identification: [ { position: 40, label: 'Đơn giá XM' } ]
   @EndUserText.label: 'Đơn giá XM'

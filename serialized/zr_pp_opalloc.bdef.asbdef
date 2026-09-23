@@ -50,6 +50,10 @@ etag master LocalLastChangedAt
   static action getWorkHistory parameter ZA_PP_HistQuery
     deep result [1] ZA_PP_HistResult;
 
+  // Pre-check khi quét QR: xác thực quyền và trả snapshot sản lượng công đoạn.
+  static action checkOperationAccess parameter ZA_PP_OperationAccessQuery
+    result [1] ZA_PP_OperationAccessResult;
+
   validation validateOperation on save { create; update; }
 
   mapping for ztb_pp_op_alloc

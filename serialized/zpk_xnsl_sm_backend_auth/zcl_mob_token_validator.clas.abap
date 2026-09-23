@@ -23,6 +23,7 @@ CLASS zcl_mob_token_validator DEFINITION
              work_id    TYPE ztb_mob_work-work_id,
              work_name  TYPE ztb_mob_work-work_name,
              plant      TYPE ztb_mob_work-plant,
+             plant_name TYPE c LENGTH 100,
              workcenter TYPE ztb_mob_work-workcenter,
              bo_phan    TYPE ztb_mob_work-bo_phan,
              location   TYPE ztb_mob_work-location,
@@ -72,6 +73,8 @@ CLASS zcl_mob_token_validator DEFINITION
                 plant TYPE ztb_mob_work-plant
                 work_center TYPE ztb_mob_work-workcenter
                 work_id TYPE ztb_mob_work-work_id OPTIONAL
+                ma_congdoan TYPE ztb_md_congdoan-ma_congdoan
+                effective_date TYPE d
       RETURNING VALUE(result) TYPE abap_bool.
     "Kiểm tra function và WorkID thuộc cùng một role, dùng khi chưa có
     "operation để suy ra Plant/Work Center.
@@ -80,15 +83,16 @@ CLASS zcl_mob_token_validator DEFINITION
                 func_id TYPE ztb_mob_func-func_id
                 work_id TYPE ztb_mob_work-work_id
       RETURNING VALUE(result) TYPE abap_bool.
-    "Kiểm tra tài khoản công nhân và vị trí Plant/Work Center qua role active. Hiệu lực ngày,
-    "Plant và Work Center của master nhân công vẫn do zcl_pp_worker_validator
-    "kiểm tra để tái sử dụng CDS đã có và tránh đọc trực tiếp bảng đối tác.
+    "Kiểm tra tài khoản công nhân, vị trí làm việc và bộ phận công đoạn.
+    "Hiệu lực ngày của master nhân công vẫn do zcl_pp_worker_validator kiểm tra.
     CLASS-METHODS has_worker_op_scope
       IMPORTING user_uuid TYPE sysuuid_x16
                 worker_id TYPE ztb_mob_user-worker_id
                 plant TYPE ztb_mob_work-plant
                 work_center TYPE ztb_mob_work-workcenter
                 work_id TYPE ztb_mob_work-work_id OPTIONAL
+                ma_congdoan TYPE ztb_md_congdoan-ma_congdoan
+                effective_date TYPE d
       RETURNING VALUE(result) TYPE abap_bool.
     CLASS-METHODS has_function
       IMPORTING user_uuid TYPE sysuuid_x16
@@ -155,7 +159,10 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
         ON role_work~role_id = assignment~role_id
       INNER JOIN ztb_mob_work AS work
         ON work~work_id = role_work~work_id
+      LEFT OUTER JOIN I_Plant AS plant_master
+        ON plant_master~Plant = work~plant
       FIELDS DISTINCT work~work_id, work~work_name, work~plant,
+                      plant_master~PlantName AS plant_name,
                       work~workcenter, work~bo_phan, work~location
       WHERE assignment~user_uuid = @user_uuid
         AND role_hdr~status = 'A'
@@ -185,7 +192,37 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
 
   METHOD has_func_op_scope.
     IF user_uuid IS INITIAL OR func_id IS INITIAL OR plant IS INITIAL
-       OR work_center IS INITIAL.
+       OR work_center IS INITIAL OR ma_congdoan IS INITIAL
+       OR effective_date IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM ztb_mob_work
+      FIELDS bo_phan
+      WHERE plant = @plant
+        AND workcenter = @work_center
+        AND is_active = 'A'
+        AND ( @work_id IS INITIAL OR work_id = @work_id )
+      INTO TABLE @DATA(work_contexts)
+      UP TO 2 ROWS.
+    IF lines( work_contexts ) <> 1.
+      RETURN.
+    ENDIF.
+
+    DATA(operation_department) = work_contexts[ 1 ]-bo_phan.
+    IF operation_department IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM ztb_md_congdoan
+      FIELDS bo_phan
+      WHERE ma_congdoan = @ma_congdoan
+        AND bo_phan = @operation_department
+        AND valid_from <= @effective_date
+        AND valid_to >= @effective_date
+      INTO TABLE @DATA(operation_masters)
+      UP TO 2 ROWS.
+    IF lines( operation_masters ) <> 1.
       RETURN.
     ENDIF.
 
@@ -205,6 +242,8 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
         AND work~is_active = 'A'
         AND work~plant = @plant
         AND work~workcenter = @work_center
+        AND ( @operation_department IS INITIAL
+              OR work~bo_phan = @operation_department )
         AND ( @work_id IS INITIAL OR work~work_id = @work_id )
       INTO TABLE @DATA(grants)
       UP TO 1 ROWS.
@@ -238,7 +277,37 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
 
   METHOD has_worker_op_scope.
     IF user_uuid IS INITIAL OR worker_id IS INITIAL OR plant IS INITIAL
-       OR work_center IS INITIAL.
+       OR work_center IS INITIAL OR ma_congdoan IS INITIAL
+       OR effective_date IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM ztb_mob_work
+      FIELDS bo_phan
+      WHERE plant = @plant
+        AND workcenter = @work_center
+        AND is_active = 'A'
+        AND ( @work_id IS INITIAL OR work_id = @work_id )
+      INTO TABLE @DATA(work_contexts)
+      UP TO 2 ROWS.
+    IF lines( work_contexts ) <> 1.
+      RETURN.
+    ENDIF.
+
+    DATA(operation_department) = work_contexts[ 1 ]-bo_phan.
+    IF operation_department IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM ztb_md_congdoan
+      FIELDS bo_phan
+      WHERE ma_congdoan = @ma_congdoan
+        AND bo_phan = @operation_department
+        AND valid_from <= @effective_date
+        AND valid_to >= @effective_date
+      INTO TABLE @DATA(operation_departments)
+      UP TO 2 ROWS.
+    IF lines( operation_departments ) <> 1.
       RETURN.
     ENDIF.
 
@@ -259,6 +328,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
         AND work~is_active = 'A'
         AND work~plant = @plant
         AND work~workcenter = @work_center
+        AND work~bo_phan = @operation_department
         AND ( @work_id IS INITIAL OR work~work_id = @work_id )
       INTO TABLE @DATA(grants)
       UP TO 1 ROWS.

@@ -15,13 +15,14 @@ etag master LocalLastChangedAt
   update;
   delete;
 
-  field ( mandatory : create, readonly : update ) MaCongDoan, ValidFrom;
+  field ( mandatory : create, readonly : update ) MaCongDoan, ValidFrom, BoPhan;
   field ( mandatory ) TenCongDoan, ValidTo;
+  field ( readonly ) WorkName, Plant, WorkCenter;
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy,
                      LastChangedAt, LocalLastChangedAt;
 
   validation validateMaster on save
-    { create; update; field MaCongDoan, ValidFrom, ValidTo, TenCongDoan, DonGiaXM, DonGiaGC; }
+    { create; update; field MaCongDoan, ValidFrom, BoPhan, ValidTo, TenCongDoan, DonGiaXM, DonGiaGC; }
 
   draft action Edit;
   draft action Activate optimized;

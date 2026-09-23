@@ -208,9 +208,14 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
     DATA(cid) = CONV string( keys[ 1 ]-%cid ).
     DATA(normalized) = to_lower( condense( CONV string( input-Username ) ) ).
-    IF normalized IS INITIAL OR input-Password IS INITIAL.
+    DATA(worker_id) = to_upper( condense( CONV string( input-WorkerID ) ) ).
+    IF normalized IS INITIAL
+       OR input-Password IS INITIAL
+       OR input-FullName IS INITIAL
+       OR input-Email IS INITIAL
+       OR worker_id IS INITIAL.
       report_error( EXPORTING cid = cid
-                              text = 'Tên đăng nhập và mật khẩu là bắt buộc'
+                              text = 'Tên đăng nhập, mật khẩu, họ tên, email và mã nhân công là bắt buộc'
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
@@ -241,7 +246,6 @@ CLASS lhc_mobileuser IMPLEMENTATION.
                     CHANGING failed = failed reported = reported ).
       RETURN.
     ENDIF.
-    DATA(worker_id) = to_upper( condense( CONV string( input-WorkerID ) ) ).
     DATA(worker_is_valid) = abap_true.
     CALL METHOD validate_worker_for_create
       EXPORTING cid = cid worker_id = CONV ztb_mob_user-worker_id( worker_id )
@@ -517,6 +521,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         ( WorkID = work_context-work_id
           WorkName = work_context-work_name
           Plant = work_context-plant
+          PlantName = work_context-plant_name
           WorkCenter = work_context-workcenter
           BoPhan = work_context-bo_phan
           Location = work_context-location ) ) ) ) ).
@@ -663,6 +668,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         ( WorkID = work_context-work_id
           WorkName = work_context-work_name
           Plant = work_context-plant
+          PlantName = work_context-plant_name
           WorkCenter = work_context-workcenter
           BoPhan = work_context-bo_phan
           Location = work_context-location ) ) ) ) ).

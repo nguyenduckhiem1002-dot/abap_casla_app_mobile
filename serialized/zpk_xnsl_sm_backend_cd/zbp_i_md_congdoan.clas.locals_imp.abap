@@ -31,6 +31,7 @@ CLASS lhc_congdoan IMPLEMENTATION.
       DATA(invalid) = abap_false.
 
       IF <record>-MaCongDoan IS INITIAL
+         OR <record>-BoPhan IS INITIAL
          OR <record>-TenCongDoan IS INITIAL
          OR <record>-ValidFrom IS INITIAL
          OR <record>-ValidTo IS INITIAL
@@ -44,6 +45,7 @@ CLASS lhc_congdoan IMPLEMENTATION.
         SELECT FROM ztb_md_congdoan
           FIELDS ma_congdoan
           WHERE ma_congdoan = @<record>-MaCongDoan
+            AND bo_phan = @<record>-BoPhan
             AND valid_from <> @<record>-ValidFrom
             AND valid_from <= @<record>-ValidTo
             AND valid_to >= @<record>-ValidFrom
@@ -57,6 +59,7 @@ CLASS lhc_congdoan IMPLEMENTATION.
       IF invalid = abap_false.
         LOOP AT records ASSIGNING FIELD-SYMBOL(<other>).
           IF <other>-MaCongDoan <> <record>-MaCongDoan
+             OR <other>-BoPhan <> <record>-BoPhan
              OR <other>-ValidFrom = <record>-ValidFrom.
             CONTINUE.
           ENDIF.

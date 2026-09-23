@@ -3,12 +3,10 @@
 {
 "FROM":
 [
-"ZTB_MD_CONGDOAN"
+"ZTB_MOB_WORK"
 ],
 "ASSOCIATED":
-[
-"ZI_MOB_WORK"
-],
+[],
 "BASE":
 [],
 "ANNO_REF":

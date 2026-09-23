@@ -291,7 +291,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     ENDIF.
     IF production_order IS NOT INITIAL AND operation_no IS NOT INITIAL.
       SELECT FROM ztb_pp_op_alloc
-        FIELDS plant, work_center
+        FIELDS plant, work_center, ma_congdoan
         WHERE production_order = @production_order
           AND operation_no = @operation_no
         INTO TABLE @DATA(operation_scopes).
@@ -305,7 +305,9 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
              func_id = history_func
              plant = <operation_scope>-plant
              work_center = <operation_scope>-work_center
-             work_id = work_id ) = abap_false.
+             work_id = work_id
+             ma_congdoan = <operation_scope>-ma_congdoan
+             effective_date = cl_abap_context_info=>get_system_date( ) ) = abap_false.
           result-error_code = 'WORK_CONTEXT_NOT_ALLOWED'.
           RETURN.
         ENDIF.
