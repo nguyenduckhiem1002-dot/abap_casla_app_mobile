@@ -6,9 +6,26 @@ CLASS ltc_history DEFINITION FINAL FOR TESTING DURATION SHORT RISK LEVEL HARMLES
     METHODS correction_and_reverse FOR TESTING.
     METHODS ancestor_scope FOR TESTING.
     METHODS legacy_work_date FOR TESTING.
+    METHODS opening_only_on_range_start FOR TESTING.
 ENDCLASS.
 
 CLASS ltc_history IMPLEMENTATION.
+  METHOD opening_only_on_range_start.
+    DATA(rows) = VALUE zcl_pp_work_history=>ledger_rows(
+      ( worker_id = 'HD000001' report_worker_id = 'HD000001' uom = 'ST'
+        transaction_type = zcl_pp_txn_type=>reassign work_date = '20260923' quantity = 50 )
+      ( worker_id = 'HD000001' report_worker_id = 'HD000001' uom = 'ST'
+        transaction_type = zcl_pp_txn_type=>initial_assign work_date = '20260923' quantity = 100 )
+      ( worker_id = 'HD000001' report_worker_id = 'HD000001' uom = 'ST'
+        transaction_type = zcl_pp_txn_type=>confirm work_date = '20260923' quantity = 30 )
+      ( worker_id = 'HD000001' report_worker_id = 'HD000001' uom = 'ST'
+        transaction_type = zcl_pp_txn_type=>reassign work_date = '20260924' quantity = 120 )
+      ( worker_id = 'HD000001' report_worker_id = 'HD000001' uom = 'ST'
+        transaction_type = zcl_pp_txn_type=>confirm work_date = '20260924' quantity = 20 ) ).
+    DATA(actual) = zcl_pp_work_history=>summarize( rows = rows date_from = '20260923' ).
+    cl_abap_unit_assert=>assert_equals( act = actual[ 1 ]-assigned exp = 150 ).
+    cl_abap_unit_assert=>assert_equals( act = actual[ 1 ]-remaining exp = 100 ).
+  ENDMETHOD.
   METHOD correction_and_reverse.
     DATA(rows) = VALUE zcl_pp_work_history=>ledger_rows(
       ( worker_id = 'HD000001' report_worker_id = 'HD000001' uom = 'ST'

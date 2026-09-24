@@ -4,6 +4,7 @@ CLASS zcl_pp_txn_type DEFINITION
   PUBLIC SECTION.
     CONSTANTS:
       initial_assign TYPE ztb_pp_alloc_txn-transaction_type VALUE 'INITIAL_ASSIGN',
+      reassign       TYPE ztb_pp_alloc_txn-transaction_type VALUE 'REASSIGN',
       transfer       TYPE ztb_pp_alloc_txn-transaction_type VALUE 'TRANSFER',
       recall         TYPE ztb_pp_alloc_txn-transaction_type VALUE 'RECALL',
       confirm        TYPE ztb_pp_alloc_txn-transaction_type VALUE 'CONFIRM',

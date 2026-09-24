@@ -28,6 +28,8 @@ etag master LocalLastChangedAt
   action recall parameter ZA_PP_Recall result [1] $self;
   action confirm parameter ZA_PP_Confirm result [1] $self;
   action reverse parameter ZA_PP_Reverse result [1] $self;
+  // Internal EML only: not exposed by either service projection.
+  action reassignOvernight parameter ZA_PP_ReassignDay;
 
   // Static facade dành cho mobile. Mỗi handler xác thực token/session/device,
   // resolve công đoạn SAP live rồi mới gọi command nghiệp vụ nội bộ.

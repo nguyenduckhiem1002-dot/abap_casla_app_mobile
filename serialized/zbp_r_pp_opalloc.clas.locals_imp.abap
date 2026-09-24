@@ -133,6 +133,8 @@ CLASS lhc_operationallocation DEFINITION
     METHODS reverse FOR MODIFY
       IMPORTING keys   FOR ACTION OperationAllocation~reverse
       RESULT    result.
+    METHODS reassignOvernight FOR MODIFY
+      IMPORTING keys FOR ACTION OperationAllocation~reassignOvernight.
     METHODS submitInitialAssign FOR MODIFY
       IMPORTING keys   FOR ACTION OperationAllocation~submitInitialAssign
       RESULT    result.
@@ -621,6 +623,10 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     IF requested_authorizations-%action-reverse = if_abap_behv=>mk-on.
       result-%action-reverse = if_abap_behv=>auth-allowed.
     ENDIF.
+    "This action is only callable via internal EML, never via service projections.
+    IF requested_authorizations-%action-reassignOvernight = if_abap_behv=>mk-on.
+      result-%action-reassignOvernight = if_abap_behv=>auth-allowed.
+    ENDIF.
     IF requested_authorizations-%action-submitInitialAssign = if_abap_behv=>mk-on.
       result-%action-submitInitialAssign = if_abap_behv=>auth-allowed.
     ENDIF.
@@ -668,6 +674,80 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             severity = if_abap_behv_message=>severity-error
             text = 'Dữ liệu snapshot công đoạn không đầy đủ' ) )
           TO reported-operationallocation.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  " Opening snapshots do not change worker balances or create new allocation capacity.
+  METHOD reassignOvernight.
+    DATA(now) = utclong_current( ).
+    DATA(time_zone) = cl_abap_context_info=>get_user_time_zone( ).
+    TRY.
+        CONVERT UTCLONG now TIME ZONE time_zone INTO DATE DATA(today).
+      CATCH cx_parameter_invalid_range cx_sy_conversion_error.
+        CLEAR today.
+    ENDTRY.
+    LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
+      DATA(day) = <key>-%param-TargetDate.
+      IF today IS INITIAL OR day > today OR day <= '00010101'.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'REASSIGN_DATE_INVALID'
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      "Read the transactional buffer under the managed operation lock. A concurrent
+      "job cannot pass the idempotency check while another writer owns this root.
+      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation BY \_Transactions ALL FIELDS
+        WITH VALUE #( ( %tky = <key>-%tky ) )
+        RESULT DATA(transactions) FAILED DATA(read_failed).
+      IF read_failed IS NOT INITIAL.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'REASSIGN_READ_FAILED'
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      DATA(rows) = VALUE zcl_pp_reassign_job=>ledger_rows(
+        FOR txn IN transactions (
+          transaction_uuid = txn-TransactionUUID original_transaction_uuid = txn-OriginalTransactionUUID
+          operation_uuid = txn-OperationUUID transaction_type = txn-TransactionType
+          original_transaction_type = txn-OriginalTransactionType worker_id = txn-WorkerID
+          from_worker_id = txn-FromWorkerID to_worker_id = txn-ToWorkerID
+          work_id = txn-WorkID shift_id = txn-ShiftID work_date = txn-WorkDate
+          execution_date = txn-ExecutionDate quantity = txn-Quantity uom = txn-UnitOfMeasure
+          transaction_status = txn-TransactionStatus ) ).
+      DATA(calculation) = zcl_pp_reassign_job=>calculate( rows = rows target_date = day ).
+      IF calculation-error_code IS NOT INITIAL.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID text = CONV #( calculation-error_code )
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+      IF calculation-entries IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+        ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
+          ( OriginalTransactionUUID OriginalTransactionType TransactionType WorkerID ToWorkerID
+            WorkID ShiftID Quantity UnitOfMeasure ExecutionDate WorkDate ExecutedAt
+            TransactionStatus SourceChannel ReasonCode VerificationMethod )
+        WITH VALUE #( ( %tky = <key>-%tky %target = VALUE #(
+          FOR entry IN calculation-entries INDEX INTO item_no (
+            %cid = |RA{ <key>-%tky-OperationUUID }_{ item_no }|
+            OriginalTransactionUUID = entry-original_transaction_uuid
+            OriginalTransactionType = entry-original_transaction_type
+            TransactionType = entry-transaction_type WorkerID = entry-worker_id ToWorkerID = entry-to_worker_id
+            WorkID = entry-work_id ShiftID = entry-shift_id Quantity = entry-quantity UnitOfMeasure = entry-uom
+            ExecutionDate = day WorkDate = day ExecutedAt = now
+            TransactionStatus = entry-transaction_status SourceChannel = entry-source_channel
+            ReasonCode = entry-reason_code VerificationMethod = 'APPLICATION_JOB' ) ) ) )
+        FAILED DATA(post_failed) REPORTED DATA(post_reported).
+      APPEND LINES OF post_reported-allocationtransaction TO reported-allocationtransaction.
+      APPEND LINES OF post_reported-operationallocation TO reported-operationallocation.
+      IF post_failed IS NOT INITIAL.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID text = 'REASSIGN_CREATE_FAILED'
+          CHANGING failed = failed reported = reported ).
       ENDIF.
     ENDLOOP.
   ENDMETHOD.

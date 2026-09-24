@@ -136,6 +136,7 @@ protected section.
 
     TYPES: BEGIN OF ledger_row,
              transaction_uuid   TYPE ztb_pp_alloc_txn-transaction_uuid,
+             original_transaction_type TYPE ztb_pp_alloc_txn-original_transaction_type,
              original_transaction_uuid
                TYPE ztb_pp_alloc_txn-original_transaction_uuid,
              execution_date     TYPE ztb_pp_alloc_txn-execution_date,
@@ -212,6 +213,7 @@ protected section.
 
     CLASS-METHODS summarize
       IMPORTING rows          TYPE ledger_rows
+                date_from     TYPE d OPTIONAL
       RETURNING VALUE(result) TYPE worker_summaries.
 
     CLASS-METHODS build_entries
@@ -355,7 +357,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
 
     result-entry_count = lines( rows ).
     result-is_truncated = xsdbool( result-entry_count >= max_scan_rows ).
-    result-workers = summarize( rows ).
+    result-workers = summarize( rows = rows date_from = result-date_from ).
     enrich_work_context( CHANGING summaries = result-workers ).
     DATA unique_workers TYPE SORTED TABLE OF ztb_pp_alloc_txn-worker_id
                         WITH UNIQUE KEY table_line.
@@ -444,7 +446,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
     SELECT FROM ztb_pp_alloc_txn AS txn
       INNER JOIN ztb_pp_op_alloc AS op
         ON op~operation_uuid = txn~operation_uuid
-      FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
+      FIELDS txn~transaction_uuid, txn~original_transaction_uuid, txn~original_transaction_type,
              txn~execution_date, txn~shift_id, txn~work_date, txn~executed_at, txn~shift_start_at,
              txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from, txn~worker_id,
              txn~work_id,
@@ -565,7 +567,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
           OR txn~to_worker_id = scope_row~worker_id )
       INNER JOIN ztb_pp_op_alloc AS op
         ON op~operation_uuid = txn~operation_uuid
-      FIELDS txn~transaction_uuid, txn~original_transaction_uuid,
+      FIELDS txn~transaction_uuid, txn~original_transaction_uuid, txn~original_transaction_type,
              txn~operation_uuid, txn~execution_date, txn~shift_id, txn~work_date, txn~executed_at,
              txn~shift_start_at, txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from, txn~worker_id,
              txn~work_id,
@@ -590,7 +592,11 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
       "vào báo cáo team để số giao và số còn lại phản ánh đúng snapshot.
       IF <candidate>-transaction_type = zcl_pp_txn_type=>allocation_adjustment
          OR <candidate>-transaction_type = zcl_pp_txn_type=>recall_adjustment
-         OR <candidate>-transaction_type = zcl_pp_txn_type=>confirm_adjustment.
+         OR <candidate>-transaction_type = zcl_pp_txn_type=>confirm_adjustment
+         OR ( <candidate>-transaction_type = zcl_pp_txn_type=>reassign
+          AND ( <candidate>-original_transaction_type = zcl_pp_txn_type=>allocation_adjustment
+             OR <candidate>-original_transaction_type = zcl_pp_txn_type=>recall_adjustment
+             OR <candidate>-original_transaction_type = zcl_pp_txn_type=>confirm_adjustment ) ).
         APPEND CORRESPONDING #( <candidate> ) TO result.
         CONTINUE.
       ENDIF.
@@ -635,8 +641,14 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
 
   METHOD summarize.
     LOOP AT rows ASSIGNING FIELD-SYMBOL(<row>).
+      "Opening balance is counted once, on the first day of the selected range.
+      IF <row>-transaction_type = zcl_pp_txn_type=>reassign
+         AND ( date_from IS INITIAL OR COND d( WHEN <row>-work_date IS NOT INITIAL
+               THEN <row>-work_date ELSE <row>-execution_date ) <> date_from ).
+        CONTINUE.
+      ENDIF.
       CASE <row>-transaction_type.
-        WHEN zcl_pp_txn_type=>initial_assign.
+        WHEN zcl_pp_txn_type=>initial_assign OR zcl_pp_txn_type=>reassign.
           IF <row>-worker_id <> <row>-report_worker_id.
             CONTINUE.
           ENDIF.

@@ -292,6 +292,7 @@ ABAP implementation / behavior hiện tại
 - Tạo Supervisor role/function/work context thật và kiểm tra cùng-role scope semantics.
 - Map WorkerID ↔ account/credential/reference đúng với Plant + Work Center.
 - Cấu hình shift theo plant/timezone và test boundary ca qua ngày.
+- Thiết lập Application Job REASSIGN lúc 04:00 theo [hướng dẫn chuyển tồn hàng ngày](docs/DAILY_REASSIGN_JOB.md).
 - Dùng UoM hợp lệ trên tenant; `ST` trong docs chỉ là sample.
 - Publish OData V4 bindings và cấu hình IAM/communication arrangement.
 - Chạy ABAP Unit, ATC, repository checks và integration tests, đặc biệt các case concurrency/idempotency phía trên.
