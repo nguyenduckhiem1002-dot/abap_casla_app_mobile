@@ -3,7 +3,11 @@ CLASS zbp_i_mob_user DEFINITION
   ABSTRACT
   FINAL
   FOR BEHAVIOR OF zi_mob_user.
+protected section.
+private section.
 ENDCLASS.
 
-CLASS zbp_i_mob_user IMPLEMENTATION.
+
+
+CLASS ZBP_I_MOB_USER IMPLEMENTATION.
 ENDCLASS.

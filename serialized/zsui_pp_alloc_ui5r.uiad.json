@@ -1,0 +1,34 @@
+{
+  "formatVersion": "2",
+  "header": {
+    "description": "An SAP Fiori application.",
+    "originalLanguage": "en",
+    "abapLanguageVersion": "cloudDevelopment"
+  },
+  "generalInformation": {
+    "appType": "ui5",
+    "catalogId": "SAP_TC_UI5_REPO_UIAD",
+    "targetMappingTitle": "Quản Lý Phân Bổ Sản Lượng"
+  },
+  "ui5AppDetails": {
+    "appId": "manageallocation"
+  },
+  "navigation": {
+    "targetMappingId": "ZSUI_PP_ALLOC_UI5R_TM",
+    "semanticObject": "ZSO_PP_ALLOC",
+    "action": "display",
+    "desktop": true,
+    "tablet": true,
+    "phone": true
+  },
+  "tiles": [
+    {
+      "id": "ZSUI_PP_ALLOC_UI5R_AL",
+      "tileType": "static",
+      "isDefault": true,
+      "standard": {
+        "title": "Quản Lý Phân Bổ Sản Lượng"
+      }
+    }
+  ]
+}

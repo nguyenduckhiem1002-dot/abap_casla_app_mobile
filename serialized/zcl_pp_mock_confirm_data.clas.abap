@@ -99,7 +99,11 @@ CLASS zcl_pp_mock_confirm_data DEFINITION
       RETURNING VALUE(success) TYPE abap_bool.
 ENDCLASS.
 
-CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
+
+
+CLASS ZCL_PP_MOCK_CONFIRM_DATA IMPLEMENTATION.
+
+
   METHOD if_oo_adt_classrun~main.
     DATA(manager) = read_user( manager_username ).
     DATA(operator) = read_user( operator_username ).
@@ -135,6 +139,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
     out->write( 'Manager xem team history; duck xem self history trong ngay hien tai.' ).
   ENDMETHOD.
 
+
   METHOD read_user.
     SELECT FROM ztb_mob_user
       FIELDS user_uuid, username, worker_id
@@ -146,6 +151,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
       user = CORRESPONDING #( users[ 1 ] ).
     ENDIF.
   ENDMETHOD.
+
 
   METHOD determine_work_context.
     DATA(today) = cl_abap_context_info=>get_system_date( ).
@@ -167,6 +173,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
     context-work_id = CONV #( |DEMO_{ context-plant }_{ context-work_center }| ).
   ENDMETHOD.
 
+
   METHOD ensure_function.
     SELECT FROM ztb_mob_func
       FIELDS func_id
@@ -186,6 +193,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
       local_last_changed_at = now ) ).
     success = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
+
 
   METHOD ensure_role.
     SELECT FROM ztb_mob_role
@@ -210,6 +218,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
       local_last_changed_at = now ) ).
     success = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
+
 
   METHOD ensure_work.
     SELECT FROM ztb_mob_work
@@ -237,6 +246,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
     success = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
 
+
   METHOD ensure_role_grant.
     SELECT FROM ztb_mob_rol_fnc
       FIELDS role_id
@@ -252,6 +262,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
       role_id = role_id func_id = func_id ) ).
     success = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
+
 
   METHOD ensure_role_work.
     SELECT FROM ztb_mob_rol_wrk
@@ -269,6 +280,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
     success = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
 
+
   METHOD ensure_user_role.
     SELECT FROM ztb_mob_usr_rol
       FIELDS user_uuid
@@ -284,6 +296,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
       user_uuid = user_uuid role_id = role_id ) ).
     success = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
+
 
   METHOD ensure_demo_access.
     success = ensure_function(
@@ -369,6 +382,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
       ensure_user_role( user_uuid = operator-user_uuid
                         role_id = operator_role ) = abap_true ).
   ENDMETHOD.
+
 
   METHOD seed_production.
     IF delete_demo_data( ) = abap_false.
@@ -492,6 +506,7 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
     result-message = 'Tao thanh cong Work ID, phan cong va san luong demo'.
   ENDMETHOD.
 
+
   METHOD delete_demo_data.
     SELECT FROM ztb_pp_op_alloc
       FIELDS operation_uuid
@@ -517,4 +532,3 @@ CLASS zcl_pp_mock_confirm_data IMPLEMENTATION.
     success = xsdbool( remaining_operations IS INITIAL ).
   ENDMETHOD.
 ENDCLASS.
-

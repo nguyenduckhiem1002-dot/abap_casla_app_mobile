@@ -1,7 +1,7 @@
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'Master công đoạn'
 define root view entity ZI_MD_CongDoan
-  as select from ztb_md_congdoan
+as select from ztb_md_congdoan
   association [0..1] to ZI_MOB_Work as _Work
     on $projection.BoPhan = _Work.BoPhan
    and _Work.IsActive = 'A'

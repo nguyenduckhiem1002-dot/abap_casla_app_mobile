@@ -22,7 +22,11 @@ CLASS zcl_pp_txn_type DEFINITION
       source_mobile TYPE ztb_pp_alloc_txn-source_channel VALUE 'MOBILE',
       source_fiori  TYPE ztb_pp_alloc_txn-source_channel VALUE 'FIORI',
       source_system TYPE ztb_pp_alloc_txn-source_channel VALUE 'SYSTEM'.
+protected section.
+private section.
 ENDCLASS.
 
-CLASS zcl_pp_txn_type IMPLEMENTATION.
+
+
+CLASS ZCL_PP_TXN_TYPE IMPLEMENTATION.
 ENDCLASS.

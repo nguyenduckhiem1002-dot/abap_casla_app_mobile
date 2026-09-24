@@ -3,6 +3,7 @@
 {
 "FROM":
 [
+"ZI_MOB_WORK",
 "ZTB_MD_CONGDOAN"
 ],
 "ASSOCIATED":

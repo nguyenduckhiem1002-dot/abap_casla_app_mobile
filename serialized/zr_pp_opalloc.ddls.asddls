@@ -2,42 +2,37 @@
 @EndUserText.label: 'Phân bổ sản lượng công đoạn'
 define root view entity ZR_PP_OpAlloc
   as select from ztb_pp_op_alloc
-  composition [0..*] of ZR_PP_EmpAlloc as _Employees
-  composition [0..*] of ZR_PP_AllocTxn as _Transactions
-  association [0..1] to ZI_PP_EmpAlloc_Agg as _EmployeeAllocationSummary
-    on $projection.OperationUUID = _EmployeeAllocationSummary.OperationUUID
-   and $projection.UnitOfMeasure = _EmployeeAllocationSummary.UnitOfMeasure
+  composition [0..*] of ZR_PP_EmpAlloc     as _Employees
+  composition [0..*] of ZR_PP_AllocTxn     as _Transactions
+  association [0..1] to ZI_PP_EmpAlloc_Agg as _EmployeeAllocationSummary on  $projection.OperationUUID = _EmployeeAllocationSummary.OperationUUID
+                                                                         and $projection.UnitOfMeasure = _EmployeeAllocationSummary.UnitOfMeasure
 {
-  key operation_uuid        as OperationUUID,
-      production_order      as ProductionOrder,
-      operation_no          as Operation,
-      ma_congdoan           as MaCongDoan,
-      plant                 as Plant,
-      work_center           as WorkCenter,
+  key operation_uuid                                    as OperationUUID,
+      production_order                                  as ProductionOrder,
+      operation_no                                      as Operation,
+      ma_congdoan                                       as MaCongDoan,
+      plant                                             as Plant,
+      work_center                                       as WorkCenter,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
-      operation_qty         as OperationQuantity,
+      operation_qty                                     as OperationQuantity,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
-      _EmployeeAllocationSummary.TotalAssignedQuantity
-        as TotalAssignedQuantity,
+      _EmployeeAllocationSummary.TotalAssignedQuantity  as TotalAssignedQuantity,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
-      _EmployeeAllocationSummary.TotalRecalledQuantity
-        as TotalRecalledQuantity,
+      _EmployeeAllocationSummary.TotalRecalledQuantity  as TotalRecalledQuantity,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
-      _EmployeeAllocationSummary.TotalCompletedQuantity
-        as TotalCompletedQuantity,
+      _EmployeeAllocationSummary.TotalCompletedQuantity as TotalCompletedQuantity,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
-      _EmployeeAllocationSummary.TotalRemainingQuantity
-        as TotalRemainingQuantity,
-      uom                   as UnitOfMeasure,
-      operation_status      as OperationStatus,
+      _EmployeeAllocationSummary.TotalRemainingQuantity as TotalRemainingQuantity,
+      uom                                               as UnitOfMeasure,
+      operation_status                                  as OperationStatus,
       @Semantics.user.createdBy: true
-      created_by            as CreatedBy,
+      created_by                                        as CreatedBy,
       @Semantics.systemDateTime.createdAt: true
-      created_at            as CreatedAt,
+      created_at                                        as CreatedAt,
       @Semantics.user.lastChangedBy: true
-      last_changed_by       as LastChangedBy,
+      last_changed_by                                   as LastChangedBy,
       @Semantics.systemDateTime.localInstanceLastChangedAt: true
-      local_last_changed_at as LocalLastChangedAt,
+      local_last_changed_at                             as LocalLastChangedAt,
       _Employees,
       _Transactions,
       _EmployeeAllocationSummary

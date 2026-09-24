@@ -3,7 +3,11 @@ CLASS zbp_i_mob_role DEFINITION
   ABSTRACT
   FINAL
   FOR BEHAVIOR OF zi_mob_role.
+protected section.
+private section.
 ENDCLASS.
 
-CLASS zbp_i_mob_role IMPLEMENTATION.
+
+
+CLASS ZBP_I_MOB_ROLE IMPLEMENTATION.
 ENDCLASS.

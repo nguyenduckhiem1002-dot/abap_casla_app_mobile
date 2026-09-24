@@ -3,8 +3,11 @@ CLASS zbp_r_pp_opalloc DEFINITION
   ABSTRACT
   FINAL
   FOR BEHAVIOR OF zr_pp_opalloc.
+protected section.
+private section.
 ENDCLASS.
 
-CLASS zbp_r_pp_opalloc IMPLEMENTATION.
-ENDCLASS.
 
+
+CLASS ZBP_R_PP_OPALLOC IMPLEMENTATION.
+ENDCLASS.

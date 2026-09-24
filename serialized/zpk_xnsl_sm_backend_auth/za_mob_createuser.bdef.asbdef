@@ -5,5 +5,10 @@ with hierarchy;
 define behavior for ZA_MOB_CreateUser
 with control
 {
-  field ( mandatory:execute ) Username, Password, FullName, Email, WorkerID;
+  field ( mandatory:execute )
+    Username,
+    Password,
+    FullName,
+    Email,
+    WorkerID;
 }

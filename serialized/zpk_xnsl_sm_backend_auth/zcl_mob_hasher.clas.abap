@@ -12,23 +12,32 @@ CLASS zcl_mob_hasher DEFINITION
       IMPORTING value_1 TYPE string
                 value_2 TYPE string
       RETURNING VALUE(result) TYPE abap_bool.
+protected section.
   PRIVATE SECTION.
     DATA secret_key TYPE string.
 ENDCLASS.
 
-CLASS zcl_mob_hasher IMPLEMENTATION.
+
+
+CLASS ZCL_MOB_HASHER IMPLEMENTATION.
+
+
   METHOD constructor.
     IF iv_secret_key IS INITIAL.
       RAISE EXCEPTION NEW zcx_mob_config( config_key = 'EMPTY_SECRET' ).
     ENDIF.
     secret_key = iv_secret_key.
   ENDMETHOD.
+
+
   METHOD calculate_hash.
     cl_abap_message_digest=>calculate_hash_for_char(
       EXPORTING if_algorithm = 'SHA256'
                 if_data = secret_key && ':' && iv_value
       IMPORTING ef_hashstring = rv_hash ).
   ENDMETHOD.
+
+
   METHOD equals_constant_time.
     "Độ dài không phải dữ liệu bí mật ở đây vì cả hai giá trị đều là digest hex có độ dài cố định.
     DATA(length) = strlen( value_1 ).

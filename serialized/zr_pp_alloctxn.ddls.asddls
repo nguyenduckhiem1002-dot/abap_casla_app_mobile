@@ -2,8 +2,7 @@
 @EndUserText.label: 'Giao dịch phân bổ sản lượng'
 define view entity ZR_PP_AllocTxn
   as select from ztb_pp_alloc_txn
-  association to parent ZR_PP_OpAlloc as _Operation
-    on $projection.OperationUUID = _Operation.OperationUUID
+  association to parent ZR_PP_OpAlloc as _Operation on $projection.OperationUUID = _Operation.OperationUUID
 {
   key transaction_uuid          as TransactionUUID,
       operation_uuid            as OperationUUID,
@@ -20,27 +19,25 @@ define view entity ZR_PP_AllocTxn
       from_worker_id            as FromWorkerID,
       to_worker_id              as ToWorkerID,
       worker_id                 as WorkerID,
-      @EndUserText.label: 'Vị trí làm việc'
-      @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Work_Hist_VH', element: 'WorkID' } }]
-      work_id                   as WorkID,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       quantity                  as Quantity,
       uom                       as UnitOfMeasure,
       execution_date            as ExecutionDate,
+      work_id                   as WorkID,
       @EndUserText.label: 'Mã ca'
-      shift_id as ShiftID,
+      shift_id                  as ShiftID,
       @EndUserText.label: 'Ngày làm việc'
-      work_date as WorkDate,
+      work_date                 as WorkDate,
       @EndUserText.label: 'Thời điểm thực hiện UTC'
-      executed_at as ExecutedAt,
+      executed_at               as ExecutedAt,
       @EndUserText.label: 'Bắt đầu ca UTC'
-      shift_start_at as ShiftStartAt,
+      shift_start_at            as ShiftStartAt,
       @EndUserText.label: 'Kết thúc ca UTC'
-      shift_end_at as ShiftEndAt,
+      shift_end_at              as ShiftEndAt,
       @EndUserText.label: 'Múi giờ ca'
-      shift_time_zone as ShiftTimeZone,
+      shift_time_zone           as ShiftTimeZone,
       @EndUserText.label: 'Phiên bản ca hiệu lực từ'
-      shift_valid_from as ShiftValidFrom,
+      shift_valid_from          as ShiftValidFrom,
       transaction_status        as TransactionStatus,
       reason_code               as ReasonCode,
       reason_text               as ReasonText,

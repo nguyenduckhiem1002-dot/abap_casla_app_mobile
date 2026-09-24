@@ -1,6 +1,6 @@
 @EndUserText.label: 'Tham số tạo tài khoản di động'
 define root abstract entity ZA_MOB_CreateUser {
-  @EndUserText.label: 'Tên đăng nhập'
+  @EndUserText.label: 'Tên đăng nhập' 
   Username : abap.char(80);
   @EndUserText.label: 'Mật khẩu'
   Password : abap.char(255);

@@ -5,45 +5,44 @@ define root view entity ZC_PP_OpAlloc_Adm
   provider contract transactional_query
   as projection on ZR_PP_OpAlloc
 {
-  @EndUserText.label: 'Mã định danh công đoạn'
+      @EndUserText.label: 'Mã định danh công đoạn'
   key OperationUUID,
-  @EndUserText.label: 'Lệnh sản xuất'
+      @EndUserText.label: 'Lệnh sản xuất'
       ProductionOrder,
-  @EndUserText.label: 'Công đoạn lệnh sản xuất'
+      @EndUserText.label: 'Công đoạn lệnh sản xuất'
       Operation,
-  @EndUserText.label: 'Mã công đoạn'
-  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MD_CongDoan_Hist_VH', element: 'MaCongDoan' } }]
+      @EndUserText.label: 'Mã công đoạn'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MD_CongDoan_Hist_VH', element: 'MaCongDoan' } }]
       MaCongDoan,
-  @EndUserText.label: 'Nhà máy'
-  @Consumption.valueHelpDefinition: [{ entity: { name: 'I_Plant', element: 'Plant' } }]
+      @EndUserText.label: 'Nhà máy'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'I_Plant', element: 'Plant' } }]
       Plant,
-  @EndUserText.label: 'Trung tâm làm việc'
-  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_WorkCenter_VH', element: 'WorkCenter' },
-    additionalBinding: [{ localElement: 'Plant', element: 'Plant', usage: #FILTER }] }]
+      @EndUserText.label: 'Trung tâm làm việc'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_WorkCenter_VH', element: 'WorkCenter' },
+        additionalBinding: [{ localElement: 'Plant', element: 'Plant', usage: #FILTER }] }]
       WorkCenter,
-  @EndUserText.label: 'Sản lượng công đoạn'
+      @EndUserText.label: 'Sản lượng công đoạn'
       OperationQuantity,
-  @EndUserText.label: 'Tổng đã giao cho nhân công'
-  TotalAssignedQuantity,
-  @EndUserText.label: 'Tổng đã thu hồi'
-  TotalRecalledQuantity,
-  @EndUserText.label: 'Tổng đã xác nhận'
-  TotalCompletedQuantity,
-  @EndUserText.label: 'Tổng còn lại'
-  TotalRemainingQuantity,
-  @EndUserText.label: 'Đơn vị tính'
-  @Consumption.valueHelpDefinition: [{ entity: { name: 'I_UnitOfMeasure', element: 'UnitOfMeasure' } }]
+      @EndUserText.label: 'Tổng đã giao cho nhân công'
+      TotalAssignedQuantity,
+      @EndUserText.label: 'Tổng đã thu hồi'
+      TotalRecalledQuantity,
+      @EndUserText.label: 'Tổng đã xác nhận'
+      TotalCompletedQuantity,
+      @EndUserText.label: 'Tổng còn lại'
+      TotalRemainingQuantity,
+      @EndUserText.label: 'Đơn vị tính'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'I_UnitOfMeasure', element: 'UnitOfMeasure' } }]
       UnitOfMeasure,
-  @EndUserText.label: 'Trạng thái công đoạn'
+      @EndUserText.label: 'Trạng thái công đoạn'
       OperationStatus,
-  @EndUserText.label: 'Người tạo'
+      @EndUserText.label: 'Người tạo'
       CreatedBy,
-  @EndUserText.label: 'Thời điểm tạo'
+      @EndUserText.label: 'Thời điểm tạo'
       CreatedAt,
-  @EndUserText.label: 'Người thay đổi cuối'
+      @EndUserText.label: 'Người thay đổi cuối'
       LastChangedBy,
-  @EndUserText.label: 'Thời điểm cập nhật bản ghi'
+      @EndUserText.label: 'Thời điểm cập nhật bản ghi'
       LocalLastChangedAt,
-
-  _Employees : redirected to composition child ZC_PP_EmpAlloc_Adm
+      _Employees : redirected to composition child ZC_PP_EmpAlloc_Adm
 }

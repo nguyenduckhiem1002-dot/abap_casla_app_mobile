@@ -12,42 +12,55 @@ etag master LocalLastChangedAt
 {
   create;
   update;
+  delete;
+  field ( mandatory : create, readonly : update )
+  Plant, ShiftID, ValidFrom;
 
-  field ( mandatory : create, readonly : update ) Plant, ShiftID, ValidFrom;
-  field ( mandatory : create ) ShiftName, StartTime, EndTime, EndDayOffset,
-                              SAPTimeZone, ValidTo, IsActive;
-  field ( readonly ) CreatedBy, CreatedAt, LastChangedBy, LastChangedAt,
-                     LocalLastChangedAt;
+  field ( mandatory : create )
+  ShiftName, SAPTimeZone, ValidTo, IsActive;
+
+  field ( readonly )
+  CreatedBy,
+  CreatedAt,
+  LastChangedBy,
+  LastChangedAt,
+  LocalLastChangedAt;
 
   validation validateShift on save
-  { create; update; field Plant, ShiftID, ValidFrom, ShiftName, StartTime,
-                             EndTime, EndDayOffset, SAPTimeZone, ValidTo, IsActive; }
+  {
+    create;
+    update;
+    field Plant, ShiftID, ValidFrom, ShiftName,
+    StartTime, EndTime, EndDayOffset,
+    SAPTimeZone, ValidTo, IsActive;
+  }
 
   draft action Edit;
   draft action Activate optimized;
   draft action Discard;
   draft action Resume;
+
   draft determine action Prepare
   {
     validation validateShift;
   }
 
   mapping for ztb_pp_shift
-  {
-    Plant              = plant;
-    ShiftID            = shift_id;
-    ValidFrom          = valid_from;
-    ShiftName          = shift_name;
-    StartTime          = start_time;
-    EndTime            = end_time;
-    EndDayOffset       = end_day_offset;
-    SAPTimeZone        = time_zone;
-    ValidTo            = valid_to;
-    IsActive           = is_active;
-    CreatedBy          = created_by;
-    CreatedAt          = created_at;
-    LastChangedBy      = last_changed_by;
-    LastChangedAt      = last_changed_at;
-    LocalLastChangedAt = local_last_changed_at;
-  }
+    {
+      Plant              = plant;
+      ShiftID            = shift_id;
+      ValidFrom          = valid_from;
+      ShiftName          = shift_name;
+      StartTime          = start_time;
+      EndTime            = end_time;
+      EndDayOffset       = end_day_offset;
+      SAPTimeZone        = time_zone;
+      ValidTo            = valid_to;
+      IsActive           = is_active;
+      CreatedBy          = created_by;
+      CreatedAt          = created_at;
+      LastChangedBy      = last_changed_by;
+      LastChangedAt      = last_changed_at;
+      LocalLastChangedAt = local_last_changed_at;
+    }
 }

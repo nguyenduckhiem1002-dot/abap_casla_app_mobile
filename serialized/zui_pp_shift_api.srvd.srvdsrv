@@ -1,0 +1,4 @@
+@EndUserText.label: 'API  ca làm việc'
+define service ZUI_PP_SHIFT_API {
+  expose ZC_PP_SHIFT as Shifts;
+}

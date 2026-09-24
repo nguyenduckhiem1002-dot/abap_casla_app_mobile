@@ -25,12 +25,17 @@ CLASS zcl_pp_worker_validator DEFINITION
         execution_date TYPE zi_pp_workerref-ValidFrom
       RETURNING
         VALUE(result)  TYPE abap_bool.
+protected section.
   PRIVATE SECTION.
     TYPES worker_refs TYPE SORTED TABLE OF zi_pp_workerref
       WITH NON-UNIQUE KEY WorkerID Plant WorkCenter ValidFrom.
 ENDCLASS.
 
-CLASS zcl_pp_worker_validator IMPLEMENTATION.
+
+
+CLASS ZCL_PP_WORKER_VALIDATOR IMPLEMENTATION.
+
+
   METHOD check_workers.
     IF checks IS INITIAL.
       RETURN.
@@ -71,6 +76,7 @@ CLASS zcl_pp_worker_validator IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
+
   METHOD is_worker_active.
     DATA(checks) = VALUE worker_checks(
       ( worker_id = worker_id
@@ -81,4 +87,3 @@ CLASS zcl_pp_worker_validator IMPLEMENTATION.
     result = VALUE #( checks[ 1 ]-is_active OPTIONAL ).
   ENDMETHOD.
 ENDCLASS.
-

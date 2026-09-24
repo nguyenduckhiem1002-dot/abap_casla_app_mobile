@@ -4,6 +4,8 @@ CLASS lhc_mobilework DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING REQUEST requested_authorizations FOR MobileWork RESULT result.
     METHODS validateWork FOR VALIDATE ON SAVE
       IMPORTING keys FOR MobileWork~validateWork.
+    METHODS setWorkDepartment FOR DETERMINE ON MODIFY
+       keys FOR MobileWork~setWorkDepartment.
 ENDCLASS.
 
 CLASS lhc_mobilework IMPLEMENTATION.
@@ -81,4 +83,24 @@ CLASS lhc_mobilework IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
   ENDMETHOD.
+  METHOD setWorkDepartment.
+
+    READ ENTITIES OF zi_mob_work IN LOCAL MODE
+      ENTITY MobileWork
+      FIELDS ( WorkID )
+      WITH CORRESPONDING #( keys )
+      RESULT DATA(works).
+
+    MODIFY ENTITIES OF zi_mob_work IN LOCAL MODE
+     ENTITY MobileWork
+     UPDATE FIELDS ( BoPhan )
+     WITH VALUE #( FOR work IN works
+       ( %tky = work-%tky
+         BoPhan = work-WorkID
+         %control-BoPhan = if_abap_behv=>mk-on ) )
+     FAILED DATA(set_failed)
+     REPORTED DATA(set_reported).
+
+  ENDMETHOD.
+
 ENDCLASS.

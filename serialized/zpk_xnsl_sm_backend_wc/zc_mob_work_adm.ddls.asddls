@@ -7,8 +7,7 @@ define root view entity ZC_MOB_Work_Adm
   as projection on ZI_MOB_Work
 {
   @EndUserText.label: 'Work ID'
-  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Work_Hist_VH', element: 'WorkID' } }]
-  @ObjectModel.text.element: ['WorkName']
+//  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Work_Hist_VH', element: 'WorkID' } }]
   key WorkID,
   @EndUserText.label: 'Tên vị trí làm việc'
       WorkName,

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <abapGit version="v1.0.0" serializer="LCL_OBJECT_SRVB" serializer_version="v1.0.0">
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
@@ -41,9 +41,9 @@
     </CONTENT>
     <CONTRACT>C1</CONTRACT>
     <RELEASE_SUPPORTED>true</RELEASE_SUPPORTED>
-    <PUBLISHED>false</PUBLISHED>
-    <BINDING_CREATED>false</BINDING_CREATED>
-    <ALLOWED_ACTION>PUBLISH</ALLOWED_ACTION>
+    <PUBLISHED>true</PUBLISHED>
+    <BINDING_CREATED>true</BINDING_CREATED>
+    <ALLOWED_ACTION>UNPUBLISH</ALLOWED_ACTION>
    </SRVB>
   </asx:values>
  </asx:abap>

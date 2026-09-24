@@ -20,14 +20,14 @@ CLASS lhc_operationallocation DEFINITION
                               WITH UNIQUE KEY production_order operation_no.
 
     TYPES: BEGIN OF work_operation_context,
-             is_valid            TYPE abap_bool,
-             error_code          TYPE c LENGTH 40,
-             work_name           TYPE ztb_mob_work-work_name,
-             work_bo_phan        TYPE ztb_mob_work-bo_phan,
-             location            TYPE ztb_mob_work-location,
-             operation_name      TYPE ztb_md_congdoan-ten_congdoan,
-              operation_bo_phan   TYPE ztb_md_congdoan-bo_phan,
-            END OF work_operation_context.
+             is_valid          TYPE abap_bool,
+             error_code        TYPE c LENGTH 40,
+             work_name         TYPE ztb_mob_work-work_name,
+             work_bo_phan      TYPE ztb_mob_work-bo_phan,
+             location          TYPE ztb_mob_work-location,
+             operation_name    TYPE ztb_md_congdoan-ten_congdoan,
+             operation_bo_phan TYPE ztb_md_congdoan-bo_phan,
+           END OF work_operation_context.
 
     TYPES: BEGIN OF worker_access_result,
              is_valid   TYPE abap_bool,
@@ -54,6 +54,9 @@ CLASS lhc_operationallocation DEFINITION
              worker_id                 TYPE ztb_pp_alloc_txn-worker_id,
              from_worker_id            TYPE ztb_pp_alloc_txn-from_worker_id,
              to_worker_id              TYPE ztb_pp_alloc_txn-to_worker_id,
+             work_id                   TYPE ztb_pp_alloc_txn-work_id,
+             shift_id                  TYPE ztb_pp_alloc_txn-shift_id,
+             work_date                 TYPE ztb_pp_alloc_txn-work_date,
              quantity                  TYPE ztb_pp_alloc_txn-quantity,
              uom                       TYPE ztb_pp_alloc_txn-uom,
              transaction_status        TYPE ztb_pp_alloc_txn-transaction_status,
@@ -65,7 +68,11 @@ CLASS lhc_operationallocation DEFINITION
              is_valid                TYPE abap_bool,
              error_code              TYPE c LENGTH 40,
              source_transaction_type TYPE ztb_pp_alloc_txn-transaction_type,
-             usable_quantity          TYPE ztb_pp_alloc_txn-quantity,
+             usable_quantity         TYPE ztb_pp_alloc_txn-quantity,
+             root_transaction_uuid   TYPE ztb_pp_alloc_txn-transaction_uuid,
+             work_id                 TYPE ztb_pp_alloc_txn-work_id,
+             shift_id                TYPE ztb_pp_alloc_txn-shift_id,
+             work_date               TYPE ztb_pp_alloc_txn-work_date,
            END OF lineage_result.
 
     TYPES: BEGIN OF balance_result,
@@ -112,100 +119,115 @@ CLASS lhc_operationallocation DEFINITION
       IMPORTING keys FOR OperationAllocation~validateOperation.
 
     METHODS initialAssign FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~initialAssign
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~initialAssign
+      RESULT    result.
     METHODS transfer FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~transfer
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~transfer
+      RESULT    result.
     METHODS recall FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~recall
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~recall
+      RESULT    result.
     METHODS confirm FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~confirm
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~confirm
+      RESULT    result.
     METHODS reverse FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~reverse
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~reverse
+      RESULT    result.
     METHODS submitInitialAssign FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~submitInitialAssign
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~submitInitialAssign
+      RESULT    result.
     METHODS submitTransfer FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~submitTransfer
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~submitTransfer
+      RESULT    result.
     METHODS submitRecall FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~submitRecall
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~submitRecall
+      RESULT    result.
     METHODS submitConfirm FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~submitConfirm
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~submitConfirm
+      RESULT    result.
     METHODS submitReverse FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~submitReverse
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~submitReverse
+      RESULT    result.
     METHODS getSyncStatus FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~getSyncStatus
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~getSyncStatus
+      RESULT    result.
     METHODS getWorkHistory FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~getWorkHistory
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~getWorkHistory
+      RESULT    result.
     METHODS checkOperationAccess FOR MODIFY
-      IMPORTING keys FOR ACTION OperationAllocation~checkOperationAccess
-      RESULT result.
+      IMPORTING keys   FOR ACTION OperationAllocation~checkOperationAccess
+      RESULT    result.
+
+
+    METHODS alpha_out_no_gaps
+      IMPORTING iv_value        TYPE csequence
+      RETURNING VALUE(rv_value) TYPE string.
 
     METHODS ensure_operation
       IMPORTING
-        production_order TYPE ztb_pp_op_alloc-production_order
-        operation_no     TYPE ztb_pp_op_alloc-operation_no
-        user_uuid        TYPE sysuuid_x16
-        func_id          TYPE ztb_mob_func-func_id
-        work_id          TYPE ztb_mob_work-work_id OPTIONAL
-        effective_date   TYPE d OPTIONAL
-      RETURNING VALUE(value) TYPE operation_context.
+                production_order TYPE ztb_pp_op_alloc-production_order
+                operation_no     TYPE ztb_pp_op_alloc-operation_no
+                user_uuid        TYPE sysuuid_x16
+                func_id          TYPE ztb_mob_func-func_id
+                work_id          TYPE ztb_mob_work-work_id OPTIONAL
+                effective_date   TYPE d OPTIONAL
+      RETURNING VALUE(value)     TYPE operation_context.
 
     METHODS check_work_operation_context
       IMPORTING
-        work_id       TYPE ztb_mob_work-work_id
-        plant         TYPE ztb_mob_work-plant
-        work_center   TYPE ztb_mob_work-workcenter
-        ma_congdoan   TYPE ztb_md_congdoan-ma_congdoan
-        effective_date TYPE d
-      RETURNING VALUE(result) TYPE work_operation_context.
+                work_id        TYPE ztb_mob_work-work_id
+                plant          TYPE ztb_mob_work-plant
+                work_center    TYPE ztb_mob_work-workcenter
+                ma_congdoan    TYPE ztb_md_congdoan-ma_congdoan
+                effective_date TYPE d
+      RETURNING VALUE(result)  TYPE work_operation_context.
 
     METHODS check_worker_access
-      IMPORTING user_uuid TYPE sysuuid_x16
-                worker_id TYPE ztb_pp_alloc_txn-worker_id
-                plant TYPE ztb_mob_work-plant
-                work_center TYPE ztb_mob_work-workcenter
-                work_id TYPE ztb_mob_work-work_id
-                ma_congdoan TYPE ztb_md_congdoan-ma_congdoan
+      IMPORTING user_uuid      TYPE sysuuid_x16
+                worker_id      TYPE ztb_pp_alloc_txn-worker_id
+                plant          TYPE ztb_mob_work-plant
+                work_center    TYPE ztb_mob_work-workcenter
+                work_id        TYPE ztb_mob_work-work_id
+                ma_congdoan    TYPE ztb_md_congdoan-ma_congdoan
                 effective_date TYPE d
-       RETURNING VALUE(result) TYPE worker_access_result.
+      RETURNING VALUE(result)  TYPE worker_access_result.
 
     METHODS read_worker_balances
       IMPORTING operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
-      RETURNING VALUE(result) TYPE worker_balances.
+      RETURNING VALUE(result)  TYPE worker_balances.
 
     METHODS validate_worker_balance
       IMPORTING balances          TYPE worker_balances
                 worker_identifier TYPE ztb_pp_alloc_txn-worker_id
                 quantity          TYPE ztb_pp_alloc_txn-quantity
                 uom               TYPE ztb_pp_alloc_txn-uom
-      RETURNING VALUE(result) TYPE balance_result.
+      RETURNING VALUE(result)     TYPE balance_result.
 
     METHODS get_usable_txn_qty
-      IMPORTING operation_uuid          TYPE ztb_pp_op_alloc-operation_uuid
+      IMPORTING operation_uuid            TYPE ztb_pp_op_alloc-operation_uuid
                 original_transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid
-                worker_id               TYPE ztb_pp_alloc_txn-worker_id
-                uom                     TYPE ztb_pp_alloc_txn-uom
-      RETURNING VALUE(result) TYPE lineage_result.
+                worker_id                 TYPE ztb_pp_alloc_txn-worker_id
+                uom                       TYPE ztb_pp_alloc_txn-uom
+      RETURNING VALUE(result)             TYPE lineage_result.
+
+
+    METHODS find_allocation_root
+      IMPORTING operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
+                worker_id      TYPE ztb_pp_alloc_txn-worker_id
+                work_id        TYPE ztb_pp_alloc_txn-work_id
+                shift_id       TYPE ztb_pp_alloc_txn-shift_id
+                work_date      TYPE ztb_pp_alloc_txn-work_date
+                uom            TYPE ztb_pp_alloc_txn-uom
+      RETURNING VALUE(result)  TYPE ztb_pp_alloc_txn-transaction_uuid.
 
     METHODS find_persisted_sync_receipts
       IMPORTING sync_item_uuid TYPE ztb_pp_alloc_txn-sync_item_uuid
-      RETURNING VALUE(result) TYPE sync_receipts.
+      RETURNING VALUE(result)  TYPE sync_receipts.
 
     METHODS read_operation_sync_receipts
       IMPORTING operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
                 sync_item_uuid TYPE ztb_pp_alloc_txn-sync_item_uuid
-      RETURNING VALUE(result) TYPE sync_receipts.
+      RETURNING VALUE(result)  TYPE sync_receipts.
 
     METHODS report_instance_failure
       IMPORTING operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
@@ -242,23 +264,23 @@ CLASS lhc_employeeallocation DEFINITION
       RESULT result.
 
     METHODS calculate_adjustment
-      IMPORTING adjustment_type   TYPE string
-                target_quantity   TYPE ztb_pp_emp_alloc-remaining_qty
-                initial_quantity  TYPE ztb_pp_emp_alloc-initial_assigned_qty
-                recalled_quantity TYPE ztb_pp_emp_alloc-recalled_qty
+      IMPORTING adjustment_type    TYPE string
+                target_quantity    TYPE ztb_pp_emp_alloc-remaining_qty
+                initial_quantity   TYPE ztb_pp_emp_alloc-initial_assigned_qty
+                recalled_quantity  TYPE ztb_pp_emp_alloc-recalled_qty
                 completed_quantity TYPE ztb_pp_emp_alloc-completed_qty
                 remaining_quantity TYPE ztb_pp_emp_alloc-remaining_qty
-      RETURNING VALUE(result) TYPE adjustment_calculation.
+      RETURNING VALUE(result)      TYPE adjustment_calculation.
 
     METHODS assignment_exceeds_operation
-      IMPORTING operation_uuid   TYPE ztb_pp_emp_alloc-operation_uuid
+      IMPORTING operation_uuid     TYPE ztb_pp_emp_alloc-operation_uuid
                 operation_quantity TYPE ztb_pp_op_alloc-operation_qty
-                delta_quantity    TYPE ztb_pp_emp_alloc-remaining_qty
-      RETURNING VALUE(result) TYPE abap_bool.
+                delta_quantity     TYPE ztb_pp_emp_alloc-remaining_qty
+      RETURNING VALUE(result)      TYPE abap_bool.
 
     METHODS adjustAllocation FOR MODIFY
-      IMPORTING keys FOR ACTION EmployeeAllocation~adjustAllocation
-      RESULT result.
+      IMPORTING keys   FOR ACTION EmployeeAllocation~adjustAllocation
+      RESULT    result.
 
     METHODS validateBalance FOR VALIDATE ON SAVE
       IMPORTING keys FOR EmployeeAllocation~validateBalance.
@@ -481,6 +503,8 @@ CLASS lhc_employeeallocation IMPLEMENTATION.
       DATA(shift_time_zone) = VALUE ztb_pp_shift-time_zone(
         shifts[ 1 ]-time_zone OPTIONAL ).
 
+
+
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY EmployeeAllocation UPDATE FIELDS
           ( InitialAssignedQuantity RecalledQuantity CompletedQuantity
@@ -573,52 +597,52 @@ CLASS lhc_operationallocation IMPLEMENTATION.
 
   " Cấp quyền RAP ở mức global; quyền nghiệp vụ cụ thể được kiểm tra trong từng action.
   METHOD get_global_authorizations.
-  "API mobile không expose raw CRUD. Các domain action tự xác thực CASLA token
-  "khi request xuất phát từ mobile; projection mobile chỉ expose các static
-  "facade action có kiểm soát.
-  IF requested_authorizations-%create = if_abap_behv=>mk-on.
-    result-%create = if_abap_behv=>auth-unauthorized.
-  ENDIF.
-  IF requested_authorizations-%update = if_abap_behv=>mk-on.
-    result-%update = if_abap_behv=>auth-unauthorized.
-  ENDIF.
-  IF requested_authorizations-%action-initialAssign = if_abap_behv=>mk-on.
-    result-%action-initialAssign = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-transfer = if_abap_behv=>mk-on.
-    result-%action-transfer = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-recall = if_abap_behv=>mk-on.
-    result-%action-recall = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-confirm = if_abap_behv=>mk-on.
-    result-%action-confirm = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-reverse = if_abap_behv=>mk-on.
-    result-%action-reverse = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-submitInitialAssign = if_abap_behv=>mk-on.
-    result-%action-submitInitialAssign = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-submitTransfer = if_abap_behv=>mk-on.
-    result-%action-submitTransfer = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-submitRecall = if_abap_behv=>mk-on.
-    result-%action-submitRecall = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-submitConfirm = if_abap_behv=>mk-on.
-    result-%action-submitConfirm = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-submitReverse = if_abap_behv=>mk-on.
-    result-%action-submitReverse = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-getSyncStatus = if_abap_behv=>mk-on.
-    result-%action-getSyncStatus = if_abap_behv=>auth-allowed.
-  ENDIF.
-  IF requested_authorizations-%action-getWorkHistory = if_abap_behv=>mk-on.
-    result-%action-getWorkHistory = if_abap_behv=>auth-allowed.
-  ENDIF.
-ENDMETHOD.
+    "API mobile không expose raw CRUD. Các domain action tự xác thực CASLA token
+    "khi request xuất phát từ mobile; projection mobile chỉ expose các static
+    "facade action có kiểm soát.
+    IF requested_authorizations-%create = if_abap_behv=>mk-on.
+      result-%create = if_abap_behv=>auth-unauthorized.
+    ENDIF.
+    IF requested_authorizations-%update = if_abap_behv=>mk-on.
+      result-%update = if_abap_behv=>auth-unauthorized.
+    ENDIF.
+    IF requested_authorizations-%action-initialAssign = if_abap_behv=>mk-on.
+      result-%action-initialAssign = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-transfer = if_abap_behv=>mk-on.
+      result-%action-transfer = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-recall = if_abap_behv=>mk-on.
+      result-%action-recall = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-confirm = if_abap_behv=>mk-on.
+      result-%action-confirm = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-reverse = if_abap_behv=>mk-on.
+      result-%action-reverse = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-submitInitialAssign = if_abap_behv=>mk-on.
+      result-%action-submitInitialAssign = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-submitTransfer = if_abap_behv=>mk-on.
+      result-%action-submitTransfer = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-submitRecall = if_abap_behv=>mk-on.
+      result-%action-submitRecall = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-submitConfirm = if_abap_behv=>mk-on.
+      result-%action-submitConfirm = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-submitReverse = if_abap_behv=>mk-on.
+      result-%action-submitReverse = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-getSyncStatus = if_abap_behv=>mk-on.
+      result-%action-getSyncStatus = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-getWorkHistory = if_abap_behv=>mk-on.
+      result-%action-getWorkHistory = if_abap_behv=>auth-allowed.
+    ENDIF.
+  ENDMETHOD.
 
   " Kiểm tra dữ liệu snapshot công đoạn trước khi ghi vào cơ sở dữ liệu.
   METHOD validateOperation.
@@ -646,6 +670,29 @@ ENDMETHOD.
           TO reported-operationallocation.
       ENDIF.
     ENDLOOP.
+  ENDMETHOD.
+
+  " Lần giao gốc của nhóm: cùng công nhân, công đoạn, bộ phận, ca, ngày làm việc
+  " và đơn vị. Lần giao sau của nhóm được ghi như phần bổ sung của gốc này.
+  METHOD find_allocation_root.
+    IF shift_id IS INITIAL OR work_date IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT FROM ztb_pp_alloc_txn
+      FIELDS transaction_uuid
+      WHERE operation_uuid = @operation_uuid
+        AND transaction_type = @zcl_pp_txn_type=>initial_assign
+        AND transaction_status = @zcl_pp_txn_type=>posted
+        AND worker_id = @worker_id
+        AND work_id = @work_id
+        AND shift_id = @shift_id
+        AND work_date = @work_date
+        AND uom = @uom
+        AND original_transaction_uuid IS INITIAL
+      ORDER BY executed_at ASCENDING, transaction_uuid ASCENDING
+      INTO @result
+      UP TO 1 ROWS.
+    ENDSELECT.
   ENDMETHOD.
 
   " Đọc công đoạn sống từ SAP, kiểm tra phạm vi quyền rồi lấy hoặc tạo snapshot công đoạn.
@@ -896,8 +943,8 @@ ENDMETHOD.
     READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
       ENTITY OperationAllocation BY \_Transactions
         FIELDS ( TransactionUUID OriginalTransactionUUID TransactionType
-                 WorkerID FromWorkerID ToWorkerID Quantity UnitOfMeasure
-                 TransactionStatus )
+                 WorkerID FromWorkerID ToWorkerID WorkID ShiftID WorkDate
+                 Quantity UnitOfMeasure TransactionStatus )
         WITH VALUE #( ( %key-OperationUUID = operation_uuid ) )
         RESULT DATA(transactions).
 
@@ -910,6 +957,9 @@ ENDMETHOD.
         worker_id = transaction-WorkerID
         from_worker_id = transaction-FromWorkerID
         to_worker_id = transaction-ToWorkerID
+        work_id = transaction-WorkID
+        shift_id = transaction-ShiftID
+        work_date = transaction-WorkDate
         quantity = transaction-Quantity
         uom = transaction-UnitOfMeasure
         transaction_status = transaction-TransactionStatus ) INTO TABLE lineage_rows.
@@ -917,6 +967,23 @@ ENDMETHOD.
 
     DATA(root) = VALUE lineage_transaction(
       lineage_rows[ transaction_uuid = original_transaction_uuid ] OPTIONAL ).
+    "Lần giao bổ sung dùng chung số dư với gốc của nhóm: quy về gốc trước.
+    DATA parent TYPE lineage_transaction.
+    DO 5 TIMES.
+      IF root IS INITIAL
+         OR root-transaction_type <> zcl_pp_txn_type=>initial_assign
+         OR root-original_transaction_uuid IS INITIAL.
+        EXIT.
+      ENDIF.
+      parent = VALUE #(
+        lineage_rows[ transaction_uuid = root-original_transaction_uuid ] OPTIONAL ).
+      IF parent IS INITIAL
+         OR parent-transaction_type <> zcl_pp_txn_type=>initial_assign.
+        EXIT.
+      ENDIF.
+      root = parent.
+    ENDDO.
+
     IF root IS INITIAL
        OR root-transaction_status <> zcl_pp_txn_type=>posted
        OR root-uom <> uom
@@ -970,6 +1037,10 @@ ENDMETHOD.
         CONTINUE.
       ENDIF.
       CASE <lineage_row>-transaction_type.
+        WHEN zcl_pp_txn_type=>initial_assign.
+          "Lần giao bổ sung của nhóm: cộng vào số dùng được.
+          result-usable_quantity = result-usable_quantity
+                                + <lineage_row>-quantity.
         WHEN zcl_pp_txn_type=>confirm OR zcl_pp_txn_type=>recall.
           result-usable_quantity = result-usable_quantity
                                 - <lineage_row>-quantity.
@@ -986,6 +1057,10 @@ ENDMETHOD.
     IF result-usable_quantity < 0.
       result-usable_quantity = 0.
     ENDIF.
+    result-root_transaction_uuid = root-transaction_uuid.
+    result-work_id = root-work_id.
+    result-shift_id = root-shift_id.
+    result-work_date = root-work_date.
     result-is_valid = abap_true.
   ENDMETHOD.
 
@@ -1149,16 +1224,16 @@ ENDMETHOD.
       ENDIF.
       IF existing_txns IS NOT INITIAL.
         DATA(existing_txn) = existing_txns[ 1 ].
-         IF existing_txn-actor_user_uuid = auth-user_uuid
-            AND existing_txn-operation_uuid = operation-OperationUUID
-           AND existing_txn-transaction_type = zcl_pp_txn_type=>initial_assign
-           AND existing_txn-to_worker_id = input-ToWorkerID
-           AND existing_txn-work_id = input-WorkID
-           AND existing_txn-quantity = input-Quantity
-           AND existing_txn-uom = input-UnitOfMeasure
-           AND existing_txn-shift_id = input-ShiftID
-           AND existing_txn-executed_at = input-ExecutedAt
-           AND existing_txn-execution_date = input-ExecutionDate.
+        IF existing_txn-actor_user_uuid = auth-user_uuid
+           AND existing_txn-operation_uuid = operation-OperationUUID
+          AND existing_txn-transaction_type = zcl_pp_txn_type=>initial_assign
+          AND existing_txn-to_worker_id = input-ToWorkerID
+          AND existing_txn-work_id = input-WorkID
+          AND existing_txn-quantity = input-Quantity
+          AND existing_txn-uom = input-UnitOfMeasure
+          AND existing_txn-shift_id = input-ShiftID
+          AND existing_txn-executed_at = input-ExecutedAt
+          AND existing_txn-execution_date = input-ExecutionDate.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
           report_instance_failure(
@@ -1214,15 +1289,26 @@ ENDMETHOD.
             LastExecutionDate = input-ExecutionDate ) ).
       ENDIF.
 
+      DATA(allocation_root) = find_allocation_root( operation_uuid = operation-OperationUUID
+                                              worker_id = input-ToWorkerID
+                                              work_id = input-WorkID
+                                              shift_id = shift-shift_id
+                                              work_date = shift-work_date
+                                              uom = input-UnitOfMeasure ).
+
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
-          ( SyncItemUUID ActorUserUUID VerifiedWorkerUserUUID WorkerVerifiedAt
+          (             OriginalTransactionUUID OriginalTransactionType SyncItemUUID ActorUserUUID VerifiedWorkerUserUUID WorkerVerifiedAt
             InitiatorSessionID DeviceID VerificationMethod TransactionType
              WorkerID ToWorkerID WorkID Quantity UnitOfMeasure ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt
              ShiftEndAt ShiftTimeZone ShiftValidFrom
             TransactionStatus SourceChannel )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
-          ( %cid = |TXN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
+          ( %cid = |TXN{ sy-tabix }|
+            OriginalTransactionUUID = allocation_root
+            OriginalTransactionType = COND #( WHEN allocation_root IS NOT INITIAL
+                                              THEN zcl_pp_txn_type=>initial_assign )
+            SyncItemUUID = input-SyncItemUUID
             ActorUserUUID = auth-user_uuid
             VerifiedWorkerUserUUID = worker_auth-worker_user_uuid
             WorkerVerifiedAt = utclong_current( )
@@ -1355,17 +1441,17 @@ ENDMETHOD.
       ENDIF.
       IF existing_txns IS NOT INITIAL.
         DATA(existing_txn) = existing_txns[ 1 ].
-         IF existing_txn-actor_user_uuid = auth-user_uuid
-            AND existing_txn-operation_uuid = operation-OperationUUID
-           AND existing_txn-transaction_type = zcl_pp_txn_type=>transfer
-           AND existing_txn-from_worker_id = input-FromWorkerID
-           AND existing_txn-to_worker_id = input-ToWorkerID
-           AND existing_txn-work_id = input-WorkID
-           AND existing_txn-quantity = input-Quantity
-           AND existing_txn-uom = input-UnitOfMeasure
-           AND existing_txn-shift_id = input-ShiftID
-           AND existing_txn-executed_at = input-ExecutedAt
-           AND existing_txn-execution_date = input-ExecutionDate.
+        IF existing_txn-actor_user_uuid = auth-user_uuid
+           AND existing_txn-operation_uuid = operation-OperationUUID
+          AND existing_txn-transaction_type = zcl_pp_txn_type=>transfer
+          AND existing_txn-from_worker_id = input-FromWorkerID
+          AND existing_txn-to_worker_id = input-ToWorkerID
+          AND existing_txn-work_id = input-WorkID
+          AND existing_txn-quantity = input-Quantity
+          AND existing_txn-uom = input-UnitOfMeasure
+          AND existing_txn-shift_id = input-ShiftID
+          AND existing_txn-executed_at = input-ExecutedAt
+          AND existing_txn-execution_date = input-ExecutionDate.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
           report_instance_failure(
@@ -1550,17 +1636,17 @@ ENDMETHOD.
       ENDIF.
       IF existing_txns IS NOT INITIAL.
         DATA(existing_txn) = existing_txns[ 1 ].
-         IF existing_txn-actor_user_uuid = auth-user_uuid
-            AND existing_txn-operation_uuid = operation-OperationUUID
-           AND existing_txn-original_transaction_uuid = input-OriginalTransactionUUID
-           AND existing_txn-transaction_type = zcl_pp_txn_type=>recall
-           AND existing_txn-worker_id = input-WorkerID
-           AND existing_txn-work_id = input-WorkID
-           AND existing_txn-quantity = input-Quantity
-           AND existing_txn-uom = input-UnitOfMeasure
-           AND existing_txn-shift_id = input-ShiftID
-           AND existing_txn-executed_at = input-ExecutedAt
-           AND existing_txn-execution_date = input-ExecutionDate.
+        IF existing_txn-actor_user_uuid = auth-user_uuid
+           AND existing_txn-operation_uuid = operation-OperationUUID
+          AND existing_txn-original_transaction_uuid = input-OriginalTransactionUUID
+          AND existing_txn-transaction_type = zcl_pp_txn_type=>recall
+          AND existing_txn-worker_id = input-WorkerID
+          AND existing_txn-work_id = input-WorkID
+          AND existing_txn-quantity = input-Quantity
+          AND existing_txn-uom = input-UnitOfMeasure
+          AND existing_txn-shift_id = input-ShiftID
+          AND existing_txn-executed_at = input-ExecutedAt
+          AND existing_txn-execution_date = input-ExecutionDate.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
           report_instance_failure(
@@ -1746,17 +1832,17 @@ ENDMETHOD.
       ENDIF.
       IF existing_txns IS NOT INITIAL.
         DATA(existing_txn) = existing_txns[ 1 ].
-         IF existing_txn-actor_user_uuid = auth-user_uuid
-            AND existing_txn-operation_uuid = operation-OperationUUID
-           AND existing_txn-transaction_type = zcl_pp_txn_type=>confirm
-           AND existing_txn-worker_id = input-WorkerID
-           AND existing_txn-work_id = input-WorkID
-           AND existing_txn-quantity = input-Quantity
-           AND existing_txn-uom = input-UnitOfMeasure
-           AND existing_txn-shift_id = input-ShiftID
-           AND existing_txn-executed_at = input-ExecutedAt
-           AND existing_txn-execution_date = input-ExecutionDate
-           AND existing_txn-original_transaction_uuid = input-OriginalTransactionUUID.
+        IF existing_txn-actor_user_uuid = auth-user_uuid
+           AND existing_txn-operation_uuid = operation-OperationUUID
+          AND existing_txn-transaction_type = zcl_pp_txn_type=>confirm
+          AND existing_txn-worker_id = input-WorkerID
+          AND existing_txn-work_id = input-WorkID
+          AND existing_txn-quantity = input-Quantity
+          AND existing_txn-uom = input-UnitOfMeasure
+          AND existing_txn-shift_id = input-ShiftID
+          AND existing_txn-executed_at = input-ExecutedAt
+          AND existing_txn-execution_date = input-ExecutionDate
+          AND existing_txn-original_transaction_uuid = input-OriginalTransactionUUID.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
           report_instance_failure(
@@ -1913,11 +1999,11 @@ ENDMETHOD.
       ENDIF.
       IF existing_receipts IS NOT INITIAL.
         DATA(existing_receipt) = existing_receipts[ 1 ].
-         IF existing_receipt-actor_user_uuid = auth-user_uuid
-           AND existing_receipt-operation_uuid = operation-OperationUUID
-           AND existing_receipt-transaction_type = zcl_pp_txn_type=>reverse
-           AND existing_receipt-work_id = input-WorkID
-           AND existing_receipt-original_transaction_uuid = input-TransactionUUID.
+        IF existing_receipt-actor_user_uuid = auth-user_uuid
+          AND existing_receipt-operation_uuid = operation-OperationUUID
+          AND existing_receipt-transaction_type = zcl_pp_txn_type=>reverse
+          AND existing_receipt-work_id = input-WorkID
+          AND existing_receipt-original_transaction_uuid = input-TransactionUUID.
           APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
         ELSE.
           report_instance_failure(
@@ -2602,17 +2688,19 @@ ENDMETHOD.
       _Entries = VALUE #( FOR entry IN history-entries
         ( TransactionUUID = entry-transaction_uuid ExecutionDate = entry-execution_date
           ShiftID = entry-shift_id
+          OriginalTransactionUUID = entry-original_transaction_uuid
           WorkDate = entry-work_date
           ExecutedAt = entry-executed_at
           ShiftStartAt = entry-shift_start_at
           ShiftEndAt = entry-shift_end_at
           ShiftTimeZone = entry-shift_time_zone
           ShiftValidFrom = entry-shift_valid_from
-        WorkerID = entry-worker_id WorkerName = entry-worker_name
-        ProductionOrder = entry-production_order Operation = entry-operation_no
-        OperationName = entry-operation_name
-        SalesOrder = entry-sales_order SalesOrderItem = entry-sales_order_item
-          Product = entry-product ProductName = entry-product_name
+          WorkerID = entry-worker_id WorkerName = entry-worker_name
+          ProductionOrder = entry-production_order Operation = entry-operation_no
+          OperationName = entry-operation_name
+          SalesOrder = alpha_out_no_gaps( entry-sales_order )
+          SalesOrderItem = alpha_out_no_gaps( entry-sales_order_item )
+          Product = alpha_out_no_gaps( entry-product ) ProductName = entry-product_name
           Plant = entry-plant WorkCenter = entry-work_center WorkID = entry-work_id
           TransactionType = entry-transaction_type Quantity = entry-quantity
           UnitOfMeasure = entry-uom TransactionStatus = entry-transaction_status ) ) ) ) ).
@@ -2771,4 +2859,13 @@ ENDMETHOD.
         ExecutedAt = shift-executed_at ) ) ).
     ENDLOOP.
   ENDMETHOD.
+
+  METHOD alpha_out_no_gaps.
+    rv_value = |{ iv_value ALPHA = OUT }|.
+    CONDENSE rv_value NO-GAPS.
+  ENDMETHOD.
+
+
+
 ENDCLASS.
+

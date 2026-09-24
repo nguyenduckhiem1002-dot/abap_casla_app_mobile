@@ -57,6 +57,7 @@ CLASS zcl_pp_work_history DEFINITION
 
     TYPES: BEGIN OF history_entry,
              transaction_uuid   TYPE ztb_pp_alloc_txn-transaction_uuid,
+             original_transaction_uuid TYPE ztb_pp_alloc_txn-original_transaction_uuid,
              execution_date     TYPE ztb_pp_alloc_txn-execution_date,
              shift_id TYPE ztb_pp_alloc_txn-shift_id,
              work_date TYPE ztb_pp_alloc_txn-work_date,
@@ -113,6 +114,7 @@ CLASS zcl_pp_work_history DEFINITION
       RETURNING VALUE(result)   TYPE history
       RAISING   cx_abap_message_digest zcx_mob_config.
 
+protected section.
   PRIVATE SECTION.
     TYPES: BEGIN OF root_key,
              transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid,
@@ -241,7 +243,11 @@ CLASS zcl_pp_work_history DEFINITION
       CHANGING rows TYPE ledger_rows.
 ENDCLASS.
 
-CLASS zcl_pp_work_history IMPLEMENTATION.
+
+
+CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
+
+
   METHOD read.
     DATA(auth) = zcl_mob_token_validator=>validate_token(
       token = access_token
@@ -367,6 +373,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     result-is_valid = abap_true.
   ENDMETHOD.
 
+
   METHOD resolve_range.
     DATA(today) = cl_abap_context_info=>get_system_date( ).
     "Client không gửi range hoặc gửi code từ app version mới sẽ nhận cửa sổ
@@ -408,6 +415,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     ENDCASE.
   ENDMETHOD.
 
+
   METHOD worker_of_account.
     "Account lưu WorkerID ở field riêng, cũng là field verify_worker_password dùng
     "để lookup. Field phía account rộng hơn field ledger nên ID không vừa sẽ bị
@@ -430,6 +438,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       CLEAR result.
     ENDIF.
   ENDMETHOD.
+
 
   METHOD select_self.
     SELECT FROM ztb_pp_alloc_txn AS txn
@@ -460,6 +469,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       <row>-report_worker_id = worker.
     ENDLOOP.
   ENDMETHOD.
+
 
   METHOD select_team.
     "Bước 1: lấy các assignment supervisor này đã ghi nhận. Scope được đóng băng
@@ -601,6 +611,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     SORT result BY execution_date DESCENDING transaction_uuid report_worker_id.
   ENDMETHOD.
 
+
   METHOD expand_roots.
     DATA(expanded) = abap_true.
     WHILE expanded = abap_true.
@@ -620,6 +631,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       ENDLOOP.
     ENDWHILE.
   ENDMETHOD.
+
 
   METHOD summarize.
     LOOP AT rows ASSIGNING FIELD-SYMBOL(<row>).
@@ -720,6 +732,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
+
   METHOD add_quantity.
     IF worker IS INITIAL.
       RETURN.
@@ -737,6 +750,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     <summary>-completed = <summary>-completed + completed.
     <summary>-txn_count = <summary>-txn_count + 1.
   ENDMETHOD.
+
 
   METHOD enrich_work_context.
     DATA wanted TYPE RANGE OF ztb_mob_work-work_id.
@@ -764,6 +778,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
+
   METHOD build_entries.
     LOOP AT rows ASSIGNING FIELD-SYMBOL(<row>) TO max_entry_rows.
       APPEND VALUE #(
@@ -789,10 +804,12 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
         work_id = <row>-work_id
         transaction_type = <row>-transaction_type
         quantity = <row>-quantity
+        original_transaction_uuid = <row>-original_transaction_uuid
         uom = <row>-uom
         transaction_status = <row>-transaction_status ) TO result.
     ENDLOOP.
   ENDMETHOD.
+
 
   METHOD enrich_business_details.
     "Lấy các khóa duy nhất trước để tránh SELECT lặp lại cho từng dòng ledger.
@@ -922,6 +939,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
+
   METHOD read_master.
     DATA wanted TYPE RANGE OF zi_pp_workerref-workerid.
     LOOP AT history-workers ASSIGNING FIELD-SYMBOL(<summary>).
@@ -947,6 +965,7 @@ CLASS zcl_pp_work_history IMPLEMENTATION.
       WHERE workerid IN @wanted
       INTO TABLE @result.
   ENDMETHOD.
+
 
   METHOD resolve_names.
     DATA(master) = read_master( history ).

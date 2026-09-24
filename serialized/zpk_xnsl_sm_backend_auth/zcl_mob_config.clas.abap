@@ -35,7 +35,9 @@ CLASS zcl_mob_config DEFINITION
 ENDCLASS.
 
 
-CLASS zcl_mob_config IMPLEMENTATION.
+
+CLASS ZCL_MOB_CONFIG IMPLEMENTATION.
+
 
   METHOD if_oo_adt_classrun~main.
 
@@ -157,5 +159,4 @@ CLASS zcl_mob_config IMPLEMENTATION.
     rv_affected_rows = sy-dbcnt.
 
   ENDMETHOD.
-
 ENDCLASS.

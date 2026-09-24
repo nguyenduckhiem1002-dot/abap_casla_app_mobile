@@ -7,6 +7,7 @@ CLASS zcl_mob_sec_config DEFINITION
     CLASS-METHODS get_token_secret
       RETURNING VALUE(result) TYPE string
       RAISING zcx_mob_config.
+protected section.
   PRIVATE SECTION.
     CLASS-METHODS get_required_value
       IMPORTING config_key TYPE ztb_mob_config-config_key
@@ -14,13 +15,21 @@ CLASS zcl_mob_sec_config DEFINITION
       RAISING zcx_mob_config.
 ENDCLASS.
 
-CLASS zcl_mob_sec_config IMPLEMENTATION.
+
+
+CLASS ZCL_MOB_SEC_CONFIG IMPLEMENTATION.
+
+
   METHOD get_password_secret.
     result = get_required_value( 'PASSWORD_PEPPER' ).
   ENDMETHOD.
+
+
   METHOD get_token_secret.
     result = get_required_value( 'TOKEN_SECRET' ).
   ENDMETHOD.
+
+
   METHOD get_required_value.
     SELECT FROM ztb_mob_config FIELDS config_value
       WHERE config_key = @config_key AND is_active = @abap_true

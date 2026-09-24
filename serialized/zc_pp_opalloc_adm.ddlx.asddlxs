@@ -50,16 +50,16 @@ annotate entity ZC_PP_OpAlloc_Adm with
   @EndUserText.label: 'Mã công đoạn'
   MaCongDoan;
 
-  @UI.lineItem: [ { position: 40, label: 'Nhà máy' } ]
+  @UI.lineItem: [ { position: 40, label: 'Plant' } ]
   @UI.identification: [{ position: 40 }]
   @UI.selectionField: [{ position: 30 }]
-  @EndUserText.label: 'Nhà máy'
+  @EndUserText.label: 'Plant'
   Plant;
 
-  @UI.lineItem: [ { position: 50, label: 'Tổ/Work Center' } ]
+  @UI.lineItem: [ { position: 50, label: 'Work Center' } ]
   @UI.identification: [{ position: 50 }]
   @UI.selectionField: [{ position: 40 }]
-  @EndUserText.label: 'Trung tâm làm việc'
+  @EndUserText.label: 'Work Center'
   WorkCenter;
 
   @UI.lineItem: [ { position: 60, label: 'Sản lượng công đoạn' } ]

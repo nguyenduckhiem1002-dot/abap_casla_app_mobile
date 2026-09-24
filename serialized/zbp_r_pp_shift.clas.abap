@@ -3,7 +3,11 @@ CLASS zbp_r_pp_shift DEFINITION
   ABSTRACT
   FINAL
   FOR BEHAVIOR OF zr_pp_shift.
+protected section.
+private section.
 ENDCLASS.
 
-CLASS zbp_r_pp_shift IMPLEMENTATION.
+
+
+CLASS ZBP_R_PP_SHIFT IMPLEMENTATION.
 ENDCLASS.

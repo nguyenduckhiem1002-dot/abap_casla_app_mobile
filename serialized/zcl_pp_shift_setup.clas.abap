@@ -1,13 +1,19 @@
 CLASS zcl_pp_shift_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     INTERFACES if_oo_adt_classrun.
+protected section.
   PRIVATE SECTION.
     "Fill these from the real plant and SAP time-zone configuration before F9.
     CONSTANTS plant TYPE ztb_pp_shift-plant VALUE ''.
     CONSTANTS time_zone TYPE ztb_pp_shift-time_zone VALUE ''.
     CONSTANTS valid_from TYPE d VALUE '20260907'.
 ENDCLASS.
-CLASS zcl_pp_shift_setup IMPLEMENTATION.
+
+
+
+CLASS ZCL_PP_SHIFT_SETUP IMPLEMENTATION.
+
+
   METHOD if_oo_adt_classrun~main.
     IF plant IS INITIAL OR time_zone IS INITIAL.
       out->write( 'Dien PLANT va TIME_ZONE SAP that trong constants truoc khi chay.' ).

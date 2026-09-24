@@ -17,9 +17,15 @@ CLASS zcl_mob_password_service DEFINITION
                 password TYPE string
       RETURNING VALUE(result) TYPE verification
       RAISING cx_abap_message_digest zcx_mob_config.
+protected section.
+private section.
 ENDCLASS.
 
-CLASS zcl_mob_password_service IMPLEMENTATION.
+
+
+CLASS ZCL_MOB_PASSWORD_SERVICE IMPLEMENTATION.
+
+
   METHOD calculate_hash.
     IF password IS INITIAL OR salt IS INITIAL OR iterations <= 0.
       RETURN.
@@ -32,6 +38,7 @@ CLASS zcl_mob_password_service IMPLEMENTATION.
     ENDDO.
     hash = hash_value.
   ENDMETHOD.
+
 
   METHOD verify_worker.
     IF worker_id IS INITIAL OR password IS INITIAL.

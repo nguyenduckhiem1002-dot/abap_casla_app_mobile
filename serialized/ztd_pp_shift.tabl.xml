@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <abapGit version="v1.0.0" serializer="LCL_OBJECT_TABL" serializer_version="v1.0.0">
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
@@ -64,6 +64,7 @@
      <DATATYPE>DATS</DATATYPE>
      <LENG>000008</LENG>
      <MASK>  DATS</MASK>
+     <SHLPORIGIN>T</SHLPORIGIN>
     </DD03P>
     <DD03P>
      <FIELDNAME>SHIFTNAME</FIELDNAME>
@@ -82,6 +83,7 @@
      <DATATYPE>TIMS</DATATYPE>
      <LENG>000006</LENG>
      <MASK>  TIMS</MASK>
+     <SHLPORIGIN>T</SHLPORIGIN>
     </DD03P>
     <DD03P>
      <FIELDNAME>ENDTIME</FIELDNAME>
@@ -91,11 +93,12 @@
      <DATATYPE>TIMS</DATATYPE>
      <LENG>000006</LENG>
      <MASK>  TIMS</MASK>
+     <SHLPORIGIN>T</SHLPORIGIN>
     </DD03P>
     <DD03P>
      <FIELDNAME>ENDDAYOFFSET</FIELDNAME>
      <ADMINFIELD>0</ADMINFIELD>
-     <INTTYPE>B</INTTYPE>
+     <INTTYPE>X</INTTYPE>
      <INTLEN>000001</INTLEN>
      <DATATYPE>INT1</DATATYPE>
      <LENG>000003</LENG>
@@ -118,6 +121,7 @@
      <DATATYPE>DATS</DATATYPE>
      <LENG>000008</LENG>
      <MASK>  DATS</MASK>
+     <SHLPORIGIN>T</SHLPORIGIN>
     </DD03P>
     <DD03P>
      <FIELDNAME>ISACTIVE</FIELDNAME>

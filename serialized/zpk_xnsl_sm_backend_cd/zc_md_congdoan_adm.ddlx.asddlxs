@@ -25,12 +25,12 @@ annotate entity ZC_MD_CongDoan_Adm with
   @UI.lineItem: [ { position: 30, label: 'Bộ phận' } ]
   @UI.identification: [ { position: 30, label: 'Bộ phận' } ]
   @UI.selectionField: [{ position: 30 }]
-  @EndUserText.label: 'Bộ phận'
+  @EndUserText.label: 'Mã Bộ phận'
   BoPhan;
 
   @UI.lineItem: [ { position: 35, label: 'Tên vị trí làm việc' } ]
   @UI.identification: [ { position: 35, label: 'Tên vị trí làm việc' } ]
-  @EndUserText.label: 'Tên vị trí làm việc'
+  @EndUserText.label: 'Tên Bộ Phận'
   WorkName;
 
   @UI.lineItem: [ { position: 36, label: 'Nhà máy' } ]

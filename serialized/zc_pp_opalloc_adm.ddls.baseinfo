@@ -6,9 +6,14 @@
 "ZR_PP_OPALLOC"
 ],
 "ASSOCIATED":
-[],
+[
+"ZC_PP_EMPALLOC_ADM",
+"ZR_PP_EMPALLOC"
+],
 "BASE":
-[],
+[
+"ZR_PP_OPALLOC"
+],
 "ANNO_REF":
 [],
 "SCALAR_FUNCTION":

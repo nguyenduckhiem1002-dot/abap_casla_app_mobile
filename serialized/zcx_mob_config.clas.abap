@@ -3,9 +3,15 @@ CLASS zcx_mob_config DEFINITION
   PUBLIC SECTION.
     METHODS constructor IMPORTING config_key TYPE string.
     DATA config_key TYPE string READ-ONLY.
+protected section.
+private section.
 ENDCLASS.
 
-CLASS zcx_mob_config IMPLEMENTATION.
+
+
+CLASS ZCX_MOB_CONFIG IMPLEMENTATION.
+
+
   METHOD constructor.
     super->constructor( ).
     me->config_key = config_key.

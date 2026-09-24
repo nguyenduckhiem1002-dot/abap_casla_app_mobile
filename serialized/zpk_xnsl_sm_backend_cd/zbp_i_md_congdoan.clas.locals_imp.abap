@@ -17,7 +17,7 @@ CLASS lhc_congdoan IMPLEMENTATION.
       result-%update = if_abap_behv=>auth-allowed.
     ENDIF.
     IF requested_authorizations-%delete = if_abap_behv=>mk-on.
-      result-%delete = if_abap_behv=>auth-unauthorized.
+      result-%delete = if_abap_behv=>auth-allowed.
     ENDIF.
   ENDMETHOD.
 
@@ -83,3 +83,4 @@ CLASS lhc_congdoan IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 ENDCLASS.
+

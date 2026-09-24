@@ -10,7 +10,7 @@ define root view entity ZC_MD_CongDoan_Adm
   key MaCongDoan,
   @EndUserText.label: 'Hiệu lực từ'
   key ValidFrom,
-  @EndUserText.label: 'Bộ phận'
+  @EndUserText.label: 'Mã Bộ phận'
   @Consumption.valueHelpDefinition: [{
     entity: { name: 'ZI_MOB_Work_BoPhan_VH', element: 'BoPhan' },
     useForValidation: true
@@ -18,11 +18,11 @@ define root view entity ZC_MD_CongDoan_Adm
   key BoPhan,
   @EndUserText.label: 'Tên công đoạn'
       TenCongDoan,
-  @EndUserText.label: 'Tên vị trí làm việc'
+  @EndUserText.label: 'Tên bộ phận'
       WorkName,
-  @EndUserText.label: 'Nhà máy'
+  @EndUserText.label: 'Plant'
       Plant,
-  @EndUserText.label: 'Trung tâm làm việc'
+  @EndUserText.label: 'Work Center'
       WorkCenter,
   @EndUserText.label: 'Đơn giá XM'
       DonGiaXM,

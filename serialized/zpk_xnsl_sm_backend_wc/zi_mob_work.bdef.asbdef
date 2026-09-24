@@ -23,6 +23,13 @@ etag master LocalLastChangedAt
   draft action Discard;
   draft action Resume;
   draft determine action Prepare { validation validateWork; }
+  determination setWorkDepartment on modify
+  {
+    create;
+    field WorkID;
+  }
+
+  field ( readonly ) BoPhan;
   mapping for ztb_mob_work
     {
       WorkID             = work_id;

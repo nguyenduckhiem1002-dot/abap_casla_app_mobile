@@ -30,7 +30,7 @@ authorization master ( global )
   LastChangedAt,
   LocalLastChangedAt;
 
-  field ( readonly : update ) WorkerID;
+//  field ( readonly : update ) WorkerID;
 
   association _Credential
   {
