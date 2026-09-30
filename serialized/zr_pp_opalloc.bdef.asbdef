@@ -56,6 +56,16 @@ etag master LocalLastChangedAt
   static action checkOperationAccess parameter ZA_PP_OperationAccessQuery
     result [1] ZA_PP_OperationAccessResult;
 
+  // Vị trí làm việc cho giám sát: xem sơ đồ ghế, xếp và cho rời vị trí.
+  // Mỗi facade xác thực access token/thiết bị và chỉ cho phép trên Work Center
+  // được cấp function PP_POS_TRANSFER (ZCL_PP_POSITION_API).
+  static action getPositionBoard parameter ZA_PP_PosBoardQuery
+    deep result [1] ZA_PP_PosBoardResult;
+  static action submitPositionTransfer parameter ZA_PP_PosTransferCmd
+    result [1] ZA_PP_PosCommandResult;
+  static action submitPositionRelease parameter ZA_PP_PosReleaseCmd
+    result [1] ZA_PP_PosCommandResult;
+
   validation validateOperation on save { create; update; }
 
   mapping for ztb_pp_op_alloc

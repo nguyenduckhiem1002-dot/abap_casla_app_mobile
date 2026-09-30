@@ -78,9 +78,46 @@ hợp, còn khe hở đồng thời tuyệt đối không được xử lý ở 
    G05, B vào G06, rồi A vào G06 → phân công A@G05 và B@G06 thành I, chỉ còn
    A@G06 Active.
 
+## API mobile
+
+Ba static action trên `ZR_PP_OpAlloc`, expose qua service mobile
+`ZUI_PP_OPALLOC` (entity set `OperationAllocations`), logic trong
+`ZCL_PP_POSITION_API`. Mỗi request một lệnh.
+
+**Xác thực (cả ba action):** `AccessToken` + `DeviceID` được kiểm tra đầy đủ —
+token hash còn hạn, khớp thiết bị của session, tài khoản Active, không đang bị
+bắt đổi mật khẩu, có function `PP_POS_TRANSFER`. Sau đó chỉ cho phép trên Work
+Center mà function đó được cấp qua work context của cùng chức danh.
+
+| Action | Tham số | Kết quả |
+| --- | --- | --- |
+| `getPositionBoard` | `AccessToken`, `DeviceID`, `WorkCenter` (trống = mọi Work Center được quyền) | `WorkCenterCount`, `PositionCount`, `_Positions[]`: `WorkCenter`, `PositionID`, `MachineID`, `PositionName`, `WorkerID`, `WorkerName`, `IsOccupied` |
+| `submitPositionTransfer` | `AccessToken`, `DeviceID`, `WorkCenter`, `PositionID`, `WorkerID` | `Status = SUCCESS`, `WorkCenter`, `PositionID`, `MachineID`, `WorkerID`, `Message` |
+| `submitPositionRelease` | `AccessToken`, `DeviceID`, `WorkCenter`, `PositionID` | như trên; `WorkerID` là người vừa rời ghế |
+
+Sơ đồ chỉ gồm vị trí đang dùng; ghế trống có `WorkerID` rỗng.
+`submitPositionTransfer` gọi lại cho người đã ngồi đúng vị trí đó vẫn trả
+`SUCCESS`, nên retry sau timeout an toàn.
+
+**Lỗi** trả theo cùng hợp đồng với các facade PP khác: request lỗi, message là
+mã lỗi.
+
+| Mã lỗi | Ý nghĩa |
+| --- | --- |
+| `AUTH_FAILED` | Thiếu token/thiết bị hoặc lỗi cấu hình băm |
+| `TOKEN_INVALID_OR_EXPIRED`, `DEVICE_MISMATCH`, `USER_INACTIVE`, `PASSWORD_CHANGE_REQUIRED` | Từ bước xác thực token |
+| `MISSING_PERMISSION` | Không có function `PP_POS_TRANSFER` |
+| `NO_WORK_CENTER_SCOPE` | Work Center (của vị trí, hoặc của ghế hiện tại của công nhân) ngoài phạm vi quyền |
+| `INPUT_INVALID` | Thiếu Work Center / vị trí / công nhân |
+| `POSITION_NOT_ACTIVE` | Vị trí chưa có hoặc đang ngừng dùng |
+| `WORKER_NOT_IN_WORK_CENTER` | Công nhân không thuộc Work Center theo master nhân công hôm nay |
+| `SEAT_EMPTY` | Cho rời vị trí đang trống |
+| `POSITION_LOCKED` | Phân công đang được mở bản nháp trên Fiori |
+| `POSITION_SAVE_FAILED` | Không tạo được phân công |
+
+Việc cần làm: tạo function `PP_POS_TRANSFER` trong `ZTB_MOB_FUNC` và gán cho chức
+danh giám sát; work context của chức danh đó phải có Work Center tương ứng.
+
 ## Còn lại
 
-- **Mobile:** sơ đồ ghế + người đang ngồi trong work center được quyền, và điều
-  chuyển từ mobile (kiểm tra function theo work center). Facade sẽ tạo/kích hoạt
-  phân công qua EML, nên dùng đúng các quy tắc ở trên.
 - **Ledger:** đóng dấu vị trí/máy vào `ZTB_PP_ALLOC_TXN` lúc post giao dịch.

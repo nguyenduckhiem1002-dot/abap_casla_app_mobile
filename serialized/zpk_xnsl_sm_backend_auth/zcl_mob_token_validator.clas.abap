@@ -83,6 +83,15 @@ CLASS zcl_mob_token_validator DEFINITION
                 func_id TYPE ztb_mob_func-func_id
                 work_id TYPE ztb_mob_work-work_id
       RETURNING VALUE(result) TYPE abap_bool.
+    TYPES work_centers TYPE SORTED TABLE OF ztb_mob_work-workcenter
+                       WITH UNIQUE KEY table_line.
+    "Các Work Center mà tài khoản được cấp function, với function và Work
+    "Center do cùng một role cấp. Dùng cho chức năng không gắn Plant/công đoạn
+    "(quản lý vị trí ngồi của công nhân).
+    CLASS-METHODS get_func_work_centers
+      IMPORTING user_uuid TYPE sysuuid_x16
+                func_id TYPE ztb_mob_func-func_id
+      RETURNING VALUE(result) TYPE work_centers.
     "Kiểm tra tài khoản công nhân, vị trí làm việc và bộ phận công đoạn.
     "Hiệu lực ngày của master nhân công vẫn do zcl_pp_worker_validator kiểm tra.
     CLASS-METHODS has_worker_op_scope
@@ -248,6 +257,29 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       INTO TABLE @DATA(grants)
       UP TO 1 ROWS.
     result = xsdbool( grants IS NOT INITIAL ).
+  ENDMETHOD.
+
+  METHOD get_func_work_centers.
+    IF user_uuid IS INITIAL OR func_id IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM ztb_mob_usr_rol AS assignment
+      INNER JOIN ztb_mob_role AS role_hdr
+        ON role_hdr~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_fnc AS role_func
+        ON role_func~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_wrk AS role_work
+        ON role_work~role_id = assignment~role_id
+      INNER JOIN ztb_mob_work AS work
+        ON work~work_id = role_work~work_id
+      FIELDS DISTINCT work~workcenter
+      WHERE assignment~user_uuid = @user_uuid
+        AND role_hdr~status = 'A'
+        AND role_func~func_id = @func_id
+        AND work~is_active = 'A'
+        AND work~workcenter <> ' '
+      INTO TABLE @result.
   ENDMETHOD.
 
   METHOD has_func_work_scope.

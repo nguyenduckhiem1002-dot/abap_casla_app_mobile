@@ -1,0 +1,13 @@
+abstract;
+strict ( 2 );
+with hierarchy;
+
+define behavior for ZA_PP_PosBoardResult
+{
+  association _Positions;
+}
+
+define behavior for ZA_PP_PosBoardItem
+{
+  association _Result;
+}
