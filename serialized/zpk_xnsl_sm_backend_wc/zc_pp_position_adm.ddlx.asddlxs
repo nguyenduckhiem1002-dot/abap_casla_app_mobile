@@ -1,0 +1,120 @@
+@Metadata.layer: #CORE
+@UI.headerInfo: {
+  typeName: 'Vị trí làm việc',
+  typeNamePlural: 'Vị trí làm việc của công nhân',
+  title: { value: 'PositionID' },
+  description: { value: 'PositionName' }
+}
+annotate entity ZC_PP_Position_Adm with
+{
+  @UI.facet: [
+    { id: 'General', purpose: #STANDARD, type: #IDENTIFICATION_REFERENCE,
+      label: 'Thông tin vị trí', position: 10 },
+    { id: 'Occupant', purpose: #STANDARD, type: #FIELDGROUP_REFERENCE,
+      targetQualifier: 'Occupant', label: 'Người đang ngồi', position: 20 },
+    { id: 'History', purpose: #STANDARD, type: #LINEITEM_REFERENCE,
+      targetElement: '_Assignments', label: 'Lịch sử người ngồi', position: 30 }
+  ]
+
+  @EndUserText.label: 'Work Center'
+  @UI.lineItem: [{ position: 10 }]
+  @UI.identification: [{ position: 10 }]
+  @UI.selectionField: [{ position: 10 }]
+  WorkCenter;
+
+  @EndUserText.label: 'Vị trí'
+  @UI.lineItem: [
+    { position: 20 },
+    { type: #FOR_ACTION, dataAction: 'transferWorker', label: 'Điều chuyển công nhân' },
+    { type: #FOR_ACTION, dataAction: 'releasePosition', label: 'Cho rời vị trí' }
+  ]
+  @UI.identification: [
+    { position: 20 },
+    { type: #FOR_ACTION, dataAction: 'transferWorker', label: 'Điều chuyển công nhân' },
+    { type: #FOR_ACTION, dataAction: 'releasePosition', label: 'Cho rời vị trí' }
+  ]
+  @UI.selectionField: [{ position: 20 }]
+  PositionID;
+
+  @EndUserText.label: 'Tên vị trí'
+  @UI.lineItem: [{ position: 30 }]
+  @UI.identification: [{ position: 30 }]
+  PositionName;
+
+  @EndUserText.label: 'Mã máy'
+  @UI.lineItem: [{ position: 40 }]
+  @UI.identification: [{ position: 40 }]
+  @UI.selectionField: [{ position: 30 }]
+  MachineID;
+
+  @EndUserText.label: 'Trạng thái (A/I)'
+  @UI.lineItem: [{ position: 50 }]
+  @UI.identification: [{ position: 50 }]
+  @UI.selectionField: [{ position: 40 }]
+  Status;
+
+  @EndUserText.label: 'Công nhân đang ngồi'
+  @UI.lineItem: [{ position: 60 }]
+  @UI.fieldGroup: [{ qualifier: 'Occupant', position: 10 }]
+  @UI.selectionField: [{ position: 50 }]
+  CurrentWorkerID;
+
+  @EndUserText.label: 'Ngồi từ'
+  @UI.lineItem: [{ position: 70 }]
+  @UI.fieldGroup: [{ qualifier: 'Occupant', position: 20 }]
+  OccupiedSince;
+
+  @EndUserText.label: 'Thao tác gần nhất'
+  @UI.fieldGroup: [{ qualifier: 'Occupant', position: 30 }]
+  LastEventType;
+
+  @EndUserText.label: 'Thời điểm thao tác gần nhất'
+  @UI.fieldGroup: [{ qualifier: 'Occupant', position: 40 }]
+  LastEventAt;
+
+  @EndUserText.label: 'Người ngồi trước đó'
+  @UI.fieldGroup: [{ qualifier: 'Occupant', position: 50 }]
+  LastPrevWorkerID;
+
+  @EndUserText.label: 'Lý do'
+  @UI.fieldGroup: [{ qualifier: 'Occupant', position: 60 }]
+  LastReasonText;
+
+  @EndUserText.label: 'Nguồn thao tác'
+  @UI.fieldGroup: [{ qualifier: 'Occupant', position: 70 }]
+  LastSourceChannel;
+
+  @UI.hidden: true
+  CurrentAssignUUID;
+
+  @UI.hidden: true
+  LastEventUUID;
+
+  @UI.hidden: true
+  LastPrevAssignUUID;
+
+  @UI.hidden: true
+  LastMoverPrevAssign;
+
+  @UI.hidden: true
+  LastActorUserUUID;
+
+  @EndUserText.label: 'Người tạo'
+  @UI.identification: [{ position: 110 }]
+  CreatedBy;
+
+  @EndUserText.label: 'Thời điểm tạo'
+  @UI.identification: [{ position: 120 }]
+  CreatedAt;
+
+  @EndUserText.label: 'Người thay đổi cuối cùng'
+  @UI.identification: [{ position: 130 }]
+  LastChangedBy;
+
+  @EndUserText.label: 'Thời điểm thay đổi cuối cùng'
+  @UI.identification: [{ position: 140 }]
+  LastChangedAt;
+
+  @UI.hidden: true
+  LocalLastChangedAt;
+}

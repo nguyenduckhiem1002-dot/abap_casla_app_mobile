@@ -1,0 +1,74 @@
+managed with additional save implementation in class zbp_r_pp_position unique;
+strict ( 2 );
+with draft;
+
+define behavior for ZR_PP_Position alias Position
+persistent table ztb_pp_position
+draft table ztd_pp_position
+lock master
+total etag LastChangedAt
+authorization master ( global )
+etag master LocalLastChangedAt
+{
+  create;
+  update;
+
+  // Không xóa vị trí: ngừng sử dụng bằng Status = I để lịch sử người ngồi
+  // luôn còn trỏ được về vị trí.
+  field ( mandatory : create, readonly : update ) WorkCenter, PositionID;
+  field ( mandatory ) Status;
+
+  // Người ngồi và thông tin sự kiện chỉ đổi qua transferWorker/releasePosition,
+  // không sửa tay được, để mọi thay đổi đều sinh lịch sử.
+  field ( readonly ) CurrentWorkerID, CurrentAssignUUID, OccupiedSince,
+                     LastEventUUID, LastEventType, LastEventAt,
+                     LastPrevWorkerID, LastPrevAssignUUID, LastMoverPrevAssign,
+                     LastReasonText, LastActorUserUUID, LastSourceChannel,
+                     CreatedBy, CreatedAt, LastChangedBy, LastChangedAt,
+                     LocalLastChangedAt;
+
+  // Điều chuyển công nhân vào vị trí này. Ghế cũ của công nhân được giải
+  // phóng; người đang ngồi ở vị trí này (nếu có) rời ghế và không tự được
+  // xếp chỗ khác.
+  action transferWorker parameter ZA_PP_PosTransfer result [1] $self;
+  // Cho người đang ngồi rời vị trí mà không xếp chỗ mới.
+  action releasePosition parameter ZA_PP_PosRelease result [1] $self;
+
+  validation validatePosition on save { create; update; }
+
+  draft action Edit;
+  draft action Activate optimized;
+  draft action Discard;
+  draft action Resume;
+
+  draft determine action Prepare
+  {
+    validation validatePosition;
+  }
+
+  mapping for ztb_pp_position
+  {
+    WorkCenter          = work_center;
+    PositionID          = position_id;
+    PositionName        = position_name;
+    MachineID           = machine_id;
+    Status              = status;
+    CurrentWorkerID     = current_worker_id;
+    CurrentAssignUUID   = current_assign_uuid;
+    OccupiedSince       = occupied_since;
+    LastEventUUID       = last_event_uuid;
+    LastEventType       = last_event_type;
+    LastEventAt         = last_event_at;
+    LastPrevWorkerID    = last_prev_worker_id;
+    LastPrevAssignUUID  = last_prev_assign_uuid;
+    LastMoverPrevAssign = last_mover_prev_assign;
+    LastReasonText      = last_reason_text;
+    LastActorUserUUID   = last_actor_user_uuid;
+    LastSourceChannel   = last_source_channel;
+    CreatedBy           = created_by;
+    CreatedAt           = created_at;
+    LastChangedBy       = last_changed_by;
+    LastChangedAt       = last_changed_at;
+    LocalLastChangedAt  = local_last_changed_at;
+  }
+}
