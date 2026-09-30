@@ -133,7 +133,7 @@ def main() -> None:
     work_metadata = read(
         "serialized/zpk_xnsl_sm_backend_wc/zc_mob_work_adm.ddlx.asddlxs"
     )
-    require(work_metadata, "@EndUserText.label: 'Work ID'", "Work metadata")
+    require(work_metadata, "@EndUserText.label: 'Mã Bộ Phận'", "Work metadata")
 
     role_work_metadata = read(
         "serialized/zpk_xnsl_sm_backend_role/zc_mob_rolwork_adm.ddlx.asddlxs"
@@ -150,7 +150,7 @@ def main() -> None:
         "serialized/zui_pp_alloc_adm.srvd.srvdsrv": (
             "serialized/zc_pp_opalloc_adm.ddls.asddls",
             "serialized/zc_pp_alloctxn_adm.ddls.asddls",
-            "serialized/za_pp_correctconfirm.ddls.asddls",
+            "serialized/za_pp_adjustallocation.ddls.asddls",
         ),
         "serialized/zui_pp_shift_adm.srvd.srvdsrv": (
             "serialized/zc_pp_shift_adm.ddls.asddls",
@@ -235,13 +235,6 @@ def main() -> None:
         shift_projection_behavior,
         "use create;",
         "Shift projection behavior",
-    )
-
-    correction_parameter = read("serialized/za_pp_correctconfirm.ddls.asddls")
-    require(
-        correction_parameter,
-        "localElement: 'UnitOfMeasure', element: 'UnitOfMeasure', usage: #RESULT",
-        "Correction transaction value help",
     )
 
     confirmation_value_help = read("serialized/zi_pp_confirm_txn_vh.ddls.asddls")

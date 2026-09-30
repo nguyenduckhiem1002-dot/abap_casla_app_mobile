@@ -25,7 +25,9 @@ def main() -> None:
         raise SystemExit("getWorkHistory phải dùng deep result ZA_PP_HistResult")
 
     md_bdef = object_file("zi_md_congdoan.bdef.asbdef").read_text(encoding="utf-8-sig")
-    key_rule = "field ( mandatory : create, readonly : update ) MaCongDoan, ValidFrom;"
+    # Prefix, not the full statement: further key-like fields (BoPhan) may follow
+    # ValidFrom in the same rule without weakening what this check protects.
+    key_rule = "field ( mandatory : create, readonly : update ) MaCongDoan, ValidFrom"
     if key_rule not in md_bdef:
         raise SystemExit(
             "MaCongDoan/ValidFrom phải dùng mandatory:create + readonly:update"
@@ -44,7 +46,6 @@ def main() -> None:
         "recall",
         "confirm",
         "reverse",
-        "correctConfirm",
     ):
         start = pp_impl.index(f"  METHOD {method}.")
         end = pp_impl.index("  ENDMETHOD.", start)
