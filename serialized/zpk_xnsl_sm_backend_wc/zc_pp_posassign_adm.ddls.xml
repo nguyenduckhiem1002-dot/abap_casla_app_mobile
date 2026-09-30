@@ -3,10 +3,10 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <DDLS>
-    <DDLNAME>ZA_PP_POSTRANSFER</DDLNAME>
+    <DDLNAME>ZC_PP_POSASSIGN_ADM</DDLNAME>
     <DDLANGUAGE>E</DDLANGUAGE>
-    <DDTEXT>Tham số điều chuyển công nhân vào vị trí</DDTEXT>
-    <SOURCE_TYPE>A</SOURCE_TYPE>
+    <DDTEXT>Phân công công nhân vào vị trí</DDTEXT>
+    <SOURCE_TYPE>W</SOURCE_TYPE>
    </DDLS>
   </asx:values>
  </asx:abap>

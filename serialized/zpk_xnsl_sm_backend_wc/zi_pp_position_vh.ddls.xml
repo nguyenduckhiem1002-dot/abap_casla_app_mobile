@@ -3,9 +3,9 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <DDLS>
-    <DDLNAME>ZI_PP_POSASSIGN</DDLNAME>
+    <DDLNAME>ZI_PP_POSITION_VH</DDLNAME>
     <DDLANGUAGE>E</DDLANGUAGE>
-    <DDTEXT>Lịch sử công nhân ngồi vị trí</DDTEXT>
+    <DDTEXT>Chọn vị trí làm việc</DDTEXT>
     <SOURCE_TYPE>W</SOURCE_TYPE>
    </DDLS>
   </asx:values>

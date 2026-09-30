@@ -127,6 +127,7 @@ def main() -> None:
         "serialized/zc_pp_alloctxn_adm.ddlx.asddlxs",
         "serialized/zc_pp_shift_adm.ddlx.asddlxs",
         "serialized/zpk_xnsl_sm_backend_wc/zc_pp_position_adm.ddlx.asddlxs",
+        "serialized/zpk_xnsl_sm_backend_wc/zc_pp_posassign_adm.ddlx.asddlxs",
     ]
     for relative in metadata_files:
         require(read(relative), "@Metadata.layer: #CORE", relative)
@@ -158,7 +159,7 @@ def main() -> None:
         ),
         "serialized/zpk_xnsl_sm_backend_wc/zui_pp_pos_adm.srvd.srvdsrv": (
             "serialized/zpk_xnsl_sm_backend_wc/zc_pp_position_adm.ddls.asddls",
-            "serialized/zpk_xnsl_sm_backend_wc/za_pp_postransfer.ddls.asddls",
+            "serialized/zpk_xnsl_sm_backend_wc/zc_pp_posassign_adm.ddls.asddls",
         ),
         "serialized/zui_md_congdoan_adm.srvd.srvdsrv": (
             "serialized/zpk_xnsl_sm_backend_cd/zc_md_congdoan_adm.ddls.asddls",

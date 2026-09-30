@@ -1,5 +1,5 @@
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'Quản lý vị trí công nhân'
+@EndUserText.label: 'Danh mục vị trí làm việc'
 @Metadata.allowExtensions: true
 @Search.searchable: true
 define root view entity ZC_PP_Position_Adm
@@ -12,27 +12,13 @@ define root view entity ZC_PP_Position_Adm
   @Search.defaultSearchElement: true
   key PositionID,
   @Search.defaultSearchElement: true
+  key MachineID,
+  @Search.defaultSearchElement: true
   PositionName,
-  @Search.defaultSearchElement: true
-  MachineID,
   Status,
-  @Search.defaultSearchElement: true
-  CurrentWorkerID,
-  CurrentAssignUUID,
-  OccupiedSince,
-  LastEventUUID,
-  LastEventType,
-  LastEventAt,
-  LastPrevWorkerID,
-  LastPrevAssignUUID,
-  LastMoverPrevAssign,
-  LastReasonText,
-  LastActorUserUUID,
-  LastSourceChannel,
   CreatedBy,
   CreatedAt,
   LastChangedBy,
   LastChangedAt,
-  LocalLastChangedAt,
-  _Assignments
+  LocalLastChangedAt
 }

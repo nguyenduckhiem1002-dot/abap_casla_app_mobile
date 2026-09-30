@@ -1,78 +1,86 @@
 # Quản lý vị trí làm việc của công nhân
 
-Mục tiêu: biết mỗi công nhân đang ngồi vị trí (ghế/máy) nào, điều chuyển vị trí
-có kiểm soát, và giữ lịch sử để về sau trả lời được "lúc phát sinh giao dịch thì
-công nhân ngồi đâu".
+Mục tiêu: biết mỗi công nhân đang ngồi vị trí (ghế/máy) nào và điều chuyển vị trí
+có kiểm soát. Thiết kế giữ ở mức tối thiểu: chỉ quan tâm dòng đang Active.
 
-## Quy tắc nghiệp vụ
+## Bảng
 
-- Vị trí được định danh bởi **Work Center + Vị trí**. Không quản lý Plant; điều
-  kiện là mã work center không trùng giữa các nhà máy.
-- Không tính theo ca. Một vị trí có tối đa **1** công nhân, một công nhân ngồi
-  tối đa **1** vị trí tại một thời điểm.
-- **Điều chuyển W vào vị trí P** (một LUW):
-  1. Ghế cũ của W (nếu có) được giải phóng — lịch sử ghi `TRANSFERRED`.
-  2. Người đang ngồi ở P (nếu có) rời ghế và **không tự được xếp chỗ khác** —
-     lịch sử ghi `BUMPED`.
-  3. W ngồi vào P.
-- **Cho rời vị trí**: gỡ người đang ngồi mà không xếp chỗ mới — `RELEASED`.
-- W phải thuộc work center của P theo master nhân công còn hiệu lực. Chuyển khác
-  work center phải đổi master nhân công trước.
-- Vị trí không bị xóa; ngừng dùng bằng `Status = I`. Không ngừng dùng được vị trí
-  đang có người ngồi. Một mã máy chỉ gắn với một vị trí đang dùng.
-- **Fiori quản trị có toàn quyền** (cổng vào là IAM app). **Chỉ kênh mobile kiểm
-  tra quyền theo work center.**
+**`ZTB_PP_POSITION` — danh mục vị trí**
 
-## Thiết kế
+| Field | Kiểu | Key | Ghi chú |
+| --- | --- | --- | --- |
+| `WORK_CENTER` | CHAR 8 | ✅ | |
+| `POSITION_ID` | CHAR 10 | ✅ | Vị trí |
+| `MACHINE_ID` | CHAR 10 | ✅ | Mã máy |
+| `POSITION_NAME` | CHAR 60 | | Tên/mô tả vị trí |
+| `STATUS` | `ZDE_IS_ACTIVE` (A/I) | | |
+| audit | | | `CREATED_BY/AT`, `LAST_CHANGED_BY/AT`, `LOCAL_LAST_CHANGED_AT` |
+
+**`ZTB_PP_POS_ASGN` — phân công công nhân vào vị trí**
+
+| Field | Kiểu | Key | Ghi chú |
+| --- | --- | --- | --- |
+| `WORK_CENTER` | CHAR 8 | ✅ | |
+| `POSITION_ID` | CHAR 10 | ✅ | |
+| `WORKER_ID` | CHAR 8 | ✅ | Mã công nhân |
+| `STATUS` | `ZDE_IS_ACTIVE` (A/I) | | A đang ngồi / I đã rời |
+| audit | | | như trên |
+
+`ZTD_PP_POSITION`, `ZTD_PP_POS_ASGN` là bảng draft tương ứng.
+
+## Quy tắc
+
+- Không quản lý Plant, không tính theo ca. Không xóa dòng; ngừng dùng bằng `I`.
+- **Một vị trí chỉ có một máy đang dùng.** Tạo dòng Active mới cho vị trí với máy
+  mới thì dòng chứa máy cũ của cùng vị trí **tự chuyển I**. Một máy không được
+  Active ở hai vị trí; muốn chuyển máy sang vị trí khác thì ngừng dùng ở vị trí
+  cũ trước.
+- **Một công nhân ngồi một vị trí, một vị trí có một công nhân.** Tạo (hoặc kích
+  hoạt lại) phân công Active thì:
+  - phân công Active cũ của công nhân đó ở vị trí khác **tự chuyển I**
+    (điều chuyển);
+  - người đang ngồi ở vị trí đó **tự chuyển I** và không được xếp chỗ khác.
+- Chỉ tạo phân công Active được khi vị trí đang có dòng Active, và công nhân
+  thuộc work center của vị trí theo master nhân công tại ngày hiện tại.
+- **"Đang ngồi" = phân công Active và vị trí có dòng Active.** Vị trí bị ngừng dùng
+  thì phân công trên đó không còn được tính, không cần sửa phân công.
+- Gán lại một công nhân về vị trí cũ: mở dòng phân công cũ (key trùng) và đổi
+  trạng thái về `A`, không tạo dòng mới.
+- **Fiori quản trị có toàn quyền.** Quyền theo work center chỉ áp cho mobile.
+
+## Cơ chế
+
+Việc chuyển dòng cũ sang I nằm ở determination `on save` của từng BO
+(`deactivateReplacedMachine`, `deactivateSuperseded`). Validation tương ứng đọc
+lại qua buffer RAP: nếu vì lý do nào đó dòng cũ vẫn còn Active (ví dụ đang có
+người mở bản nháp dòng đó) thì việc lưu bị từ chối, không để lọt hai dòng Active.
+
+Hai thao tác đồng thời trên hai key khác nhau (ví dụ hai quản lý cùng lúc xếp
+hai người vào một ghế) không khóa lẫn nhau; validation bắt được phần lớn trường
+hợp, còn khe hở đồng thời tuyệt đối không được xử lý ở phiên bản đơn giản này.
+
+## Object
 
 | Object | Vai trò |
 | --- | --- |
-| `ZTB_PP_POSITION` | Danh mục vị trí, kèm người đang ngồi và thông tin sự kiện gần nhất |
-| `ZTB_PP_POS_ASGN` | Lịch sử ngồi, append-only: mỗi dòng là một khoảng thời gian một người ngồi một vị trí |
-| `ZR_PP_Position` | BO managed + draft + additional save; action `transferWorker`, `releasePosition` |
-| `ZI_PP_PosAssign` | View đọc lịch sử, hiển thị ở trang chi tiết vị trí |
-| `ZC_PP_Position_Adm`, `ZUI_PP_POS_ADM(_O4)` | App Fiori quản trị |
-
-Người đang ngồi lưu ngay trên dòng vị trí, nên mỗi lần điều chuyển là một lần
-update dòng vị trí và RAP khóa ghế đó: hai thao tác đồng thời không thể xếp hai
-người vào một ghế. Ghế cũ của người được điều chuyển cũng bị update (và khóa)
-trong cùng LUW.
-
-Lịch sử được ghi ở `save_modified` (additional save) từ các trường `Last*` mà
-action đặt. Hai lệnh ghi đều idempotent — chỉ đóng dòng còn mở, chỉ insert khi
-khóa chưa tồn tại — nên draft activation gửi lại dữ liệu cũ không sinh lịch sử
-trùng. Người ngồi và các trường sự kiện là readonly; mọi thay đổi người ngồi đều
-phải đi qua action, vì vậy luôn có lịch sử.
-
-Action bị từ chối trên bản nháp: phải lưu/hủy bản nháp của vị trí trước khi điều
-chuyển. Khi một vị trí đang được sửa ở chế độ nháp, điều chuyển vào/ra vị trí đó
-bị khóa cho tới khi lưu hoặc hủy.
+| `ZR_PP_Position`, `ZBP_R_PP_POSITION` | BO danh mục vị trí (managed, draft) |
+| `ZR_PP_PosAssign`, `ZBP_R_PP_POSASSIGN` | BO phân công (managed, draft) |
+| `ZI_PP_Position_VH` | Value help vị trí đang dùng |
+| `ZC_PP_Position_Adm`, `ZC_PP_PosAssign_Adm` + MDE | Hai màn Fiori |
+| `ZUI_PP_POS_ADM`, `ZUI_PP_POS_ADM_O4` | Service + binding OData V4 |
 
 ## Việc cần làm trên tenant
 
-1. Pull và activate theo thứ tự: 3 bảng → `ZI_PP_PosAssign` → `ZR_PP_Position` →
-   BDEF + `ZBP_R_PP_POSITION` → projection + MDE → service → publish binding
-   `ZUI_PP_POS_ADM_O4`.
-2. Tạo IAM app + business catalog cho app quản trị vị trí và gán cho vai trò quản
-   trị (như các app admin khác).
-3. Kiểm tra: association `_Assignments` từ projection draft sang
-   `ZI_PP_PosAssign` (không thuộc BO) hiển thị được bảng lịch sử trên object page.
-4. Smoke-test: tạo 2 vị trí cùng work center; điều chuyển A vào ghế 1, B vào ghế
-   2, rồi A vào ghế 2 → ghế 1 trống, B không có ghế, lịch sử có
-   `TRANSFERRED` (A rời ghế 1) và `BUMPED` (B rời ghế 2), dòng mới của A trỏ
-   `PreviousAssignUUID` về lượt ngồi ở ghế 1.
+1. Pull và activate: 4 bảng → CDS → BDEF + behavior pool → projection + MDE →
+   service → publish binding `ZUI_PP_POS_ADM_O4`.
+2. Tạo IAM app + business catalog cho hai màn quản trị.
+3. Smoke-test: tạo vị trí G05 máy M1; đổi sang máy M2 (dòng M1 thành I). Gán A vào
+   G05, B vào G06, rồi A vào G06 → phân công A@G05 và B@G06 thành I, chỉ còn
+   A@G06 Active.
 
 ## Còn lại
 
-- **Giai đoạn 2 — mobile:** `getPositionBoard` (sơ đồ ghế + người ngồi trong các
-  work center giám sát được quyền) và `submitPositionTransfer` /
-  `submitPositionRelease`, xác thực token và kiểm tra function `PP_POS_TRANSFER`
-  theo work center của work context. Facade gọi lại đúng `perform_transfer` /
-  `perform_release` để hai kênh dùng chung một bộ quy tắc.
-- **Giai đoạn 3 — ledger:** thêm `POSITION_ID`, `MACHINE_ID` vào
-  `ZTB_PP_ALLOC_TXN`; lúc post giao dịch backend tra lượt ngồi còn hiệu lực tại
-  `EXECUTED_AT` và ghi ảnh chụp vị trí/máy vào dòng ledger.
-- Tên công nhân chưa hiển thị cạnh mã ở danh sách vị trí.
-- Value help chọn công nhân trong hộp thoại điều chuyển chưa lọc theo work center
-  của vị trí đang chọn (tham số action không nhận được ngữ cảnh instance); backend
-  vẫn từ chối công nhân khác work center.
+- **Mobile:** sơ đồ ghế + người đang ngồi trong work center được quyền, và điều
+  chuyển từ mobile (kiểm tra function theo work center). Facade sẽ tạo/kích hoạt
+  phân công qua EML, nên dùng đúng các quy tắc ở trên.
+- **Ledger:** đóng dấu vị trí/máy vào `ZTB_PP_ALLOC_TXN` lúc post giao dịch.

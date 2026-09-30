@@ -1,17 +1,15 @@
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'Danh mục vị trí làm việc của công nhân'
+@EndUserText.label: 'Phân công công nhân vào vị trí'
 @Metadata.allowExtensions: true
-define root view entity ZR_PP_Position
-  as select from ztb_pp_position
+define root view entity ZR_PP_PosAssign
+  as select from ztb_pp_pos_asgn
 {
   @EndUserText.label: 'Work Center'
   key work_center           as WorkCenter,
   @EndUserText.label: 'Vị trí'
   key position_id           as PositionID,
-  @EndUserText.label: 'Mã máy'
-  key machine_id            as MachineID,
-  @EndUserText.label: 'Tên vị trí'
-  position_name             as PositionName,
+  @EndUserText.label: 'Mã công nhân'
+  key worker_id             as WorkerID,
   @EndUserText.label: 'Trạng thái'
   status                    as Status,
   @Semantics.user.createdBy: true

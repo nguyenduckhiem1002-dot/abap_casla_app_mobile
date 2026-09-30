@@ -1,17 +1,17 @@
 @Metadata.layer: #CORE
 @UI.headerInfo: {
-  typeName: 'Vị trí làm việc',
-  typeNamePlural: 'Danh mục vị trí làm việc',
-  title: { value: 'PositionID' },
-  description: { value: 'PositionName' }
+  typeName: 'Phân công vị trí',
+  typeNamePlural: 'Phân công công nhân vào vị trí',
+  title: { value: 'WorkerID' },
+  description: { value: 'PositionID' }
 }
-annotate entity ZC_PP_Position_Adm with
+annotate entity ZC_PP_PosAssign_Adm with
 {
   @UI.facet: [{
     id: 'General',
     purpose: #STANDARD,
     type: #IDENTIFICATION_REFERENCE,
-    label: 'Thông tin vị trí',
+    label: 'Thông tin phân công',
     position: 10
   }]
 
@@ -27,20 +27,15 @@ annotate entity ZC_PP_Position_Adm with
   @UI.selectionField: [{ position: 20 }]
   PositionID;
 
-  @EndUserText.label: 'Mã máy'
+  @EndUserText.label: 'Mã công nhân'
   @UI.lineItem: [{ position: 30 }]
   @UI.identification: [{ position: 30 }]
   @UI.selectionField: [{ position: 30 }]
-  MachineID;
-
-  @EndUserText.label: 'Tên vị trí'
-  @UI.lineItem: [{ position: 40 }]
-  @UI.identification: [{ position: 40 }]
-  PositionName;
+  WorkerID;
 
   @EndUserText.label: 'Trạng thái'
-  @UI.lineItem: [{ position: 50 }]
-  @UI.identification: [{ position: 50 }]
+  @UI.lineItem: [{ position: 40 }]
+  @UI.identification: [{ position: 40 }]
   @UI.selectionField: [{ position: 40 }]
   Status;
 
@@ -49,6 +44,7 @@ annotate entity ZC_PP_Position_Adm with
   CreatedBy;
 
   @EndUserText.label: 'Thời điểm tạo'
+  @UI.lineItem: [{ position: 50 }]
   @UI.identification: [{ position: 120 }]
   CreatedAt;
 

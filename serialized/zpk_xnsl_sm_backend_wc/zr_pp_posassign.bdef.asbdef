@@ -1,0 +1,51 @@
+managed implementation in class zbp_r_pp_posassign unique;
+strict ( 2 );
+with draft;
+
+define behavior for ZR_PP_PosAssign alias Assignment
+persistent table ztb_pp_pos_asgn
+draft table ztd_pp_pos_asgn
+lock master
+total etag LastChangedAt
+authorization master ( global )
+etag master LocalLastChangedAt
+{
+  create;
+  update;
+
+  // Không xóa: kết thúc phân công bằng Status = I.
+  field ( mandatory : create, readonly : update ) WorkCenter, PositionID, WorkerID;
+  field ( mandatory ) Status;
+  field ( readonly ) CreatedBy, CreatedAt, LastChangedBy, LastChangedAt,
+                     LocalLastChangedAt;
+
+  // Một công nhân ngồi một vị trí và một vị trí có một công nhân. Phân công
+  // Active mới làm các phân công Active khác của cùng công nhân (điều chuyển)
+  // và của cùng vị trí (người đang ngồi rời ghế) tự chuyển I.
+  determination deactivateSuperseded on save { create; field Status; }
+
+  validation validateAssignment on save { create; update; }
+
+  draft action Edit;
+  draft action Activate optimized;
+  draft action Discard;
+  draft action Resume;
+
+  draft determine action Prepare
+  {
+    validation validateAssignment;
+  }
+
+  mapping for ztb_pp_pos_asgn
+  {
+    WorkCenter         = work_center;
+    PositionID         = position_id;
+    WorkerID           = worker_id;
+    Status             = status;
+    CreatedBy          = created_by;
+    CreatedAt          = created_at;
+    LastChangedBy      = last_changed_by;
+    LastChangedAt      = last_changed_at;
+    LocalLastChangedAt = local_last_changed_at;
+  }
+}

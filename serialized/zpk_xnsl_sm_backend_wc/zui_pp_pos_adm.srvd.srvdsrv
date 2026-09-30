@@ -1,7 +1,8 @@
 @EndUserText.label: 'Quản lý vị trí công nhân'
 define service ZUI_PP_POS_ADM {
   expose ZC_PP_Position_Adm as Positions;
-  expose ZI_PP_PosAssign as PositionAssignments;
+  expose ZC_PP_PosAssign_Adm as PositionAssignments;
+  expose ZI_PP_Position_VH as PositionValueHelp;
   expose ZI_MOB_WorkCenter_VH as WorkCenterValueHelp;
   expose ZI_PP_Worker_VH as WorkerValueHelp;
 }

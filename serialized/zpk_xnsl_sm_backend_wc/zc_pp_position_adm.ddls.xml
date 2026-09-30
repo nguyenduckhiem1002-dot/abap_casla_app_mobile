@@ -5,7 +5,7 @@
    <DDLS>
     <DDLNAME>ZC_PP_POSITION_ADM</DDLNAME>
     <DDLANGUAGE>E</DDLANGUAGE>
-    <DDTEXT>Quản lý vị trí công nhân</DDTEXT>
+    <DDTEXT>Danh mục vị trí làm việc</DDTEXT>
     <SOURCE_TYPE>W</SOURCE_TYPE>
    </DDLS>
   </asx:values>
