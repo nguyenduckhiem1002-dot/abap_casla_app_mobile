@@ -3,9 +3,9 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <DDLS>
-    <DDLNAME>ZA_PP_POSRELEASECMD</DDLNAME>
+    <DDLNAME>ZA_PP_POSCREATECMD</DDLNAME>
     <DDLANGUAGE>E</DDLANGUAGE>
-    <DDTEXT>Lệnh cho công nhân rời vị trí</DDTEXT>
+    <DDTEXT>Lệnh tạo vị trí làm việc</DDTEXT>
     <SOURCE_TYPE>A</SOURCE_TYPE>
    </DDLS>
   </asx:values>

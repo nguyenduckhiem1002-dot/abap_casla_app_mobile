@@ -1,0 +1,9 @@
+projection;
+strict ( 2 );
+
+define behavior for ZC_PP_PosAssign alias Assignment
+{
+  // Mobile chỉ gọi facade; không expose create/update/draft. Đọc trực tiếp
+  // entity bị chặn bởi DCL.
+  use action submitPositionTransfer;
+}

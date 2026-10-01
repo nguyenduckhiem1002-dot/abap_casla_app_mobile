@@ -1,0 +1,6 @@
+@EndUserText.label: 'Chặn đọc mặc định phân công vị trí'
+@MappingRole: true
+define role ZR_PP_POSASSIGN {
+  grant select on ZR_PP_PosAssign
+    where Status = '' and Status <> '';
+}

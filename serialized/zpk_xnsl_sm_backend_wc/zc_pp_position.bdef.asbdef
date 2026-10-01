@@ -1,0 +1,11 @@
+projection;
+strict ( 2 );
+
+define behavior for ZC_PP_Position alias Position
+{
+  // Mobile chỉ gọi các facade; không expose create/update/draft. Đọc trực
+  // tiếp entity bị chặn bởi DCL.
+  use action getPositionBoard;
+  use action submitPositionCreate;
+  use action submitMachineChange;
+}

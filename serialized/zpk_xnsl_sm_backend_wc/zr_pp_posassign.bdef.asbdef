@@ -13,6 +13,11 @@ etag master LocalLastChangedAt
   create;
   update;
 
+  // Mobile (giám sát): xếp công nhân vào vị trí. Facade xác thực access
+  // token/thiết bị và phạm vi Work Center (ZCL_PP_POSITION_API).
+  static action submitPositionTransfer parameter ZA_PP_PosTransferCmd
+    result [1] ZA_PP_PosCommandResult;
+
   // Không xóa: kết thúc phân công bằng Status = I.
   field ( mandatory : create, readonly : update ) WorkCenter, PositionID, WorkerID;
   field ( mandatory ) Status;

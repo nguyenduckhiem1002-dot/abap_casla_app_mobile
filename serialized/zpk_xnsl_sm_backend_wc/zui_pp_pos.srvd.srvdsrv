@@ -1,0 +1,5 @@
+@EndUserText.label: 'API vị trí công nhân cho mobile'
+define service ZUI_PP_POS {
+  expose ZC_PP_Position as Positions;
+  expose ZC_PP_PosAssign as PositionAssignments;
+}

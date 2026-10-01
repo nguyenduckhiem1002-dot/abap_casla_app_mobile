@@ -1,0 +1,6 @@
+@EndUserText.label: 'Chặn đọc trực tiếp API phân công'
+@MappingRole: true
+define role ZC_PP_POSASSIGN {
+  grant select on ZC_PP_PosAssign
+    where inheriting conditions from entity ZR_PP_PosAssign;
+}

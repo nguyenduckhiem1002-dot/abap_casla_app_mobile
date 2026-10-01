@@ -1,0 +1,6 @@
+@EndUserText.label: 'Chặn đọc trực tiếp API vị trí'
+@MappingRole: true
+define role ZC_PP_POSITION {
+  grant select on ZC_PP_Position
+    where inheriting conditions from entity ZR_PP_Position;
+}

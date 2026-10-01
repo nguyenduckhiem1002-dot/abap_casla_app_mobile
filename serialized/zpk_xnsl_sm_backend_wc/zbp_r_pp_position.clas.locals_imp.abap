@@ -15,6 +15,17 @@ CLASS lhc_position DEFINITION INHERITING FROM cl_abap_behavior_handler.
 
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
       IMPORTING REQUEST requested_authorizations FOR Position RESULT result.
+    "Facade mobile cho giám sát; logic và kiểm tra quyền nằm trong
+    "ZCL_PP_POSITION_API.
+    METHODS getPositionBoard FOR MODIFY
+      IMPORTING keys   FOR ACTION Position~getPositionBoard
+      RESULT    result.
+    METHODS submitPositionCreate FOR MODIFY
+      IMPORTING keys   FOR ACTION Position~submitPositionCreate
+      RESULT    result.
+    METHODS submitMachineChange FOR MODIFY
+      IMPORTING keys   FOR ACTION Position~submitMachineChange
+      RESULT    result.
     METHODS deactivateReplacedMachine FOR DETERMINE ON SAVE
       IMPORTING keys FOR Position~deactivateReplacedMachine.
     METHODS validatePosition FOR VALIDATE ON SAVE
@@ -32,6 +43,13 @@ CLASS lhc_position DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS still_active
       IMPORTING candidates    TYPE position_keys
       RETURNING VALUE(result) TYPE position_rows.
+
+    TYPES failed_response TYPE RESPONSE FOR FAILED zr_pp_position.
+    TYPES reported_response TYPE RESPONSE FOR REPORTED zr_pp_position.
+    "Lỗi facade mobile: request bị từ chối, message là mã lỗi.
+    METHODS report_failure
+      IMPORTING cid TYPE string text TYPE string
+      CHANGING failed TYPE failed_response reported TYPE reported_response.
 ENDCLASS.
 
 CLASS lhc_position IMPLEMENTATION.
@@ -43,6 +61,11 @@ CLASS lhc_position IMPLEMENTATION.
     IF requested_authorizations-%update = if_abap_behv=>mk-on.
       result-%update = if_abap_behv=>auth-allowed.
     ENDIF.
+    "Facade mobile tự xác thực token, thiết bị và phạm vi Work Center. Gán
+    "thẳng thay vì IF theo request: RAP chỉ đọc các thao tác được yêu cầu.
+    result-%action-getPositionBoard = if_abap_behv=>auth-allowed.
+    result-%action-submitPositionCreate = if_abap_behv=>auth-allowed.
+    result-%action-submitMachineChange = if_abap_behv=>auth-allowed.
   ENDMETHOD.
 
   METHOD deactivateReplacedMachine.
@@ -172,5 +195,136 @@ CLASS lhc_position IMPLEMENTATION.
             MachineID = candidate-machine_id ) )
       RESULT DATA(rows).
     result = VALUE #( FOR row IN rows WHERE ( Status = status_active ) ( row ) ).
+  ENDMETHOD.
+
+  METHOD getPositionBoard.
+    IF keys IS INITIAL.
+      RETURN.
+    ENDIF.
+    IF lines( keys ) > 1.
+      LOOP AT keys ASSIGNING FIELD-SYMBOL(<board_key>).
+        report_failure( EXPORTING cid = CONV string( <board_key>-%cid )
+                          text = 'Mỗi yêu cầu chỉ được xem một sơ đồ vị trí'
+                        CHANGING failed = failed reported = reported ).
+      ENDLOOP.
+      RETURN.
+    ENDIF.
+    DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
+    TRY.
+        DATA(board) = zcl_pp_position_api=>get_board(
+          access_token = CONV string( input-AccessToken )
+          device_id = input-DeviceID
+          work_center = input-WorkCenter ).
+      CATCH cx_abap_message_digest zcx_mob_config.
+        report_failure( EXPORTING cid = cid text = 'AUTH_FAILED'
+                        CHANGING failed = failed reported = reported ).
+        RETURN.
+    ENDTRY.
+    IF board-is_valid = abap_false.
+      report_failure( EXPORTING cid = cid text = CONV string( board-error_code )
+                      CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    result = VALUE #( ( %cid = cid %param = VALUE #(
+      WorkCenterCount = board-work_center_count
+      PositionCount = lines( board-seats )
+      _Positions = VALUE #( FOR seat IN board-seats
+        ( WorkCenter = seat-work_center
+          PositionID = seat-position_id
+          MachineID = seat-machine_id
+          PositionName = seat-position_name
+          WorkerID = seat-worker_id
+          WorkerName = seat-worker_name
+          IsOccupied = xsdbool( seat-worker_id IS NOT INITIAL ) ) ) ) ) ).
+  ENDMETHOD.
+
+  METHOD submitPositionCreate.
+    IF keys IS INITIAL.
+      RETURN.
+    ENDIF.
+    IF lines( keys ) > 1.
+      LOOP AT keys ASSIGNING FIELD-SYMBOL(<create_key>).
+        report_failure( EXPORTING cid = CONV string( <create_key>-%cid )
+                          text = 'Mỗi yêu cầu chỉ được tạo một vị trí'
+                        CHANGING failed = failed reported = reported ).
+      ENDLOOP.
+      RETURN.
+    ENDIF.
+    DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
+    TRY.
+        DATA(outcome) = zcl_pp_position_api=>create_position(
+          access_token = CONV string( input-AccessToken )
+          device_id = input-DeviceID
+          work_center = input-WorkCenter
+          position_id = input-PositionID
+          machine_id = input-MachineID
+          position_name = input-PositionName ).
+      CATCH cx_abap_message_digest zcx_mob_config.
+        report_failure( EXPORTING cid = cid text = 'AUTH_FAILED'
+                        CHANGING failed = failed reported = reported ).
+        RETURN.
+    ENDTRY.
+    IF outcome-is_valid = abap_false.
+      report_failure( EXPORTING cid = cid text = CONV string( outcome-error_code )
+                      CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    result = VALUE #( ( %cid = cid %param = VALUE #(
+      Status = 'SUCCESS'
+      WorkCenter = outcome-work_center
+      PositionID = outcome-position_id
+      MachineID = outcome-machine_id
+      WorkerID = outcome-worker_id
+      Message = 'Đã tạo vị trí' ) ) ).
+  ENDMETHOD.
+
+  METHOD submitMachineChange.
+    IF keys IS INITIAL.
+      RETURN.
+    ENDIF.
+    IF lines( keys ) > 1.
+      LOOP AT keys ASSIGNING FIELD-SYMBOL(<machine_key>).
+        report_failure( EXPORTING cid = CONV string( <machine_key>-%cid )
+                          text = 'Mỗi yêu cầu chỉ được đổi máy một vị trí'
+                        CHANGING failed = failed reported = reported ).
+      ENDLOOP.
+      RETURN.
+    ENDIF.
+    DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
+    TRY.
+        DATA(outcome) = zcl_pp_position_api=>change_machine(
+          access_token = CONV string( input-AccessToken )
+          device_id = input-DeviceID
+          work_center = input-WorkCenter
+          position_id = input-PositionID
+          machine_id = input-MachineID ).
+      CATCH cx_abap_message_digest zcx_mob_config.
+        report_failure( EXPORTING cid = cid text = 'AUTH_FAILED'
+                        CHANGING failed = failed reported = reported ).
+        RETURN.
+    ENDTRY.
+    IF outcome-is_valid = abap_false.
+      report_failure( EXPORTING cid = cid text = CONV string( outcome-error_code )
+                      CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    result = VALUE #( ( %cid = cid %param = VALUE #(
+      Status = 'SUCCESS'
+      WorkCenter = outcome-work_center
+      PositionID = outcome-position_id
+      MachineID = outcome-machine_id
+      WorkerID = outcome-worker_id
+      Message = 'Đã đổi máy của vị trí' ) ) ).
+  ENDMETHOD.
+
+  METHOD report_failure.
+    APPEND VALUE #( %cid = cid ) TO failed-position.
+    APPEND VALUE #( %cid = cid
+      %msg = new_message_with_text(
+        severity = if_abap_behv_message=>severity-error text = text ) )
+      TO reported-position.
   ENDMETHOD.
 ENDCLASS.

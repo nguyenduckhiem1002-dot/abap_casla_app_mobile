@@ -3,10 +3,10 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <DDLS>
-    <DDLNAME>ZC_PP_POSITION_ADM</DDLNAME>
+    <DDLNAME>ZA_PP_POSMACHINECMD</DDLNAME>
     <DDLANGUAGE>E</DDLANGUAGE>
-    <DDTEXT>Danh mục vị trí làm việc</DDTEXT>
-    <SOURCE_TYPE>P</SOURCE_TYPE>
+    <DDTEXT>Lệnh đổi máy của vị trí làm việc</DDTEXT>
+    <SOURCE_TYPE>A</SOURCE_TYPE>
    </DDLS>
   </asx:values>
  </asx:abap>

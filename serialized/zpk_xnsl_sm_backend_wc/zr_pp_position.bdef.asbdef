@@ -13,6 +13,16 @@ etag master LocalLastChangedAt
   create;
   update;
 
+  // Mobile (giám sát): xem sơ đồ ghế, tạo vị trí, đổi máy. Mỗi facade xác thực
+  // access token/thiết bị và chỉ cho phép trên Work Center được cấp function
+  // PP_POS_MANAGE (ZCL_PP_POSITION_API).
+  static action getPositionBoard parameter ZA_PP_PosBoardQuery
+    deep result [1] ZA_PP_PosBoardResult;
+  static action submitPositionCreate parameter ZA_PP_PosCreateCmd
+    result [1] ZA_PP_PosCommandResult;
+  static action submitMachineChange parameter ZA_PP_PosMachineCmd
+    result [1] ZA_PP_PosCommandResult;
+
   // Không xóa: ngừng dùng bằng Status = I.
   field ( mandatory : create, readonly : update ) WorkCenter, PositionID, MachineID;
   field ( mandatory ) Status;

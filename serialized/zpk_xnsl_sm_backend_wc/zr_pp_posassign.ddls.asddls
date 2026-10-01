@@ -1,4 +1,4 @@
-@AccessControl.authorizationCheck: #NOT_REQUIRED
+@AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: 'Phân công công nhân vào vị trí'
 @Metadata.allowExtensions: true
 define root view entity ZR_PP_PosAssign

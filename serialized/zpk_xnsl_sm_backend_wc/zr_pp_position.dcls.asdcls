@@ -1,0 +1,6 @@
+@EndUserText.label: 'Chặn đọc mặc định danh mục vị trí'
+@MappingRole: true
+define role ZR_PP_POSITION {
+  grant select on ZR_PP_Position
+    where Status = '' and Status <> '';
+}

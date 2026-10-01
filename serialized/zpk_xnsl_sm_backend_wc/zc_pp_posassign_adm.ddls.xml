@@ -6,7 +6,7 @@
     <DDLNAME>ZC_PP_POSASSIGN_ADM</DDLNAME>
     <DDLANGUAGE>E</DDLANGUAGE>
     <DDTEXT>Phân công công nhân vào vị trí</DDTEXT>
-    <SOURCE_TYPE>W</SOURCE_TYPE>
+    <SOURCE_TYPE>P</SOURCE_TYPE>
    </DDLS>
   </asx:values>
  </asx:abap>

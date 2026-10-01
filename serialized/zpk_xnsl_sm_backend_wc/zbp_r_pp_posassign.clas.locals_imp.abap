@@ -15,6 +15,11 @@ CLASS lhc_assignment DEFINITION INHERITING FROM cl_abap_behavior_handler.
 
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
       IMPORTING REQUEST requested_authorizations FOR Assignment RESULT result.
+    "Facade mobile cho giám sát; logic và kiểm tra quyền nằm trong
+    "ZCL_PP_POSITION_API.
+    METHODS submitPositionTransfer FOR MODIFY
+      IMPORTING keys   FOR ACTION Assignment~submitPositionTransfer
+      RESULT    result.
     METHODS deactivateSuperseded FOR DETERMINE ON SAVE
       IMPORTING keys FOR Assignment~deactivateSuperseded.
     METHODS validateAssignment FOR VALIDATE ON SAVE
@@ -33,6 +38,13 @@ CLASS lhc_assignment DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS still_active
       IMPORTING candidates    TYPE assignment_keys
       RETURNING VALUE(result) TYPE assignment_rows.
+
+    TYPES failed_response TYPE RESPONSE FOR FAILED zr_pp_posassign.
+    TYPES reported_response TYPE RESPONSE FOR REPORTED zr_pp_posassign.
+    "Lỗi facade mobile: request bị từ chối, message là mã lỗi.
+    METHODS report_failure
+      IMPORTING cid TYPE string text TYPE string
+      CHANGING failed TYPE failed_response reported TYPE reported_response.
 ENDCLASS.
 
 CLASS lhc_assignment IMPLEMENTATION.
@@ -44,6 +56,9 @@ CLASS lhc_assignment IMPLEMENTATION.
     IF requested_authorizations-%update = if_abap_behv=>mk-on.
       result-%update = if_abap_behv=>auth-allowed.
     ENDIF.
+    "Facade mobile tự xác thực token, thiết bị và phạm vi Work Center. Gán
+    "thẳng thay vì IF theo request: RAP chỉ đọc các thao tác được yêu cầu.
+    result-%action-submitPositionTransfer = if_abap_behv=>auth-allowed.
   ENDMETHOD.
 
   METHOD deactivateSuperseded.
@@ -179,5 +194,53 @@ CLASS lhc_assignment IMPLEMENTATION.
             WorkerID = candidate-worker_id ) )
       RESULT DATA(rows).
     result = VALUE #( FOR row IN rows WHERE ( Status = status_active ) ( row ) ).
+  ENDMETHOD.
+
+  METHOD submitPositionTransfer.
+    IF keys IS INITIAL.
+      RETURN.
+    ENDIF.
+    IF lines( keys ) > 1.
+      LOOP AT keys ASSIGNING FIELD-SYMBOL(<transfer_key>).
+        report_failure( EXPORTING cid = CONV string( <transfer_key>-%cid )
+                          text = 'Mỗi yêu cầu chỉ được điều chuyển một công nhân'
+                        CHANGING failed = failed reported = reported ).
+      ENDLOOP.
+      RETURN.
+    ENDIF.
+    DATA(input) = VALUE #( keys[ 1 ]-%param OPTIONAL ).
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
+    TRY.
+        DATA(outcome) = zcl_pp_position_api=>transfer(
+          access_token = CONV string( input-AccessToken )
+          device_id = input-DeviceID
+          work_center = input-WorkCenter
+          position_id = input-PositionID
+          worker_id = input-WorkerID ).
+      CATCH cx_abap_message_digest zcx_mob_config.
+        report_failure( EXPORTING cid = cid text = 'AUTH_FAILED'
+                        CHANGING failed = failed reported = reported ).
+        RETURN.
+    ENDTRY.
+    IF outcome-is_valid = abap_false.
+      report_failure( EXPORTING cid = cid text = CONV string( outcome-error_code )
+                      CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    result = VALUE #( ( %cid = cid %param = VALUE #(
+      Status = 'SUCCESS'
+      WorkCenter = outcome-work_center
+      PositionID = outcome-position_id
+      MachineID = outcome-machine_id
+      WorkerID = outcome-worker_id
+      Message = 'Đã xếp công nhân vào vị trí' ) ) ).
+  ENDMETHOD.
+
+  METHOD report_failure.
+    APPEND VALUE #( %cid = cid ) TO failed-assignment.
+    APPEND VALUE #( %cid = cid
+      %msg = new_message_with_text(
+        severity = if_abap_behv_message=>severity-error text = text ) )
+      TO reported-assignment.
   ENDMETHOD.
 ENDCLASS.

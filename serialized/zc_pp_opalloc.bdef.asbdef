@@ -22,10 +22,5 @@ define behavior for ZC_PP_OpAlloc alias OperationAllocation
 
   use action checkOperationAccess;
 
-  // Vị trí làm việc: chỉ qua facade có kiểm tra token và phạm vi Work Center.
-  use action getPositionBoard;
-  use action submitPositionTransfer;
-  use action submitPositionRelease;
-
 
 }

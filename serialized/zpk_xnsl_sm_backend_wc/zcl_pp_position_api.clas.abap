@@ -1,14 +1,15 @@
-"API mobile cho vị trí làm việc của công nhân: sơ đồ ghế, điều chuyển và cho
-"rời vị trí. Mọi thao tác xác thực access token đầy đủ (token, hạn, thiết bị,
-"trạng thái tài khoản) và chỉ cho phép trên Work Center mà tài khoản được cấp
-"function PP_POS_TRANSFER. Ghi dữ liệu đi qua BO ZR_PP_PosAssign, nên dùng đúng
-"quy tắc của màn Fiori: phân công Active mới tự chuyển phân công cũ của công
+"API mobile cho vị trí làm việc của công nhân: sơ đồ ghế, tạo vị trí, đổi máy
+"và xếp công nhân vào vị trí. Mọi thao tác xác thực access token đầy đủ (token,
+"hạn, thiết bị, trạng thái tài khoản) và chỉ cho phép trên Work Center mà tài
+"khoản được cấp function PP_POS_MANAGE. Ghi dữ liệu đi qua BO ZR_PP_Position và
+"ZR_PP_PosAssign, nên dùng đúng quy tắc của màn Fiori: máy mới của một vị trí
+"tự chuyển dòng máy cũ sang I; phân công mới tự chuyển phân công cũ của công
 "nhân và người đang ngồi ở vị trí đó sang I.
 CLASS zcl_pp_position_api DEFINITION
   PUBLIC FINAL CREATE PRIVATE.
 
   PUBLIC SECTION.
-    CONSTANTS func_position TYPE ztb_mob_func-func_id VALUE 'PP_POS_TRANSFER'.
+    CONSTANTS func_position TYPE ztb_mob_func-func_id VALUE 'PP_POS_MANAGE'.
 
     TYPES failure_code TYPE c LENGTH 40.
     TYPES: BEGIN OF seat,
@@ -44,6 +45,29 @@ CLASS zcl_pp_position_api DEFINITION
       RETURNING VALUE(result) TYPE board
       RAISING   cx_abap_message_digest zcx_mob_config.
 
+    "Tạo vị trí mới với máy của nó. Vị trí đã đang dùng thì phải đổi máy qua
+    "change_machine, không tạo lại.
+    CLASS-METHODS create_position
+      IMPORTING access_token  TYPE string
+                device_id     TYPE ztb_mob_session-device_id
+                work_center   TYPE ztb_pp_position-work_center
+                position_id   TYPE ztb_pp_position-position_id
+                machine_id    TYPE ztb_pp_position-machine_id
+                position_name TYPE ztb_pp_position-position_name
+      RETURNING VALUE(result) TYPE outcome
+      RAISING   cx_abap_message_digest zcx_mob_config.
+
+    "Đổi máy của vị trí đang dùng: tạo dòng mới với máy mới, dòng máy cũ tự
+    "chuyển I. Người đang ngồi vị trí đó giữ nguyên phân công.
+    CLASS-METHODS change_machine
+      IMPORTING access_token  TYPE string
+                device_id     TYPE ztb_mob_session-device_id
+                work_center   TYPE ztb_pp_position-work_center
+                position_id   TYPE ztb_pp_position-position_id
+                machine_id    TYPE ztb_pp_position-machine_id
+      RETURNING VALUE(result) TYPE outcome
+      RAISING   cx_abap_message_digest zcx_mob_config.
+
     "Xếp công nhân vào vị trí. Gọi lại khi công nhân đã ngồi đúng vị trí đó vẫn
     "trả thành công, để mobile retry sau timeout không bị báo lỗi giả.
     CLASS-METHODS transfer
@@ -52,15 +76,6 @@ CLASS zcl_pp_position_api DEFINITION
                 work_center   TYPE ztb_pp_position-work_center
                 position_id   TYPE ztb_pp_position-position_id
                 worker_id     TYPE ztb_pp_pos_asgn-worker_id
-      RETURNING VALUE(result) TYPE outcome
-      RAISING   cx_abap_message_digest zcx_mob_config.
-
-    "Cho người đang ngồi rời vị trí mà không xếp chỗ mới.
-    CLASS-METHODS release
-      IMPORTING access_token  TYPE string
-                device_id     TYPE ztb_mob_session-device_id
-                work_center   TYPE ztb_pp_position-work_center
-                position_id   TYPE ztb_pp_position-position_id
       RETURNING VALUE(result) TYPE outcome
       RAISING   cx_abap_message_digest zcx_mob_config.
 
@@ -73,10 +88,26 @@ CLASS zcl_pp_position_api DEFINITION
                 error_code   TYPE failure_code
       RAISING   cx_abap_message_digest zcx_mob_config.
 
-    CLASS-METHODS active_machine
+    "Xác thực và kiểm tra Work Center nằm trong phạm vi quyền.
+    CLASS-METHODS authorize_work_center
+      IMPORTING access_token  TYPE string
+                device_id     TYPE ztb_mob_session-device_id
+                work_center   TYPE ztb_pp_position-work_center
+      RETURNING VALUE(result) TYPE failure_code
+      RAISING   cx_abap_message_digest zcx_mob_config.
+
+    CLASS-METHODS active_position
       IMPORTING work_center   TYPE ztb_pp_position-work_center
                 position_id   TYPE ztb_pp_position-position_id
-      RETURNING VALUE(result) TYPE ztb_pp_position-machine_id.
+      EXPORTING machine_id    TYPE ztb_pp_position-machine_id
+                position_name TYPE ztb_pp_position-position_name.
+
+    "Máy đang dùng ở một vị trí khác (khác Work Center + vị trí đã cho).
+    CLASS-METHODS is_machine_in_use_elsewhere
+      IMPORTING work_center   TYPE ztb_pp_position-work_center
+                position_id   TYPE ztb_pp_position-position_id
+                machine_id    TYPE ztb_pp_position-machine_id
+      RETURNING VALUE(result) TYPE abap_bool.
 
     CLASS-METHODS is_worker_of_work_center
       IMPORTING worker_id     TYPE ztb_pp_pos_asgn-worker_id
@@ -86,11 +117,17 @@ CLASS zcl_pp_position_api DEFINITION
     CLASS-METHODS fill_worker_names
       CHANGING seats TYPE seats.
 
+    CLASS-METHODS save_position
+      IMPORTING work_center   TYPE ztb_pp_position-work_center
+                position_id   TYPE ztb_pp_position-position_id
+                machine_id    TYPE ztb_pp_position-machine_id
+                position_name TYPE ztb_pp_position-position_name
+      RETURNING VALUE(result) TYPE failure_code.
+
     CLASS-METHODS save_assignment
       IMPORTING work_center   TYPE ztb_pp_position-work_center
                 position_id   TYPE ztb_pp_position-position_id
                 worker_id     TYPE ztb_pp_pos_asgn-worker_id
-                status        TYPE ztb_pp_pos_asgn-status
       RETURNING VALUE(result) TYPE failure_code.
 ENDCLASS.
 
@@ -116,6 +153,20 @@ CLASS zcl_pp_position_api IMPLEMENTATION.
       func_id = func_position ).
     IF work_centers IS INITIAL.
       error_code = 'NO_WORK_CENTER_SCOPE'.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD authorize_work_center.
+    authorize( EXPORTING access_token = access_token device_id = device_id
+               IMPORTING work_centers = DATA(work_centers)
+                         error_code = result ).
+    IF result IS NOT INITIAL.
+      RETURN.
+    ENDIF.
+    IF work_center IS INITIAL.
+      result = 'INPUT_INVALID'.
+    ELSEIF NOT line_exists( work_centers[ table_line = work_center ] ).
+      result = 'NO_WORK_CENTER_SCOPE'.
     ENDIF.
   ENDMETHOD.
 
@@ -158,6 +209,85 @@ CLASS zcl_pp_position_api IMPLEMENTATION.
     result-is_valid = abap_true.
   ENDMETHOD.
 
+  METHOD create_position.
+    result = VALUE #( work_center = work_center position_id = position_id
+                      machine_id = machine_id ).
+    result-error_code = authorize_work_center( access_token = access_token
+                                               device_id = device_id
+                                               work_center = work_center ).
+    IF result-error_code IS NOT INITIAL.
+      RETURN.
+    ENDIF.
+    IF position_id IS INITIAL OR machine_id IS INITIAL.
+      result-error_code = 'INPUT_INVALID'.
+      RETURN.
+    ENDIF.
+
+    active_position( EXPORTING work_center = work_center position_id = position_id
+                     IMPORTING machine_id = DATA(current_machine) ).
+    IF current_machine = machine_id.
+      "Đã tạo đúng như vậy: coi như thành công để retry an toàn.
+      result-is_valid = abap_true.
+      RETURN.
+    ENDIF.
+    IF current_machine IS NOT INITIAL.
+      result-error_code = 'POSITION_EXISTS'.
+      RETURN.
+    ENDIF.
+    IF is_machine_in_use_elsewhere( work_center = work_center position_id = position_id
+                                    machine_id = machine_id ) = abap_true.
+      result-error_code = 'MACHINE_IN_USE'.
+      RETURN.
+    ENDIF.
+
+    result-error_code = save_position( work_center = work_center
+                                       position_id = position_id
+                                       machine_id = machine_id
+                                       position_name = position_name ).
+    result-is_valid = xsdbool( result-error_code IS INITIAL ).
+  ENDMETHOD.
+
+  METHOD change_machine.
+    result = VALUE #( work_center = work_center position_id = position_id
+                      machine_id = machine_id ).
+    result-error_code = authorize_work_center( access_token = access_token
+                                               device_id = device_id
+                                               work_center = work_center ).
+    IF result-error_code IS NOT INITIAL.
+      RETURN.
+    ENDIF.
+    IF position_id IS INITIAL OR machine_id IS INITIAL.
+      result-error_code = 'INPUT_INVALID'.
+      RETURN.
+    ENDIF.
+
+    active_position( EXPORTING work_center = work_center position_id = position_id
+                     IMPORTING machine_id = DATA(current_machine)
+                               position_name = DATA(current_name) ).
+    IF current_machine IS INITIAL.
+      result-error_code = 'POSITION_NOT_ACTIVE'.
+      RETURN.
+    ENDIF.
+    IF current_machine = machine_id.
+      "Vị trí đã dùng đúng máy này: coi như thành công để retry an toàn.
+      result-is_valid = abap_true.
+      RETURN.
+    ENDIF.
+    IF is_machine_in_use_elsewhere( work_center = work_center position_id = position_id
+                                    machine_id = machine_id ) = abap_true.
+      result-error_code = 'MACHINE_IN_USE'.
+      RETURN.
+    ENDIF.
+
+    "Dòng máy mới giữ tên vị trí hiện tại; dòng máy cũ được determination của
+    "ZR_PP_Position chuyển sang I trong cùng LUW.
+    result-error_code = save_position( work_center = work_center
+                                       position_id = position_id
+                                       machine_id = machine_id
+                                       position_name = current_name ).
+    result-is_valid = xsdbool( result-error_code IS INITIAL ).
+  ENDMETHOD.
+
   METHOD transfer.
     result = VALUE #( work_center = work_center position_id = position_id
                       worker_id = worker_id ).
@@ -176,8 +306,8 @@ CLASS zcl_pp_position_api IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    result-machine_id = active_machine( work_center = work_center
-                                        position_id = position_id ).
+    active_position( EXPORTING work_center = work_center position_id = position_id
+                     IMPORTING machine_id = result-machine_id ).
     IF result-machine_id IS INITIAL.
       result-error_code = 'POSITION_NOT_ACTIVE'.
       RETURN.
@@ -209,54 +339,60 @@ CLASS zcl_pp_position_api IMPLEMENTATION.
 
     result-error_code = save_assignment( work_center = work_center
                                          position_id = position_id
-                                         worker_id = worker_id
-                                         status = 'A' ).
+                                         worker_id = worker_id ).
     result-is_valid = xsdbool( result-error_code IS INITIAL ).
   ENDMETHOD.
 
-  METHOD release.
-    result = VALUE #( work_center = work_center position_id = position_id ).
-    authorize( EXPORTING access_token = access_token device_id = device_id
-               IMPORTING work_centers = DATA(work_centers)
-                         error_code = result-error_code ).
-    IF result-error_code IS NOT INITIAL.
-      RETURN.
-    ENDIF.
-    IF work_center IS INITIAL OR position_id IS INITIAL.
-      result-error_code = 'INPUT_INVALID'.
-      RETURN.
-    ENDIF.
-    IF NOT line_exists( work_centers[ table_line = work_center ] ).
-      result-error_code = 'NO_WORK_CENTER_SCOPE'.
-      RETURN.
-    ENDIF.
-
-    SELECT FROM ztb_pp_pos_asgn
-      FIELDS worker_id
+  METHOD save_position.
+    "Key đã tồn tại (vị trí từng dùng máy này) thì kích hoạt lại dòng cũ, chưa
+    "có thì tạo mới. Determination của ZR_PP_Position chuyển dòng máy khác của
+    "cùng vị trí sang I trong cùng LUW.
+    SELECT FROM ztb_pp_position
+      FIELDS machine_id
       WHERE work_center = @work_center
         AND position_id = @position_id
-        AND status = 'A'
-      INTO TABLE @DATA(occupants)
+        AND machine_id = @machine_id
+      INTO TABLE @DATA(existing)
       UP TO 1 ROWS.
-    IF occupants IS INITIAL.
-      result-error_code = 'SEAT_EMPTY'.
+
+    IF existing IS INITIAL.
+      MODIFY ENTITIES OF zr_pp_position
+        ENTITY Position
+          CREATE FIELDS ( WorkCenter PositionID MachineID PositionName Status )
+          WITH VALUE #( ( %cid = 'POSITION'
+                          %is_draft = if_abap_behv=>mk-off
+                          WorkCenter = work_center
+                          PositionID = position_id
+                          MachineID = machine_id
+                          PositionName = position_name
+                          Status = 'A' ) )
+        FAILED DATA(create_failed).
+      IF create_failed IS NOT INITIAL.
+        result = 'POSITION_SAVE_FAILED'.
+      ENDIF.
       RETURN.
     ENDIF.
-    result-worker_id = occupants[ 1 ]-worker_id.
-    result-machine_id = active_machine( work_center = work_center
-                                        position_id = position_id ).
 
-    result-error_code = save_assignment( work_center = work_center
-                                         position_id = position_id
-                                         worker_id = result-worker_id
-                                         status = 'I' ).
-    result-is_valid = xsdbool( result-error_code IS INITIAL ).
+    MODIFY ENTITIES OF zr_pp_position
+      ENTITY Position
+        UPDATE FIELDS ( PositionName Status )
+        WITH VALUE #( ( %is_draft = if_abap_behv=>mk-off
+                        WorkCenter = work_center
+                        PositionID = position_id
+                        MachineID = machine_id
+                        PositionName = position_name
+                        Status = 'A' ) )
+      FAILED DATA(update_failed).
+    IF update_failed IS NOT INITIAL.
+      "Thường do dòng đang được mở bản nháp trên Fiori.
+      result = 'POSITION_LOCKED'.
+    ENDIF.
   ENDMETHOD.
 
   METHOD save_assignment.
-    "Key đã tồn tại (từng ngồi vị trí này) thì kích hoạt/khóa lại dòng cũ, chưa
-    "có thì tạo mới. Determination của ZR_PP_PosAssign lo phần chuyển các phân
-    "công bị thay thế sang I trong cùng LUW.
+    "Key đã tồn tại (từng ngồi vị trí này) thì kích hoạt lại dòng cũ, chưa có
+    "thì tạo mới. Determination của ZR_PP_PosAssign chuyển phân công cũ của
+    "công nhân và người đang ngồi vị trí đó sang I trong cùng LUW.
     SELECT FROM ztb_pp_pos_asgn
       FIELDS worker_id
       WHERE work_center = @work_center
@@ -274,7 +410,7 @@ CLASS zcl_pp_position_api IMPLEMENTATION.
                           WorkCenter = work_center
                           PositionID = position_id
                           WorkerID = worker_id
-                          Status = status ) )
+                          Status = 'A' ) )
         FAILED DATA(create_failed).
       IF create_failed IS NOT INITIAL.
         result = 'POSITION_SAVE_FAILED'.
@@ -289,7 +425,7 @@ CLASS zcl_pp_position_api IMPLEMENTATION.
                         WorkCenter = work_center
                         PositionID = position_id
                         WorkerID = worker_id
-                        Status = status ) )
+                        Status = 'A' ) )
       FAILED DATA(update_failed).
     IF update_failed IS NOT INITIAL.
       "Thường do dòng đang được mở bản nháp trên Fiori.
@@ -297,17 +433,31 @@ CLASS zcl_pp_position_api IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
-  METHOD active_machine.
+  METHOD active_position.
+    CLEAR: machine_id, position_name.
     SELECT FROM ztb_pp_position
-      FIELDS machine_id
+      FIELDS machine_id, position_name
       WHERE work_center = @work_center
         AND position_id = @position_id
         AND status = 'A'
-      INTO TABLE @DATA(machines)
+      INTO TABLE @DATA(positions)
       UP TO 1 ROWS.
-    IF machines IS NOT INITIAL.
-      result = machines[ 1 ]-machine_id.
+    IF positions IS NOT INITIAL.
+      machine_id = positions[ 1 ]-machine_id.
+      position_name = positions[ 1 ]-position_name.
     ENDIF.
+  ENDMETHOD.
+
+  METHOD is_machine_in_use_elsewhere.
+    SELECT FROM ztb_pp_position
+      FIELDS machine_id
+      WHERE machine_id = @machine_id
+        AND status = 'A'
+        AND NOT ( work_center = @work_center
+                  AND position_id = @position_id )
+      INTO TABLE @DATA(elsewhere)
+      UP TO 1 ROWS.
+    result = xsdbool( elsewhere IS NOT INITIAL ).
   ENDMETHOD.
 
   METHOD is_worker_of_work_center.
