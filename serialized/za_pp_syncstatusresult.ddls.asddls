@@ -8,6 +8,10 @@ define abstract entity ZA_PP_SyncStatusResult
   ProductionOrder : abap.char(12);
   Operation : abap.char(4);
   WorkerID : abap.char(8);
+  @EndUserText.label: 'Vị trí hiện tại'
+  PositionID : abap.char(10);
+  @EndUserText.label: 'Vị trí gốc'
+  OriginPositionID : abap.char(10);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   Quantity : abap.quan(15,3);
   UnitOfMeasure : abap.unit(3);

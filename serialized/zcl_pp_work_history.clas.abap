@@ -78,6 +78,8 @@ CLASS zcl_pp_work_history DEFINITION
              plant              TYPE ztb_pp_op_alloc-plant,
              work_center        TYPE ztb_pp_op_alloc-work_center,
              work_id            TYPE ztb_mob_work-work_id,
+             position_id        TYPE ztb_pp_alloc_txn-position_id,
+             origin_position_id TYPE ztb_pp_alloc_txn-origin_position_id,
              transaction_type   TYPE ztb_pp_alloc_txn-transaction_type,
              quantity           TYPE ztb_pp_alloc_txn-quantity,
              uom                TYPE ztb_pp_alloc_txn-uom,
@@ -116,6 +118,21 @@ CLASS zcl_pp_work_history DEFINITION
 
 protected section.
   PRIVATE SECTION.
+    TYPES: BEGIN OF team_context,
+             operation_uuid TYPE ztb_pp_alloc_txn-operation_uuid,
+             work_id TYPE ztb_mob_work-work_id,
+             work_center TYPE ztb_pp_op_alloc-work_center,
+             ma_congdoan TYPE ztb_pp_op_alloc-ma_congdoan,
+           END OF team_context,
+           team_contexts TYPE SORTED TABLE OF team_context
+                         WITH UNIQUE KEY operation_uuid work_id.
+    CLASS-METHODS authorized_team_contexts
+      IMPORTING user_uuid TYPE sysuuid_x16 worker TYPE ztb_pp_alloc_txn-worker_id
+                date_from TYPE d date_to TYPE d shift_id TYPE ztb_pp_shift-shift_id
+                work_id TYPE ztb_mob_work-work_id
+                production_order TYPE ztb_pp_op_alloc-production_order
+                operation_no TYPE ztb_pp_op_alloc-operation_no
+      RETURNING VALUE(result) TYPE team_contexts.
     TYPES: BEGIN OF root_key,
              transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid,
              worker_id TYPE ztb_pp_alloc_txn-worker_id,
@@ -148,6 +165,8 @@ protected section.
              shift_time_zone TYPE ztb_pp_alloc_txn-shift_time_zone,
              shift_valid_from TYPE ztb_pp_alloc_txn-shift_valid_from,
              work_id           TYPE ztb_mob_work-work_id,
+             position_id        TYPE ztb_pp_alloc_txn-position_id,
+             origin_position_id TYPE ztb_pp_alloc_txn-origin_position_id,
              report_worker_id   TYPE ztb_pp_alloc_txn-worker_id,
              worker_id          TYPE ztb_pp_alloc_txn-worker_id,
              from_worker_id     TYPE ztb_pp_alloc_txn-from_worker_id,
@@ -185,6 +204,10 @@ protected section.
       EXPORTING effective_from TYPE d
                 effective_to   TYPE d
                 error_code     TYPE failure_code.
+
+    "Today's business date in the user's time zone (see local_today).
+    CLASS-METHODS local_today
+      RETURNING VALUE(result) TYPE d.
 
     CLASS-METHODS worker_of_account
       IMPORTING user_uuid     TYPE sysuuid_x16
@@ -260,8 +283,8 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
     ENDIF.
 
     "Scope luôn được suy ra từ RBAC function của caller, không lấy từ dữ liệu
-    "device gửi. Supervisor thấy các assignment do mình ghi nhận; người dùng
-    "khác chỉ được xem row của chính mình.
+    "device gửi. Team xem các WorkID/công đoạn có quyền hiện tại; self chỉ xem
+    "row của chính mình. Người tạo giao dịch không quyết định quyền xem team.
     DATA(worker_filter) = worker_id.
     DATA(permissions) = zcl_mob_token_validator=>get_permissions(
       auth-user_uuid ).
@@ -297,7 +320,10 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
         result-error_code = 'WORK_CONTEXT_NOT_ALLOWED'.
         RETURN.
     ENDIF.
-    IF production_order IS NOT INITIAL AND operation_no IS NOT INITIAL.
+    "Team checks each concrete WorkID below, including unfiltered requests.
+    "An empty WorkID must not become an ambiguous broad operation-scope check.
+    IF production_order IS NOT INITIAL AND operation_no IS NOT INITIAL
+       AND result-scope_code = scope_self.
       SELECT FROM ztb_pp_op_alloc
         FIELDS plant, work_center, ma_congdoan
         WHERE production_order = @production_order
@@ -315,7 +341,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
              work_center = <operation_scope>-work_center
              work_id = work_id
              ma_congdoan = <operation_scope>-ma_congdoan
-             effective_date = cl_abap_context_info=>get_system_date( ) ) = abap_false.
+             effective_date = local_today( ) ) = abap_false.
           result-error_code = 'WORK_CONTEXT_NOT_ALLOWED'.
           RETURN.
         ENDIF.
@@ -376,8 +402,36 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD local_today.
+    "Mobile calls run as a communication user, so derive the business date
+    "from a configured SAP shift timezone instead of the server UTC date.
+    DATA(now) = utclong_current( ).
+    SELECT DISTINCT time_zone FROM ztb_pp_shift
+      WHERE is_active = 'A' AND time_zone <> ' '
+      ORDER BY time_zone
+      INTO TABLE @DATA(zones)
+      UP TO 1 ROWS.
+    IF zones IS NOT INITIAL.
+      TRY.
+          CONVERT UTCLONG now TIME ZONE zones[ 1 ]-time_zone INTO DATE result.
+        CATCH cx_parameter_invalid_range cx_sy_conversion_error.
+          CLEAR result.
+      ENDTRY.
+      IF result IS NOT INITIAL.
+        RETURN.
+      ENDIF.
+    ENDIF.
+    TRY.
+        CONVERT UTCLONG now
+          TIME ZONE cl_abap_context_info=>get_user_time_zone( ) INTO DATE result.
+      CATCH cx_abap_context_info_error cx_parameter_invalid_range cx_sy_conversion_error.
+        result = cl_abap_context_info=>get_system_date( ).
+    ENDTRY.
+  ENDMETHOD.
+
+
   METHOD resolve_range.
-    DATA(today) = cl_abap_context_info=>get_system_date( ).
+    DATA(today) = local_today( ).
     "Client không gửi range hoặc gửi code từ app version mới sẽ nhận cửa sổ
     "mặc định theo tháng thay vì một query không giới hạn.
     DATA(selection) = COND range_selection(
@@ -449,7 +503,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid, txn~original_transaction_type,
              txn~execution_date, txn~shift_id, txn~work_date, txn~executed_at, txn~shift_start_at,
              txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from, txn~worker_id,
-             txn~work_id,
+             txn~work_id, txn~position_id, txn~origin_position_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~ma_congdoan,
@@ -473,22 +527,32 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD select_team.
-    "Bước 1: lấy các assignment supervisor này đã ghi nhận. Scope được đóng băng
-    "trong ledger: row thuộc scope vì supervisor đã book assignment, không phải
-    "vì Work Center hiện tại trong master data. Nhân công chuyển team vẫn còn
-    "xuất hiện trong lịch sử của team cũ.
-    SELECT DISTINCT txn~transaction_uuid, txn~operation_uuid, txn~worker_id,
-                    txn~from_worker_id, txn~to_worker_id, txn~work_id
+  METHOD authorized_team_contexts.
+    "Only inspect contexts with activity in the requested period. Ancestors can
+    "be older; select_team loads them after authorizing their operation/WorkID.
+    "last_date: the context's latest work date in the range, used to check the
+    "operation master as it was for that data (see below).
+    SELECT txn~operation_uuid, txn~work_id, op~work_center, op~ma_congdoan,
+           MAX( CASE WHEN txn~work_date <> '00000000' THEN txn~work_date
+                     ELSE txn~execution_date END ) AS last_date
       FROM ztb_pp_alloc_txn AS txn
       INNER JOIN ztb_pp_op_alloc AS op
         ON op~operation_uuid = txn~operation_uuid
-      WHERE txn~actor_user_uuid = @user_uuid
-        AND txn~transaction_type IN ( @zcl_pp_txn_type=>initial_assign,
-                                  @zcl_pp_txn_type=>transfer )
-        AND txn~transaction_status = @zcl_pp_txn_type=>posted
-        AND ( txn~work_date <= @date_to AND txn~work_date <> '00000000'
-           OR ( txn~work_date = '00000000' AND txn~execution_date <= @date_to ) )
+      INNER JOIN ztb_mob_rol_wrk AS role_work
+        ON role_work~work_id = txn~work_id
+      INNER JOIN ztb_mob_role AS role_header
+        ON role_header~role_id = role_work~role_id
+      INNER JOIN ztb_mob_usr_rol AS assignment
+        ON assignment~role_id = role_header~role_id
+      INNER JOIN ztb_mob_rol_fnc AS role_func
+        ON role_func~role_id = role_header~role_id
+      WHERE txn~transaction_status = @zcl_pp_txn_type=>posted
+        AND assignment~user_uuid = @user_uuid AND role_header~status = 'A'
+        AND role_func~func_id = @func_team
+        AND txn~work_id <> ' '
+        AND ( txn~work_date BETWEEN @date_from AND @date_to
+           OR ( txn~work_date = '00000000' AND txn~execution_date BETWEEN @date_from AND @date_to ) )
+        AND ( @shift_id = ' ' OR txn~shift_id = @shift_id )
         AND ( @work_id = ' ' OR txn~work_id = @work_id )
         AND ( @production_order = ' ' OR op~production_order = @production_order )
         AND ( @operation_no = ' ' OR op~operation_no = @operation_no )
@@ -496,7 +560,67 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
            OR txn~worker_id = @worker
            OR txn~from_worker_id = @worker
            OR txn~to_worker_id = @worker )
-      INTO TABLE @DATA(booked).
+      GROUP BY txn~operation_uuid, txn~work_id, op~work_center, op~ma_congdoan
+      INTO TABLE @DATA(contexts).
+    TYPES: BEGIN OF permission,
+             work_id TYPE ztb_mob_work-work_id,
+             work_center TYPE ztb_pp_op_alloc-work_center,
+             ma_congdoan TYPE ztb_pp_op_alloc-ma_congdoan,
+             effective_date TYPE d,
+             allowed TYPE abap_bool,
+           END OF permission.
+    DATA permissions TYPE HASHED TABLE OF permission
+                     WITH UNIQUE KEY work_id work_center ma_congdoan effective_date.
+    LOOP AT contexts INTO DATA(context).
+      "The role grant has no validity dates, so it is always today's grant. The
+      "date only selects the operation master (ztb_md_congdoan valid_from/to):
+      "use the data's own date, never today's, or history of an operation whose
+      "master has since expired or moved department would silently disappear.
+      DATA(effective_date) = COND d( WHEN context-last_date IS INITIAL
+                                     THEN date_to ELSE context-last_date ).
+      READ TABLE permissions ASSIGNING FIELD-SYMBOL(<permission>)
+        WITH TABLE KEY work_id = context-work_id
+                       work_center = context-work_center ma_congdoan = context-ma_congdoan
+                       effective_date = effective_date.
+      IF sy-subrc <> 0.
+        "Cache within this request only; never cache grants across viewers/days.
+        INSERT VALUE #( work_id = context-work_id
+          work_center = context-work_center ma_congdoan = context-ma_congdoan
+          effective_date = effective_date
+          allowed = zcl_mob_token_validator=>has_func_op_scope(
+            user_uuid = user_uuid func_id = func_team work_id = context-work_id
+            plant = '' work_center = context-work_center
+            ma_congdoan = context-ma_congdoan effective_date = effective_date ) )
+          INTO TABLE permissions ASSIGNING <permission>.
+      ENDIF.
+      IF <permission>-allowed = abap_true.
+        INSERT CORRESPONDING #( context ) INTO TABLE result.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD select_team.
+    DATA(contexts) = authorized_team_contexts(
+      user_uuid = user_uuid worker = worker date_from = date_from date_to = date_to
+      shift_id = shift_id work_id = work_id production_order = production_order operation_no = operation_no ).
+    IF contexts IS INITIAL.
+      RETURN.
+    ENDIF.
+    "Roots may predate the range. Ownership is irrelevant; authorization is by
+    "concrete operation/WorkID and today's PP_HIST_TEAM grant.
+    SELECT FROM @contexts AS context_row
+      INNER JOIN ztb_pp_alloc_txn AS txn
+        ON txn~operation_uuid = context_row~operation_uuid AND txn~work_id = context_row~work_id
+      FIELDS DISTINCT txn~transaction_uuid, txn~operation_uuid, txn~worker_id,
+                      txn~from_worker_id, txn~to_worker_id, txn~work_id
+      WHERE txn~transaction_type IN ( @zcl_pp_txn_type=>initial_assign, @zcl_pp_txn_type=>transfer )
+        AND txn~transaction_status = @zcl_pp_txn_type=>posted
+        AND ( txn~work_date <= @date_to AND txn~work_date <> '00000000'
+           OR ( txn~work_date = '00000000' AND txn~execution_date <= @date_to ) )
+        AND ( @worker = ' ' OR txn~worker_id = @worker
+           OR txn~from_worker_id = @worker OR txn~to_worker_id = @worker )
+      INTO TABLE @DATA(booked)
+      ##itab_db_select.
     IF booked IS INITIAL.
       RETURN.
     ENDIF.
@@ -507,7 +631,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
              work_id        TYPE ztb_mob_work-work_id,
            END OF scope_key.
     DATA scope TYPE SORTED TABLE OF scope_key
-               WITH UNIQUE KEY operation_uuid worker_id.
+               WITH UNIQUE KEY operation_uuid worker_id work_id.
     DATA roots TYPE root_keys.
     LOOP AT booked ASSIGNING FIELD-SYMBOL(<booked>).
       IF <booked>-worker_id IS NOT INITIAL.
@@ -555,9 +679,8 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
       ##itab_db_select.
     expand_roots( EXPORTING derived = derived CHANGING roots = roots ).
 
-    "Bước 2: lấy mọi POSTED row của các cặp operation/worker trong scope, gồm cả
-    "CONFIRM do worker ghi sau đó. Nếu thiếu các row này thì cột progress sẽ trống
-    "đối với supervisor chỉ thực hiện assignment.
+    "Bước 2: lấy POSTED row của operation/worker/WorkID đã được cấp quyền,
+    "bao gồm phát sinh do quản lý khác hoặc worker ghi nhận.
     SELECT FROM @scope AS scope_row
       INNER JOIN ztb_pp_alloc_txn AS txn
         ON txn~operation_uuid = scope_row~operation_uuid
@@ -570,7 +693,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid, txn~original_transaction_type,
              txn~operation_uuid, txn~execution_date, txn~shift_id, txn~work_date, txn~executed_at,
              txn~shift_start_at, txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from, txn~worker_id,
-             txn~work_id,
+             txn~work_id, txn~position_id, txn~origin_position_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
              txn~quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~ma_congdoan,
@@ -587,8 +710,8 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
       UP TO @max_scan_rows ROWS
       ##itab_db_select.
     LOOP AT candidates ASSIGNING FIELD-SYMBOL(<candidate>).
-      "Điều chỉnh phân bổ do admin tạo không có root assignment của supervisor;
-      "scope operation/worker đã được xác lập ở bước 1 nên vẫn phải đưa row này
+      "Điều chỉnh phân bổ do admin tạo không có root assignment;
+      "scope operation/worker/WorkID đã được cấp quyền ở bước 1 nên vẫn đưa row này
       "vào báo cáo team để số giao và số còn lại phản ánh đúng snapshot.
       IF <candidate>-transaction_type = zcl_pp_txn_type=>allocation_adjustment
          OR <candidate>-transaction_type = zcl_pp_txn_type=>recall_adjustment
@@ -608,8 +731,8 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
            transaction_uuid = <candidate>-original_transaction_uuid
            worker_id = <candidate>-report_worker_id
            work_id = <candidate>-work_id ] ).
-        "Derived row phải trỏ về root assignment/transfer. Rule này ngăn booking
-        "của supervisor khác trên cùng operation/worker lọt vào số liệu hiện tại.
+        "Derived row phải trỏ về assignment/transfer trong phạm vi được cấp quyền.
+        "Không nhận dòng mồ côi hoặc tham chiếu sang worker/WorkID ngoài phạm vi.
         CONTINUE.
       ENDIF.
       APPEND CORRESPONDING #( <candidate> ) TO result.
@@ -814,6 +937,8 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
         plant = <row>-plant
         work_center = <row>-work_center
         work_id = <row>-work_id
+        position_id = <row>-position_id
+        origin_position_id = <row>-origin_position_id
         transaction_type = <row>-transaction_type
         quantity = <row>-quantity
         original_transaction_uuid = <row>-original_transaction_uuid

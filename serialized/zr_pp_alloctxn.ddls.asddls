@@ -24,6 +24,10 @@ define view entity ZR_PP_AllocTxn
       uom                       as UnitOfMeasure,
       execution_date            as ExecutionDate,
       work_id                   as WorkID,
+      @EndUserText.label: 'Vị trí hiện tại'
+      position_id               as PositionID,
+      @EndUserText.label: 'Vị trí gốc'
+      origin_position_id        as OriginPositionID,
       @EndUserText.label: 'Mã ca'
       shift_id                  as ShiftID,
       @EndUserText.label: 'Ngày làm việc'

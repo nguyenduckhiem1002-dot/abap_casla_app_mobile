@@ -7,6 +7,10 @@ define abstract entity ZA_PP_CommandResult
   ProductionOrder : abap.char(12);
   Operation : abap.char(4);
   MaCongDoan : abap.char(7);
+  @EndUserText.label: 'Vị trí hiện tại'
+  PositionID : abap.char(10);
+  @EndUserText.label: 'Vị trí gốc'
+  OriginPositionID : abap.char(10);
   ErrorCode : abap.char(40);
   Message : abap.char(255);
 }

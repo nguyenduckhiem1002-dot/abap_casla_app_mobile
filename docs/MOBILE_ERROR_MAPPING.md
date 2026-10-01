@@ -33,12 +33,13 @@ mã lỗi được forward từ bound action.
 
 | Code | Đối tượng | Ý nghĩa | UI/action đề xuất |
 | --- | --- | --- | --- |
-| `MANAGER_OPERATION_NOT_ALLOWED` | Quản lý | Quản lý không có function tương ứng tại WorkID/bộ phận công đoạn/Plant/Work Center | Ẩn hoặc khóa nút thao tác; yêu cầu chọn vị trí làm việc có quyền |
+| `MANAGER_OPERATION_NOT_ALLOWED` | Quản lý | Quản lý không có function tương ứng tại WorkID/bộ phận công đoạn/Work Center | Ẩn hoặc khóa nút thao tác; yêu cầu chọn vị trí làm việc có quyền |
 | `WORKER_OPERATION_NOT_ALLOWED` | Công nhân | Công nhân không có role WorkID phù hợp với bộ phận của công đoạn | Yêu cầu chọn công nhân khác hoặc cấp lại role |
-| `WORKER_ASSIGNMENT_EXPIRED` | Công nhân | Bản ghi công nhân tại Plant/Work Center không hiệu lực trong ngày làm việc | Báo phân công hết hiệu lực; không retry mù |
+| `WORKER_ASSIGNMENT_EXPIRED` | Công nhân | Bản ghi công nhân tại Work Center không hiệu lực trong ngày làm việc | Báo phân công hết hiệu lực; không retry mù |
+| `POSITION_NOT_ACTIVE` | Vị trí | `PositionID` gửi lên chưa có hoặc đang ngừng dùng tại Work Center của công đoạn | Cho chọn lại vị trí; không retry mù |
 | `MISSING_PERMISSION` | User | Thiếu function tổng quát được yêu cầu | Hiển thị không có quyền chức năng |
 | `WORK_NOT_FOUND` | WorkID | WorkID không tồn tại hoặc không active | Mở lại value help/chọn WorkID khác |
-| `WORK_CONTEXT_MISMATCH` | WorkID | WorkID không khớp Plant/Work Center của công đoạn | Yêu cầu quét lại QR hoặc chọn đúng vị trí |
+| `WORK_CONTEXT_MISMATCH` | WorkID | WorkID không khớp Work Center của công đoạn | Yêu cầu quét lại QR hoặc chọn đúng vị trí |
 | `WORK_OPERATION_MISMATCH` | WorkID | Vị trí làm việc không khớp dữ liệu operation | Không cho tiếp tục |
 | `OPERATION_DEPARTMENT_MISMATCH` | WorkID/công đoạn | Bộ phận của WorkID khác bộ phận master công đoạn | Không cho tiếp tục; sửa cấu hình master |
 
@@ -83,7 +84,12 @@ mã lỗi được forward từ bound action.
 | `WORKER_BALANCE_DUPLICATE` | Có nhiều balance cho cùng worker-operation | Dừng thao tác, báo quản trị |
 | `REVERSE_BALANCE_INCONSISTENT` | Balance không nhất quán khi hoàn tác | Không retry mù; cần kiểm tra ledger |
 | `CONFIRM_ORIGINAL_TRANSACTION_INVALID` | Giao dịch gốc không hợp lệ cho xác nhận | Chọn đúng giao dịch gốc |
-| `CONFIRM_ORIGINAL_QUANTITY_EXCEEDED` | Xác nhận vượt số lượng còn dùng được của chính giao dịch gốc | Hiển thị số còn lại của giao dịch gốc |
+| `CONFIRM_ORIGINAL_QUANTITY_EXCEEDED` | Xác nhận vượt số còn dùng được của nhóm gốc, gồm REASSIGN và giao bổ sung | Refresh số còn lại của nhóm |
+| `CONFIRM_ORIGINAL_CONTEXT_MISMATCH` | WorkID hoặc ca xác nhận khác nhóm gốc; thiếu ca khi gốc có ca cũng bị từ chối | Chọn đúng nhóm và gửi ca của nhóm |
+| `RECALL_ORIGINAL_CONTEXT_MISMATCH` | WorkID hoặc ca thu hồi khác nhóm gốc; thiếu ca khi gốc có ca cũng bị từ chối | Chọn đúng nhóm và gửi ca của nhóm |
+| `RECALL_ORIGINAL_QUANTITY_EXCEEDED` | Thu hồi vượt số còn lại của nhóm sau xác nhận/thu hồi trước đó | Refresh số còn lại của nhóm và nhập lại |
+| `RECALL_NOT_ALLOWED` | Gốc không hợp lệ, không thuộc loại cho phép hoặc số dư worker không đủ/khác UoM | Đọc lại nhóm; REASSIGN hợp lệ có thể dùng làm nguồn thu hồi |
+| `ASSIGNMENT_GROUP_INVALID` | Nhóm giao trong ngày có liên kết gốc không hợp lệ | Dừng giao bổ sung và báo quản trị kiểm tra ledger |
 
 ## Idempotency và ledger
 

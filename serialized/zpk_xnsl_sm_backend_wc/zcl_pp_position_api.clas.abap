@@ -79,6 +79,21 @@ CLASS zcl_pp_position_api DEFINITION
       RETURNING VALUE(result) TYPE outcome
       RAISING   cx_abap_message_digest zcx_mob_config.
 
+    "Vị trí gốc của công nhân trong Work Center: phân công Active trên vị trí
+    "đang dùng; trống nếu không có. Ledger sản lượng lưu giá trị này làm vị
+    "trí gốc lúc post. Không kiểm tra token: chỉ dùng nội bộ backend.
+    CLASS-METHODS assigned_position
+      IMPORTING work_center   TYPE ztb_pp_position-work_center
+                worker_id     TYPE ztb_pp_pos_asgn-worker_id
+      RETURNING VALUE(result) TYPE ztb_pp_position-position_id.
+
+    "Vị trí có dòng đang dùng (Status A) trong Work Center. Không xét ai đang
+    "ngồi: công nhân có thể thao tác tạm ở vị trí khác vị trí gốc.
+    CLASS-METHODS is_active_position
+      IMPORTING work_center   TYPE ztb_pp_position-work_center
+                position_id   TYPE ztb_pp_position-position_id
+      RETURNING VALUE(result) TYPE abap_bool.
+
   PRIVATE SECTION.
     "Xác thực token và trả về các Work Center được cấp function vị trí.
     CLASS-METHODS authorize
@@ -132,6 +147,39 @@ CLASS zcl_pp_position_api DEFINITION
 ENDCLASS.
 
 CLASS zcl_pp_position_api IMPLEMENTATION.
+  METHOD is_active_position.
+    IF work_center IS INITIAL OR position_id IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT FROM ztb_pp_position
+      FIELDS position_id
+      WHERE work_center = @work_center
+        AND position_id = @position_id
+        AND status = 'A'
+      INTO TABLE @DATA(positions)
+      UP TO 1 ROWS.
+    result = xsdbool( positions IS NOT INITIAL ).
+  ENDMETHOD.
+
+  METHOD assigned_position.
+    IF work_center IS INITIAL OR worker_id IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT FROM ztb_pp_pos_asgn AS assignment
+      INNER JOIN ztb_pp_position AS position
+        ON  position~work_center = assignment~work_center
+        AND position~position_id = assignment~position_id
+      FIELDS assignment~position_id
+      WHERE assignment~work_center = @work_center
+        AND assignment~worker_id = @worker_id
+        AND assignment~status = 'A'
+        AND position~status = 'A'
+      ORDER BY assignment~position_id
+      INTO TABLE @DATA(seats)
+      UP TO 1 ROWS.
+    result = VALUE #( seats[ 1 ]-position_id OPTIONAL ).
+  ENDMETHOD.
+
   METHOD authorize.
     CLEAR: work_centers, error_code.
     IF access_token IS INITIAL OR device_id IS INITIAL.

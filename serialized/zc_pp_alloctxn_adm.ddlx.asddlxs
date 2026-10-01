@@ -59,6 +59,16 @@ annotate entity ZC_PP_AllocTxn_Adm with
   @UI.identification: [{ position: 70 }]
   WorkerID;
 
+  @EndUserText.label: 'Vị trí hiện tại'
+  @UI.lineItem: [{ position: 75 }]
+  @UI.identification: [{ position: 75 }]
+  PositionID;
+
+  @EndUserText.label: 'Vị trí gốc'
+  @UI.lineItem: [{ position: 76 }]
+  @UI.identification: [{ position: 76 }]
+  OriginPositionID;
+
   @EndUserText.label: 'Số lượng'
   @UI.lineItem: [{ position: 80 }]
   @UI.identification: [{ position: 80 }]
@@ -80,7 +90,7 @@ annotate entity ZC_PP_AllocTxn_Adm with
   @UI.selectionField: [{ position: 80 }]
   @UI.identification: [{ position: 110 }]
   @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Shift', element: 'ShiftID' },
-    additionalBinding: [{ localElement: 'Plant', element: 'Plant', usage: #FILTER }] }]
+    additionalBinding: [{ localElement: 'WorkCenter', element: 'WorkCenter', usage: #FILTER }] }]
   ShiftID;
 
   @EndUserText.label: 'Thời điểm thực hiện UTC'

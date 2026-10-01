@@ -179,7 +179,7 @@ flowchart TD
     D -->|No| E2["SHIFT_AND_EXECUTED_AT_REQUIRED"]
     D -->|Yes| F{"ExecutedAt <= now?"}
     F -->|No| E3["EXECUTED_AT_IN_FUTURE"]
-    F -->|Yes| G["UTC -> plant local time"]
+    F -->|Yes| G["UTC -> configured shift local time"]
     G --> H["Find exactly one active shift version"]
     H --> I["Calculate WorkDate + UTC boundaries"]
     I --> J{"Explicit ExecutionDate matches?"}
@@ -234,6 +234,8 @@ Retry có một rule mạnh hơn: nếu `SyncItemUUID` đã có receipt, resolve
   "ProductionOrder": "100000000001",
   "Operation": "0010",
   "MaCongDoan": "CD00001",
+  "PositionID": "G07",
+  "OriginPositionID": "G05",
   "ErrorCode": "",
   "Message": "<success-message>"
 }
@@ -520,7 +522,9 @@ Recalled total             = 5
 
 # 9. Happy Case HC-05 — Team history reconciles with the same dataset
 
-Giả định actor `lead.pp01` có `PP_HIST_TEAM` và chính actor đã tạo các transaction trên.
+Giả định actor `lead.pp01` có `PP_HIST_TEAM` tại WorkID/công đoạn của các
+transaction trên theo quyền hiện tại. Transaction có thể do quản lý khác tạo;
+xem [phạm vi lịch sử đội](TEAM_HISTORY_SCOPE.md).
 
 ## 9.1 Request
 
@@ -540,7 +544,7 @@ Giả định actor `lead.pp01` có `PP_HIST_TEAM` và chính actor đã tạo c
 ## 9.2 Expected scope/result
 
 - scope = team,
-- history contains the relevant lineage rows created by actor in range/scope,
+- history contains relevant lineage rows in the viewer's authorized WorkID/operation scope and selected range,
 - no duplicate row caused by HC-01 retry,
 - `IsTruncated = false` với dataset nhỏ này,
 - entries giữ transaction type/quantity/UoM/business date/shift snapshot.

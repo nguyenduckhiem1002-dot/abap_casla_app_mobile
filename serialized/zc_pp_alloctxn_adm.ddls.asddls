@@ -44,6 +44,10 @@ define root view entity ZC_PP_AllocTxn_Adm
   @EndUserText.label: 'Vị trí làm việc'
   @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Work_Hist_VH', element: 'WorkID' } }]
       txn.work_id                   as WorkID,
+  @EndUserText.label: 'Vị trí hiện tại'
+      txn.position_id               as PositionID,
+  @EndUserText.label: 'Vị trí gốc'
+      txn.origin_position_id        as OriginPositionID,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   @EndUserText.label: 'Số lượng'
       txn.quantity                  as Quantity,
@@ -54,7 +58,7 @@ define root view entity ZC_PP_AllocTxn_Adm
       txn.execution_date            as ExecutionDate,
   @EndUserText.label: 'Mã ca'
       @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Shift', element: 'ShiftID' },
-        additionalBinding: [{ localElement: 'Plant', element: 'Plant', usage: #FILTER }] }]
+        additionalBinding: [{ localElement: 'WorkCenter', element: 'WorkCenter', usage: #FILTER }] }]
       txn.shift_id as ShiftID,
       @EndUserText.label: 'Ngày làm việc'
       txn.work_date as WorkDate,

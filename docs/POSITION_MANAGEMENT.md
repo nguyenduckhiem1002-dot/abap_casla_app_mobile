@@ -142,6 +142,49 @@ mã lỗi.
 Việc cần làm: tạo function `PP_POS_MANAGE` trong `ZTB_MOB_FUNC` và gán cho chức
 danh giám sát; work context của chức danh đó phải có Work Center tương ứng.
 
+## Lưu vết vị trí trên ledger
+
+Công nhân có thể được chuyển sang một vị trí tạm để thao tác, nên ledger
+`ZTB_PP_ALLOC_TXN` lưu hai cột CHAR 10:
+
+| Cột | Field | Ý nghĩa | Nguồn |
+| --- | --- | --- | --- |
+| `POSITION_ID` | `PositionID` | Vị trí hiện tại, nơi thao tác | Mobile gửi trong lệnh |
+| `ORIGIN_POSITION_ID` | `OriginPositionID` | Vị trí gốc | `ZTB_PP_POS_ASGN` lúc post |
+
+**Vị trí hiện tại**
+- `submitInitialAssign`, `submitTransfer`, `submitRecall` và `submitConfirm`
+  nhận thêm tham số `PositionID`.
+- Tham số này không bắt buộc, để client cũ vẫn chạy.
+- Nếu có gửi, backend chỉ kiểm tra vị trí đang dùng (dòng Status `A` trong
+  `ZTB_PP_POSITION`) tại Work Center của công đoạn. Không đạt thì trả
+  `POSITION_NOT_ACTIVE`.
+- Backend **không** kiểm tra công nhân có được phân vào vị trí đó hay không.
+- `PositionID` thuộc payload idempotency: retry cùng `SyncItemUUID` nhưng khác
+  `PositionID` thì trả `IDEMPOTENCY_KEY_REUSED`.
+
+**Vị trí gốc**
+- Được tra bằng `ZCL_PP_POSITION_API=>assigned_position` theo Work Center của
+  công đoạn: phân công Active trên vị trí đang dùng. Không có thì để trống.
+- Công nhân dùng để tra theo từng loại giao dịch:
+  - `INITIAL_ASSIGN`, `TRANSFER`: người nhận (`ToWorkerID`).
+  - `RECALL`, `CONFIRM`, điều chỉnh từ Fiori: `WorkerID`.
+  - `REASSIGN` (job qua đêm): `WorkerID`, tra lúc job chạy.
+
+**Trường hợp đặc biệt**
+- Điều chỉnh từ Fiori và `REASSIGN` không có thao tác tại máy, nên chỉ ghi vị
+  trí gốc. Vị trí hiện tại để trống.
+- `REVERSE` chép cả hai cột từ dòng xác nhận gốc. Nếu vị trí gốc của dòng đó
+  trống (dòng có trước khi thêm cột) thì tra lại vị trí gốc lúc đảo.
+
+**Mobile và Fiori**
+- Mobile nhận cả hai field trong `ZA_PP_CommandResult` (các `submit*`),
+  `ZA_PP_SyncStatusResult` (`getSyncStatus`) và `ZA_PP_HistEntry` (`getWorkHistory`).
+- Fiori sổ giao dịch `ZC_PP_AllocTxn_Adm` có thêm hai cột "Vị trí hiện tại" và
+  "Vị trí gốc".
+
+Giao dịch post trước khi thêm cột thì cả hai cột đều trống. Không backfill.
+
 ## Còn lại
 
-- **Ledger:** đóng dấu vị trí/máy vào `ZTB_PP_ALLOC_TXN` lúc post giao dịch.
+- **Ledger:** chưa đóng dấu mã máy (`MACHINE_ID`).

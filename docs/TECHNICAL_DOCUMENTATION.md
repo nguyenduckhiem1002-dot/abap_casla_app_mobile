@@ -139,7 +139,8 @@ flowchart TB
 - Worker nhận/phát sinh sản lượng là business identity riêng được resolve qua worker mapping/reference.
 - Không được suy luận “manager gửi lệnh” đồng nghĩa manager là worker nhận quantity.
 - Function quyết định **được làm gì**.
-- Work context quyết định **được làm ở plant/work center nào**.
+- Work context quyết định **được làm ở WorkID/Work Center và bộ phận công đoạn nào**; Plant không tham gia phân quyền.
+- Plant vẫn được lưu theo công đoạn SAP và dùng để tra Work Center nội bộ. Cấu hình ca chỉ được chọn theo WorkCenter/ShiftID, không chứa hoặc xác thực Plant.
 
 ### 4.2 Mobile auth surface
 
@@ -204,7 +205,7 @@ flowchart TD
     B -->|No| X["Reject"]
     B -->|Yes| C{"Required function active?"}
     C -->|No| X
-    C -->|Yes| D{"Plant + WorkCenter allowed?"}
+    C -->|Yes| D{"WorkID + WorkCenter allowed?"}
     D -->|No| X
     D -->|Yes| E["Continue domain validation"]
 ```
@@ -337,9 +338,18 @@ TransactionUUID
 ProductionOrder
 Operation
 MaCongDoan
+PositionID
+OriginPositionID
 ErrorCode
 Message
 ```
+
+- `PositionID` là vị trí hiện tại, do mobile gửi trong lệnh. Backend chỉ kiểm tra vị trí
+  đang dùng trong Work Center; sai thì trả `POSITION_NOT_ACTIVE`.
+- `OriginPositionID` là vị trí gốc, lấy từ bảng phân công lúc post.
+- Cả hai được lưu vào ledger `ZTB_PP_ALLOC_TXN`. Chúng cũng được trả trong
+  `ZA_PP_SyncStatusResult` (`getSyncStatus`) và `ZA_PP_HistEntry` (`getWorkHistory`).
+- Chi tiết xem `docs/POSITION_MANAGEMENT.md`, mục "Lưu vết vị trí trên ledger".
 
 ---
 
@@ -379,7 +389,7 @@ Server kiểm tra tối thiểu:
 - actor work scope,
 - operation tồn tại và live validation pass,
 - quantity > 0,
-- target worker hợp lệ cho plant/work center/business date,
+- target worker hợp lệ cho Work Center/business date,
 - target worker password đúng,
 - UoM trùng operation UoM,
 - `SyncItemUUID` hợp lệ,
@@ -466,10 +476,10 @@ Append `CORRECTION` với reason và source Fiori/IAM. Không update row `CONFIR
 
 ### 9.1 Shift configuration
 
-Shift được version theo plant và validity. Các field nghiệp vụ chính:
+Shift được version theo Work Center và validity. Các field nghiệp vụ chính:
 
 ```text
-Plant
+WorkCenter
 ShiftID
 ShiftName
 StartTime
@@ -496,7 +506,7 @@ flowchart TD
     A -->|No| C{"Both ShiftID and ExecutedAt present?"}
     C -->|No| E2["SHIFT_AND_EXECUTED_AT_REQUIRED"]
     C -->|Yes| N["Shift-aware resolution"]
-    N --> D["UTC -> plant local time"]
+    N --> D["UTC -> Work Center local time"]
     D --> V["Resolve exactly one active shift version"]
     V --> W["Calculate WorkDate + start/end UTC snapshot"]
     W --> X{"ExecutionDate supplied and matches?"}
@@ -602,7 +612,8 @@ Implementation history hỗ trợ các range code dạng ngày/tuần/tháng/cus
 
 ### Authorization semantics
 
-- Team-history permission: actor thấy scope team mà backend xác định, cùng lineage liên quan.
+- Team-history permission: actor thấy lineage trong WorkID/công đoạn có quyền `PP_HIST_TEAM`
+  tại ngày xem, kể cả giao dịch do quản lý khác tạo. Xem [quy tắc phạm vi](TEAM_HISTORY_SCOPE.md).
 - Self-history permission: worker được derive từ account mapping; client không thể đổi identity bằng cách tự gửi một worker khác.
 - Role/work-context inactive không được coi là quyền hợp lệ.
 
@@ -667,7 +678,7 @@ Versioning cho phép lịch sử cũ giữ ngữ nghĩa tại thời điểm hi�
 | Code | Ý nghĩa |
 | --- | --- |
 | `MISSING_PERMISSION` | Actor thiếu function cần thiết |
-| `WORK_CONTEXT_NOT_ALLOWED` | Plant/work center ngoài scope |
+| `WORK_CONTEXT_NOT_ALLOWED` | WorkID/Work Center ngoài scope |
 | `WORKER_NOT_ALLOWED` | Worker không hợp lệ cho scope/date |
 | `WORKER_AUTH_FAILED` | Worker password verification fail |
 | `UNIT_OF_MEASURE_MISMATCH` | Payload UoM khác operation/balance UoM |

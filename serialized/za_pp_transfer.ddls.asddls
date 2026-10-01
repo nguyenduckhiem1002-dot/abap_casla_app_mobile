@@ -6,6 +6,8 @@ define abstract entity ZA_PP_Transfer
   @EndUserText.label: 'Vị trí làm việc'
   @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Work_Hist_VH', element: 'WorkID' } }]
   WorkID : abap.char(30);
+  @EndUserText.label: 'Vị trí hiện tại'
+  PositionID : abap.char(10);
   FromWorkerID : abap.char(8);
   ToWorkerID : abap.char(8);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'

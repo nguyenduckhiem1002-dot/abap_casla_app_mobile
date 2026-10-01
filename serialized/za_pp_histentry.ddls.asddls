@@ -30,8 +30,14 @@ define abstract entity ZA_PP_HistEntry
   Plant                   : abap.char(4);
   @EndUserText.label      : 'Trung tâm làm việc'
   WorkCenter              : abap.char(8);
+  @EndUserText.label      : 'Tên trung tâm làm việc'
+  WorkCenterName          : abap.char(100);
   @EndUserText.label      : 'Vị trí làm việc'
   WorkID                  : abap.char(30);
+  @EndUserText.label      : 'Vị trí hiện tại'
+  PositionID              : abap.char(10);
+  @EndUserText.label      : 'Vị trí gốc'
+  OriginPositionID        : abap.char(10);
   @EndUserText.label      : 'Loại giao dịch'
   TransactionType         : abap.char(20);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
