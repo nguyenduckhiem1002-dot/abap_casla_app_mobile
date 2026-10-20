@@ -3,6 +3,7 @@
 {
 "FROM":
 [
+"ZTB_MOB_USER",
 "ZTB_PP_ALLOC_TXN",
 "ZTB_PP_OP_ALLOC"
 ],

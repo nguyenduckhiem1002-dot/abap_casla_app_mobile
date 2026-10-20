@@ -2,6 +2,7 @@ CLASS lhc_shift DEFINITION INHERITING FROM cl_abap_behavior_handler.
   PRIVATE SECTION.
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
       IMPORTING REQUEST requested_authorizations FOR Shift RESULT result.
+
     METHODS validateShift FOR VALIDATE ON SAVE
       IMPORTING keys FOR Shift~validateShift.
 ENDCLASS.
@@ -16,16 +17,17 @@ CLASS lhc_shift IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+
   METHOD validateShift.
     READ ENTITIES OF zr_pp_shift IN LOCAL MODE
       ENTITY Shift
-      FIELDS ( Plant ShiftID ValidFrom ShiftName StartTime EndTime EndDayOffset
+      FIELDS ( WorkCenter ShiftID ValidFrom ShiftName StartTime EndTime EndDayOffset
                SAPTimeZone ValidTo IsActive )
       WITH CORRESPONDING #( keys )
       RESULT DATA(shifts).
 
     LOOP AT shifts ASSIGNING FIELD-SYMBOL(<shift>).
-      IF <shift>-Plant IS INITIAL
+      IF <shift>-WorkCenter IS INITIAL
          OR <shift>-ShiftID IS INITIAL
          OR <shift>-ValidFrom IS INITIAL
          OR <shift>-ShiftName IS INITIAL
@@ -40,7 +42,7 @@ CLASS lhc_shift IMPLEMENTATION.
           %tky = <shift>-%tky
           %msg = new_message_with_text(
             severity = if_abap_behv_message=>severity-error
-            text = 'Nhà máy, mã ca, thời gian, múi giờ, hiệu lực và trạng thái A/I là bắt buộc' ) )
+            text = 'Work Center, mã ca, thời gian, múi giờ, hiệu lực và trạng thái A/I là bắt buộc' ) )
           TO reported-shift.
         CONTINUE.
       ENDIF.
@@ -59,16 +61,16 @@ CLASS lhc_shift IMPLEMENTATION.
       ENDIF.
 
       SELECT FROM ztb_pp_shift
-        FIELDS plant
-        WHERE plant = @<shift>-Plant
+        FIELDS work_center
+        WHERE work_center = @<shift>-WorkCenter
           AND shift_id = @<shift>-ShiftID
           AND valid_from <> @<shift>-ValidFrom
           AND is_active = 'A'
           AND valid_from <= @<shift>-ValidTo
           AND valid_to >= @<shift>-ValidFrom
-        INTO TABLE @DATA(overlap_plants)
+        INTO TABLE @DATA(overlap_shifts)
         UP TO 1 ROWS.
-      IF overlap_plants IS NOT INITIAL.
+      IF overlap_shifts IS NOT INITIAL.
         APPEND VALUE #( %tky = <shift>-%tky ) TO failed-shift.
         APPEND VALUE #(
           %tky = <shift>-%tky
@@ -82,3 +84,4 @@ CLASS lhc_shift IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 ENDCLASS.
+

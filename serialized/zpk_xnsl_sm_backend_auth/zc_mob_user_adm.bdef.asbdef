@@ -11,6 +11,7 @@ use etag
 
   use action createUser;
   use action changePasswordAdmin;
+  use action uploadExcel;
 
   use action Edit;
   use action Activate;

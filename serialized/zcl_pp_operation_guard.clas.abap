@@ -39,7 +39,7 @@ CLASS ZCL_PP_OPERATION_GUARD IMPLEMENTATION.
     "Chỉ xét các system status SAP đang active. REL là bắt buộc; các trạng thái
     "kết thúc/xóa luôn có ưu tiên chặn kể cả khi REL vẫn còn active.
     SELECT FROM I_ManufacturingOrderStatus
-      FIELDS StatusCode
+      FIELDS DISTINCT StatusCode
       WHERE ManufacturingOrder = @production_order
         AND IsUserStatus = @abap_false
         AND StatusIsActive = @abap_true

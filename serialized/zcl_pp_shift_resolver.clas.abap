@@ -6,13 +6,45 @@ CLASS zcl_pp_shift_resolver DEFINITION PUBLIC FINAL CREATE PRIVATE.
              shift_id         TYPE ztb_pp_shift-shift_id,
              work_date        TYPE d,
              executed_at      TYPE utclong,
+             entry_date       TYPE d,
+             entry_time       TYPE t,
              shift_start_at   TYPE utclong,
              shift_end_at     TYPE utclong,
              shift_time_zone  TYPE ztb_pp_shift-time_zone,
              shift_valid_from TYPE d,
+
            END OF context.
+
+    "Múi giờ dùng khi không xác định được múi giờ của ca.
+    CONSTANTS default_time_zone TYPE ztb_pp_shift-time_zone VALUE 'UTC+7'.
+    "Múi giờ khai báo của ca tại Work Center; không xác định được duy nhất thì
+    "trả default_time_zone.
+    CLASS-METHODS shift_time_zone
+      IMPORTING work_center   TYPE ztb_pp_shift-work_center
+                shift_id      TYPE ztb_pp_shift-shift_id
+      RETURNING VALUE(result) TYPE ztb_pp_shift-time_zone.
+    "Thời điểm thực hiện dạng UTC. Client mới gửi ngày giờ địa phương
+    "(entry_date, entry_time), được đổi theo múi giờ của ca; client cũ gửi sẵn
+    "executed_at. Ngày giờ địa phương không hợp lệ thì trả initial.
+    CLASS-METHODS to_executed_at
+      IMPORTING work_center   TYPE ztb_pp_shift-work_center
+                shift_id      TYPE ztb_pp_shift-shift_id
+                executed_at   TYPE utclong
+                entry_date    TYPE d
+                entry_time    TYPE t
+      RETURNING VALUE(result) TYPE utclong.
+    "Ngày và giờ địa phương của một thời điểm UTC; time_zone trống thì dùng
+    "default_time_zone.
+    CLASS-METHODS to_local_date
+      IMPORTING utc           TYPE utclong
+                time_zone     TYPE ztb_pp_shift-time_zone OPTIONAL
+      RETURNING VALUE(result) TYPE d.
+    CLASS-METHODS to_local_time
+      IMPORTING utc           TYPE utclong
+                time_zone     TYPE ztb_pp_shift-time_zone OPTIONAL
+      RETURNING VALUE(result) TYPE t.
     CLASS-METHODS resolve
-      IMPORTING plant          TYPE ztb_pp_shift-plant
+      IMPORTING work_center    TYPE ztb_pp_shift-work_center
                 shift_id       TYPE ztb_pp_shift-shift_id
                 executed_at    TYPE utclong
                 execution_date TYPE d
@@ -37,7 +69,11 @@ CLASS zcl_pp_shift_resolver DEFINITION PUBLIC FINAL CREATE PRIVATE.
       RETURNING VALUE(result) TYPE abap_bool.
 ENDCLASS.
 
-CLASS zcl_pp_shift_resolver IMPLEMENTATION.
+
+
+CLASS ZCL_PP_SHIFT_RESOLVER IMPLEMENTATION.
+
+
   METHOD resolve.
     "A retry uses the original snapshot, even after configuration is changed.
     IF sync_item_uuid IS NOT INITIAL.
@@ -45,7 +81,7 @@ CLASS zcl_pp_shift_resolver IMPLEMENTATION.
         INNER JOIN ztb_pp_op_alloc AS op ON op~operation_uuid = txn~operation_uuid
         FIELDS txn~shift_id, txn~work_date, txn~execution_date, txn~executed_at,
                txn~shift_start_at, txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from
-        WHERE txn~sync_item_uuid = @sync_item_uuid AND op~plant = @plant
+        WHERE txn~sync_item_uuid = @sync_item_uuid AND op~work_center = @work_center
         INTO TABLE @DATA(receipts) UP TO 2 ROWS.
       IF lines( receipts ) = 1.
         DATA(receipt) = receipts[ 1 ].
@@ -84,7 +120,7 @@ CLASS zcl_pp_shift_resolver IMPLEMENTATION.
     ENDIF.
 
     SELECT FROM ztb_pp_shift FIELDS *
-      WHERE plant = @plant AND shift_id = @shift_id AND is_active = 'A'
+      WHERE work_center = @work_center AND shift_id = @shift_id AND is_active = 'A'
       INTO TABLE @DATA(configs).
 
     "New clients send the shift's business date. Accept the transaction for
@@ -133,6 +169,7 @@ CLASS zcl_pp_shift_resolver IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+
   METHOD calculate.
     result-error_code = 'SHIFT_CONFIG_INVALID'.
     IF executed_at IS INITIAL OR is_config_consistent( config ) = abap_false.
@@ -165,9 +202,11 @@ CLASS zcl_pp_shift_resolver IMPLEMENTATION.
     ENDIF.
     result = VALUE #( is_valid = abap_true shift_id = config-shift_id
       work_date = work_date executed_at = executed_at
+            entry_date = local_date entry_time = local_time
       shift_start_at = start_at shift_end_at = end_at
       shift_time_zone = config-time_zone shift_valid_from = config-valid_from ).
   ENDMETHOD.
+
 
   METHOD calculate_for_work_date.
     result-error_code = 'SHIFT_CONFIG_INVALID'.
@@ -205,11 +244,15 @@ CLASS zcl_pp_shift_resolver IMPLEMENTATION.
     result = VALUE #( is_valid = abap_true shift_id = config-shift_id
       work_date = work_date executed_at = executed_at
       shift_start_at = start_at shift_end_at = end_at
+            entry_date = to_local_date( utc = executed_at time_zone = config-time_zone )
+      entry_time = to_local_time( utc = executed_at time_zone = config-time_zone )
       shift_time_zone = config-time_zone shift_valid_from = config-valid_from ).
   ENDMETHOD.
 
+
   METHOD is_config_consistent.
-    result = xsdbool( config-time_zone IS NOT INITIAL
+    result = xsdbool( config-work_center IS NOT INITIAL
+      AND config-time_zone IS NOT INITIAL
       AND config-valid_from IS NOT INITIAL
       AND config-valid_to >= config-valid_from
       AND config-end_day_offset <= 1
@@ -217,5 +260,63 @@ CLASS zcl_pp_shift_resolver IMPLEMENTATION.
       AND config-end_time <= '235959'
       AND NOT ( config-end_day_offset = 0 AND config-end_time <= config-start_time )
       AND NOT ( config-end_day_offset = 1 AND config-end_time > config-start_time ) ).
+  ENDMETHOD.
+
+
+  METHOD shift_time_zone.
+    result = default_time_zone.
+    IF work_center IS INITIAL OR shift_id IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT FROM ztb_pp_shift
+      FIELDS DISTINCT time_zone
+      WHERE work_center = @work_center AND shift_id = @shift_id
+        AND is_active = 'A' AND time_zone <> ' '
+      INTO TABLE @DATA(zones) UP TO 2 ROWS.
+    IF lines( zones ) = 1.
+      result = zones[ 1 ]-time_zone.
+    ENDIF.
+  ENDMETHOD.
+
+
+  METHOD to_executed_at.
+    IF entry_date IS INITIAL.
+      result = executed_at.
+      RETURN.
+    ENDIF.
+    DATA(zone) = shift_time_zone( work_center = work_center shift_id = shift_id ).
+    TRY.
+        CONVERT DATE entry_date TIME entry_time TIME ZONE zone INTO UTCLONG result.
+      CATCH cx_parameter_invalid_range cx_sy_conversion_error.
+        CLEAR result.
+    ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD to_local_date.
+    IF utc IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA(zone) = COND ztb_pp_shift-time_zone(
+      WHEN time_zone IS INITIAL THEN default_time_zone ELSE time_zone ).
+    TRY.
+        CONVERT UTCLONG utc TIME ZONE zone INTO DATE result.
+      CATCH cx_parameter_invalid_range cx_sy_conversion_error.
+        CLEAR result.
+    ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD to_local_time.
+    IF utc IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA(zone) = COND ztb_pp_shift-time_zone(
+      WHEN time_zone IS INITIAL THEN default_time_zone ELSE time_zone ).
+    TRY.
+        CONVERT UTCLONG utc TIME ZONE zone INTO TIME result.
+      CATCH cx_parameter_invalid_range cx_sy_conversion_error.
+        CLEAR result.
+    ENDTRY.
   ENDMETHOD.
 ENDCLASS.

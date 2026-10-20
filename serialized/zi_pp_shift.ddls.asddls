@@ -3,8 +3,8 @@
 @Search.searchable: true
 define view entity ZI_PP_Shift as select from ztb_pp_shift
 {
-  @EndUserText.label: 'Nhà máy'
-  key plant as Plant,
+  @EndUserText.label: 'Work Center'
+  key work_center as WorkCenter,
   @EndUserText.label: 'Mã ca'
   @Search.defaultSearchElement: true
   key shift_id as ShiftID,

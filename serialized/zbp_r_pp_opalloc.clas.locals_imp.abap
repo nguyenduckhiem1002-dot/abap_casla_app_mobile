@@ -51,6 +51,7 @@ CLASS lhc_operationallocation DEFINITION
              transferred_out_qty      TYPE ztb_pp_emp_alloc-transferred_out_qty,
              recalled_qty             TYPE ztb_pp_emp_alloc-recalled_qty,
              completed_qty            TYPE ztb_pp_emp_alloc-completed_qty,
+             defect_qty               TYPE ztb_pp_emp_alloc-defect_qty,
              remaining_qty            TYPE ztb_pp_emp_alloc-remaining_qty,
              uom                      TYPE ztb_pp_emp_alloc-uom,
            END OF worker_balance,
@@ -77,6 +78,7 @@ CLASS lhc_operationallocation DEFINITION
              from_worker_id            TYPE ztb_pp_alloc_txn-from_worker_id,
              to_worker_id              TYPE ztb_pp_alloc_txn-to_worker_id,
              quantity                  TYPE ztb_pp_alloc_txn-quantity,
+             defect_quantity           TYPE ztb_pp_alloc_txn-defect_quantity,
              uom                       TYPE ztb_pp_alloc_txn-uom,
              execution_date            TYPE ztb_pp_alloc_txn-execution_date,
              shift_id                  TYPE ztb_pp_alloc_txn-shift_id,
@@ -98,8 +100,8 @@ CLASS lhc_operationallocation DEFINITION
     DATA work_center_name_cache TYPE work_center_name_entries.
 
     METHODS get_work_center_name
-      IMPORTING plant TYPE ztb_pp_op_alloc-plant
-                work_center TYPE ztb_pp_op_alloc-work_center
+      IMPORTING plant         TYPE ztb_pp_op_alloc-plant
+                work_center   TYPE ztb_pp_op_alloc-work_center
       RETURNING VALUE(result) TYPE work_center_name.
 
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
@@ -152,6 +154,8 @@ CLASS lhc_operationallocation DEFINITION
       RESULT    result.
 
 
+
+
     METHODS alpha_out_no_gaps
       IMPORTING iv_value        TYPE csequence
       RETURNING VALUE(rv_value) TYPE string.
@@ -183,6 +187,8 @@ CLASS lhc_operationallocation DEFINITION
                 ma_congdoan    TYPE ztb_md_congdoan-ma_congdoan
                 effective_date TYPE d
                 position_id    TYPE ztb_pp_alloc_txn-position_id OPTIONAL
+                manager_uuid   TYPE sysuuid_x16 OPTIONAL
+                func_id        TYPE ztb_mob_func-func_id OPTIONAL
       RETURNING VALUE(result)  TYPE worker_access_result.
 
     METHODS read_worker_balances
@@ -198,7 +204,7 @@ CLASS lhc_operationallocation DEFINITION
 
     METHODS read_allocation_lineage
       IMPORTING operation_uuid TYPE ztb_pp_op_alloc-operation_uuid
-      RETURNING VALUE(result) TYPE zcl_pp_alloc_lineage=>ledger_rows.
+      RETURNING VALUE(result)  TYPE zcl_pp_alloc_lineage=>ledger_rows.
 
     METHODS get_usable_txn_qty
       IMPORTING operation_uuid            TYPE ztb_pp_op_alloc-operation_uuid
@@ -240,6 +246,11 @@ CLASS lhc_operationallocation DEFINITION
     METHODS report_failure
       IMPORTING cid TYPE string text TYPE string
       CHANGING failed TYPE failed_response reported TYPE reported_response.
+
+    METHODS get_original_position
+      IMPORTING operation_uuid   TYPE ztb_pp_op_alloc-operation_uuid
+                transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid
+      RETURNING VALUE(result)    TYPE ztb_pp_alloc_txn-position_id.
 ENDCLASS.
 
 CLASS lhc_employeeallocation DEFINITION
@@ -331,13 +342,14 @@ CLASS lhc_employeeallocation IMPLEMENTATION.
   METHOD assignment_exceeds_operation.
     READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
       ENTITY OperationAllocation BY \_Employees
-      FIELDS ( CompletedQuantity RemainingQuantity )
+      FIELDS ( CompletedQuantity DefectQuantity RemainingQuantity )
       WITH VALUE #( ( %key-OperationUUID = operation_uuid ) )
       RESULT DATA(operation_allocations).
     DATA(total_allocated) = REDUCE ztb_pp_emp_alloc-remaining_qty(
       INIT total = CONV ztb_pp_emp_alloc-remaining_qty( 0 )
       FOR current IN operation_allocations
-      NEXT total = total + current-RemainingQuantity + current-CompletedQuantity ).
+      NEXT total = total + current-RemainingQuantity
+                         + current-CompletedQuantity + current-DefectQuantity ).
     result = xsdbool( total_allocated + delta_quantity > operation_quantity ).
   ENDMETHOD.
 
@@ -531,10 +543,16 @@ CLASS lhc_employeeallocation IMPLEMENTATION.
             ExecutedAt = executed_at
             ShiftTimeZone = shift_time_zone
             ShiftValidFrom = shift_valid_from
+                        PostingDate = execution_date
+            EntryDate = zcl_pp_shift_resolver=>to_local_date(
+              utc = executed_at time_zone = shift_time_zone )
+            EntryTime = zcl_pp_shift_resolver=>to_local_time(
+              utc = executed_at time_zone = shift_time_zone )
             TransactionStatus = zcl_pp_txn_type=>posted
             ReasonCode = input-ReasonCode
             ReasonText = input-ReasonText
             SourceChannel = zcl_pp_txn_type=>source_fiori
+
             VerificationMethod = 'IAM' ) ) ) )
         FAILED DATA(modify_failed).
       IF modify_failed-employeeallocation IS NOT INITIAL
@@ -564,7 +582,7 @@ CLASS lhc_employeeallocation IMPLEMENTATION.
     READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
       ENTITY EmployeeAllocation
       FIELDS ( InitialAssignedQuantity TransferredInQuantity
-               TransferredOutQuantity RecalledQuantity CompletedQuantity
+               TransferredOutQuantity RecalledQuantity CompletedQuantity DefectQuantity
                RemainingQuantity )
       WITH CORRESPONDING #( keys )
       RESULT DATA(allocations).
@@ -576,9 +594,11 @@ CLASS lhc_employeeallocation IMPLEMENTATION.
         + <allocation>-TransferredInQuantity
         - <allocation>-TransferredOutQuantity
         - <allocation>-RecalledQuantity
-        - <allocation>-CompletedQuantity.
-      IF expected_remaining < 0
-         OR <allocation>-RemainingQuantity <> expected_remaining.
+        - <allocation>-CompletedQuantity
+        - <allocation>-DefectQuantity.
+*      IF expected_remaining < 0
+*         OR <allocation>-RemainingQuantity <> expected_remaining.
+      IF <allocation>-RemainingQuantity <> expected_remaining.
         APPEND VALUE #( %tky = <allocation>-%tky ) TO failed-employeeallocation.
         APPEND VALUE #(
           %tky = <allocation>-%tky
@@ -716,7 +736,9 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           original_transaction_type = txn-OriginalTransactionType worker_id = txn-WorkerID
           from_worker_id = txn-FromWorkerID to_worker_id = txn-ToWorkerID
           work_id = txn-WorkID shift_id = txn-ShiftID work_date = txn-WorkDate
-          execution_date = txn-ExecutionDate quantity = txn-Quantity uom = txn-UnitOfMeasure
+          position_id = txn-PositionID
+          execution_date = txn-ExecutionDate quantity = txn-Quantity
+          defect_quantity = txn-DefectQuantity uom = txn-UnitOfMeasure
           transaction_status = txn-TransactionStatus ) ).
       DATA(calculation) = zcl_pp_reassign_job=>calculate( rows = rows target_date = day ).
       IF calculation-error_code IS NOT INITIAL.
@@ -736,8 +758,10 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
           ( OriginalTransactionUUID OriginalTransactionType TransactionType WorkerID ToWorkerID
-            WorkID OriginPositionID ShiftID Quantity UnitOfMeasure ExecutionDate WorkDate ExecutedAt
-            TransactionStatus SourceChannel ReasonCode VerificationMethod )
+            WorkID PositionID MachineID OriginPositionID ShiftID Quantity UnitOfMeasure
+            ExecutionDate WorkDate ExecutedAt
+            TransactionStatus SourceChannel ReasonCode VerificationMethod
+            PostingDate EntryDate EntryTime )
         WITH VALUE #( ( %tky = <key>-%tky %target = VALUE #(
           FOR entry IN calculation-entries INDEX INTO item_no (
             %cid = |RA{ <key>-%tky-OperationUUID }_{ item_no }|
@@ -745,9 +769,15 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             OriginalTransactionType = entry-original_transaction_type
             TransactionType = entry-transaction_type WorkerID = entry-worker_id ToWorkerID = entry-to_worker_id
             WorkID = entry-work_id ShiftID = entry-shift_id Quantity = entry-quantity UnitOfMeasure = entry-uom
+            PositionID = entry-position_id
+            MachineID = zcl_pp_position_api=>machine_of_position(
+              work_center = work_center position_id = entry-position_id )
             OriginPositionID = zcl_pp_position_api=>assigned_position(
               work_center = work_center worker_id = entry-worker_id )
             ExecutionDate = day WorkDate = day ExecutedAt = now
+            PostingDate = day
+            EntryDate = zcl_pp_shift_resolver=>to_local_date( utc = now )
+            EntryTime = zcl_pp_shift_resolver=>to_local_time( utc = now )
             TransactionStatus = entry-transaction_status SourceChannel = entry-source_channel
             ReasonCode = entry-reason_code VerificationMethod = 'APPLICATION_JOB' ) ) ) )
         FAILED DATA(post_failed) REPORTED DATA(post_reported).
@@ -782,17 +812,17 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     DATA(context_date) = COND d(
       WHEN effective_date IS INITIAL THEN cl_abap_context_info=>get_system_date( )
       ELSE effective_date ).
-    IF zcl_mob_token_validator=>has_func_op_scope(
-         user_uuid = user_uuid
-         func_id = func_id
-         plant = live-plant
-         work_center = live-work_center
-         work_id = work_id
-         ma_congdoan = live-ma_congdoan
-         effective_date = context_date ) = abap_false.
-      value-error_code = 'MANAGER_OPERATION_NOT_ALLOWED'.
-      RETURN.
-    ENDIF.
+*    IF zcl_mob_token_validator=>has_func_op_scope(
+*         user_uuid = user_uuid
+*         func_id = func_id
+*         plant = live-plant
+*         work_center = live-work_center
+*         work_id = work_id
+*         ma_congdoan = live-ma_congdoan
+*         effective_date = context_date ) = abap_false.
+*      value-error_code = 'MANAGER_OPERATION_NOT_ALLOWED'.
+*      RETURN.
+*    ENDIF.
     DATA(work_operation_context) = check_work_operation_context(
       work_id = work_id
       work_center = live-work_center
@@ -906,7 +936,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     SELECT FROM ztb_md_congdoan
       FIELDS ma_congdoan, ten_congdoan, bo_phan
       WHERE ma_congdoan = @ma_congdoan
-        AND bo_phan = @work_context-bo_phan
+*        AND bo_phan = @work_context-bo_phan
         AND valid_from <= @effective_date
         AND valid_to >= @effective_date
       INTO TABLE @DATA(operation_masters)
@@ -915,18 +945,18 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       result-error_code = 'OPERATION_MASTER_NOT_FOUND'.
       RETURN.
     ENDIF.
-    IF lines( operation_masters ) > 1.
-      result-error_code = 'OPERATION_MASTER_AMBIGUOUS'.
-      RETURN.
-    ENDIF.
+*    IF lines( operation_masters ) > 1.
+*      result-error_code = 'OPERATION_MASTER_AMBIGUOUS'.
+*      RETURN.
+*    ENDIF.
 
     DATA(operation_master) = operation_masters[ 1 ].
-    IF work_context-bo_phan IS INITIAL
-       OR operation_master-bo_phan IS INITIAL
-       OR work_context-bo_phan <> operation_master-bo_phan.
-      result-error_code = 'OPERATION_DEPARTMENT_MISMATCH'.
-      RETURN.
-    ENDIF.
+*    IF work_context-bo_phan IS INITIAL
+*       OR operation_master-bo_phan IS INITIAL
+*       OR work_context-bo_phan <> operation_master-bo_phan.
+*      result-error_code = 'OPERATION_DEPARTMENT_MISMATCH'.
+*      RETURN.
+*    ENDIF.
 
     result = VALUE #(
       is_valid = abap_true
@@ -940,17 +970,32 @@ CLASS lhc_operationallocation IMPLEMENTATION.
   " Kiểm tra công nhân theo đúng thứ tự để mobile phân biệt được nguyên nhân lỗi:
   " tài khoản/role không có quyền tại công đoạn hay phân công nhân công hết hiệu lực.
   METHOD check_worker_access.
-    IF zcl_mob_token_validator=>has_worker_op_scope(
-         user_uuid = user_uuid
-         worker_id = worker_id
-         plant = plant
-         work_center = work_center
-         work_id = work_id
-         ma_congdoan = ma_congdoan
-         effective_date = effective_date ) = abap_false.
-      result-error_code = 'WORKER_OPERATION_NOT_ALLOWED'.
+
+    "Giám sát và công nhân phải cùng phạm vi WorkID: giám sát được cấp function
+    "của lệnh trên WorkID này, công nhân có WorkID này trong role. Không xét
+    "công đoạn.
+    "Quản lý phải có quyền với chính công nhân này: role cấp function của lệnh
+    "cho quản lý và role của công nhân phải có chung bộ phận. Không xét WorkID
+    "mobile gửi, không xét công đoạn.
+    IF manager_uuid IS NOT INITIAL
+       AND zcl_mob_token_validator=>manager_covers_worker(
+             manager_uuid = manager_uuid func_id = func_id
+             worker_uuid = user_uuid ) = abap_false.
+      result-error_code = 'MANAGER_WORKER_NOT_ALLOWED'.
       RETURN.
     ENDIF.
+
+*    IF zcl_mob_token_validator=>has_worker_op_scope(
+*         user_uuid = user_uuid
+*         worker_id = worker_id
+*         plant = plant
+*         work_center = work_center
+*         work_id = work_id
+*         ma_congdoan = ma_congdoan
+*         effective_date = effective_date ) = abap_false.
+*      result-error_code = 'WORKER_OPERATION_NOT_ALLOWED'.
+*      RETURN.
+*    ENDIF.
 
     IF zcl_pp_worker_validator=>is_worker_active(
          worker_id = worker_id
@@ -981,7 +1026,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENTITY OperationAllocation BY \_Employees
         FIELDS ( EmployeeAllocationUUID WorkerID InitialAssignedQuantity
                  TransferredInQuantity TransferredOutQuantity RecalledQuantity
-                 CompletedQuantity RemainingQuantity UnitOfMeasure )
+                 CompletedQuantity DefectQuantity RemainingQuantity UnitOfMeasure )
         WITH VALUE #( ( %key-OperationUUID = operation_uuid ) )
         RESULT DATA(allocations).
     LOOP AT allocations INTO DATA(allocation).
@@ -993,6 +1038,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         transferred_out_qty = allocation-TransferredOutQuantity
         recalled_qty = allocation-RecalledQuantity
         completed_qty = allocation-CompletedQuantity
+        defect_qty = allocation-DefectQuantity
         remaining_qty = allocation-RemainingQuantity
         uom = allocation-UnitOfMeasure ) TO result.
     ENDLOOP.
@@ -1011,8 +1057,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     ENDIF.
 
     result-balance = worker_balances[ 1 ].
-    IF result-balance-uom <> uom
-       OR result-balance-remaining_qty < quantity.
+    IF result-balance-uom <> uom.
+*       OR result-balance-remaining_qty < quantity.
       result-error_code = 'CONFIRM_QUANTITY_EXCEEDED'.
       RETURN.
     ENDIF.
@@ -1026,7 +1072,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENTITY OperationAllocation BY \_Transactions
       FIELDS ( TransactionUUID OriginalTransactionUUID OperationUUID TransactionType
                WorkerID FromWorkerID ToWorkerID WorkID ShiftID WorkDate ExecutionDate ExecutedAt
-               Quantity UnitOfMeasure TransactionStatus )
+               Quantity DefectQuantity UnitOfMeasure TransactionStatus )
       WITH VALUE #( ( %key-OperationUUID = operation_uuid ) )
       RESULT DATA(transactions).
     result = VALUE #( FOR txn IN transactions (
@@ -1035,7 +1081,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       worker_id = txn-WorkerID from_worker_id = txn-FromWorkerID to_worker_id = txn-ToWorkerID
       work_id = txn-WorkID shift_id = txn-ShiftID work_date = txn-WorkDate
       execution_date = txn-ExecutionDate executed_at = txn-ExecutedAt
-      quantity = txn-Quantity uom = txn-UnitOfMeasure transaction_status = txn-TransactionStatus ) ).
+      quantity = txn-Quantity defect_quantity = txn-DefectQuantity
+      uom = txn-UnitOfMeasure transaction_status = txn-TransactionStatus ) ).
   ENDMETHOD.
 
   METHOD get_usable_txn_qty.
@@ -1054,7 +1101,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       FIELDS txn~transaction_uuid, txn~operation_uuid, txn~actor_user_uuid,
              txn~original_transaction_uuid, txn~transaction_type, txn~worker_id,
              txn~from_worker_id, txn~to_worker_id, txn~work_id, txn~position_id, txn~origin_position_id,
-             txn~quantity, txn~uom, txn~execution_date, txn~shift_id, txn~executed_at,
+             txn~quantity, txn~defect_quantity, txn~uom, txn~execution_date, txn~shift_id, txn~executed_at,
              op~production_order, op~operation_no, op~ma_congdoan
       WHERE txn~sync_item_uuid = @sync_item_uuid
         AND txn~transaction_status = @zcl_pp_txn_type=>posted
@@ -1068,7 +1115,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENTITY OperationAllocation BY \_Transactions
         FIELDS ( TransactionUUID OperationUUID SyncItemUUID ActorUserUUID
                  OriginalTransactionUUID TransactionType WorkerID
-                 FromWorkerID ToWorkerID WorkID PositionID OriginPositionID Quantity UnitOfMeasure
+                 FromWorkerID ToWorkerID WorkID PositionID OriginPositionID Quantity DefectQuantity UnitOfMeasure
                  ExecutionDate ShiftID ExecutedAt )
         WITH VALUE #( ( %key-OperationUUID = operation_uuid ) )
         RESULT DATA(transactions).
@@ -1087,6 +1134,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         from_worker_id = transaction-FromWorkerID
         to_worker_id = transaction-ToWorkerID
         quantity = transaction-Quantity
+        defect_quantity = transaction-DefectQuantity
         uom = transaction-UnitOfMeasure
         execution_date = transaction-ExecutionDate
         shift_id = transaction-ShiftID
@@ -1144,19 +1192,19 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       input-ExecutionDate = shift-work_date.
-      IF zcl_mob_token_validator=>has_func_op_scope(
-           user_uuid = auth-user_uuid func_id = func_initial_assign
-           plant = operation-Plant
-           work_center = operation-WorkCenter
-           work_id = input-WorkID
-           ma_congdoan = operation-MaCongDoan
-           effective_date = shift-work_date ) = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'MANAGER_OPERATION_NOT_ALLOWED'
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
+*      IF zcl_mob_token_validator=>has_func_op_scope(
+*           user_uuid = auth-user_uuid func_id = func_initial_assign
+*           plant = operation-Plant
+*           work_center = operation-WorkCenter
+*           work_id = input-WorkID
+*           ma_congdoan = operation-MaCongDoan
+*           effective_date = shift-work_date ) = abap_false.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                    text = 'MANAGER_OPERATION_NOT_ALLOWED'
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
       IF input-UnitOfMeasure <> operation-UnitOfMeasure.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -1171,7 +1219,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CATCH cx_abap_message_digest zcx_mob_config.
           report_instance_failure(
             EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                      text = 'WORKER_AUTH_FAILED'
+                      text = CONV string( worker_auth-error_code )
             CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
@@ -1179,14 +1227,14 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         WHEN worker_auth-is_valid = abap_false
         THEN VALUE #( error_code = 'WORKER_AUTH_FAILED' )
         ELSE check_worker_access(
-          user_uuid = worker_auth-worker_user_uuid
-          worker_id = input-ToWorkerID
-          plant = operation-Plant
-          work_center = operation-WorkCenter
-          work_id = input-WorkID
-          ma_congdoan = operation-MaCongDoan
-          effective_date = input-ExecutionDate
-          position_id = input-PositionID ) ).
+        user_uuid = worker_auth-worker_user_uuid
+        worker_id = input-ToWorkerID
+        plant = operation-Plant
+        work_center = operation-WorkCenter
+        work_id = input-WorkID
+        ma_congdoan = operation-MaCongDoan
+        effective_date = input-ExecutionDate
+         manager_uuid = auth-user_uuid func_id = func_initial_assign ) ).
       IF worker_access-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -1229,19 +1277,20 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENDIF.
 
       DATA(worker_balances) = read_worker_balances( operation-OperationUUID ).
-      DATA(allocated_quantity) = REDUCE ztb_pp_emp_alloc-remaining_qty(
-        INIT total = CONV ztb_pp_emp_alloc-remaining_qty( 0 )
-        FOR worker_balance IN worker_balances
-        NEXT total = total + worker_balance-remaining_qty
-                          + worker_balance-completed_qty ).
-      IF allocated_quantity + input-Quantity
-         > operation-OperationQuantity.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'OPERATION_QUANTITY_EXCEEDED'
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
+*      DATA(allocated_quantity) = REDUCE ztb_pp_emp_alloc-remaining_qty(
+*        INIT total = CONV ztb_pp_emp_alloc-remaining_qty( 0 )
+*        FOR worker_balance IN worker_balances
+*        NEXT total = total + worker_balance-remaining_qty
+*                          + worker_balance-completed_qty
+*                          + worker_balance-defect_qty ).
+*      IF allocated_quantity + input-Quantity
+*         > operation-OperationQuantity.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                    text = 'OPERATION_QUANTITY_EXCEEDED'
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
 
       DELETE worker_balances WHERE worker_id <> input-ToWorkerID.
       "Resolve before changing balances; include REASSIGN and buffered assignments.
@@ -1249,6 +1298,29 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         operation_uuid = operation-OperationUUID worker_id = input-ToWorkerID
         work_id = input-WorkID shift_id = shift-shift_id work_date = shift-work_date
         uom = input-UnitOfMeasure ).
+      " Vị trí của các lần giao trước trong cùng nhóm (cùng CN, công đoạn, WorkID, ca, ngày)
+      SELECT FROM ztb_pp_alloc_txn
+        FIELDS position_id
+        WHERE operation_uuid     = @operation-OperationUUID
+          AND transaction_type   = @zcl_pp_txn_type=>initial_assign
+          AND to_worker_id       = @input-ToWorkerID
+          AND work_id            = @input-WorkID
+          AND shift_id           = @shift-shift_id
+          AND work_date          = @shift-work_date
+          AND transaction_status = @zcl_pp_txn_type=>posted
+          AND position_id       <> ''
+        ORDER BY executed_at DESCENDING
+        INTO TABLE @DATA(group_positions) UP TO 1 ROWS.
+
+      IF group_positions IS NOT INITIAL
+         AND group_positions[ 1 ]-position_id <> input-PositionID.
+        report_instance_failure(
+          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+                    text = 'POSITION_GROUP_MISMATCH'
+          CHANGING failed = failed reported = reported ).
+        CONTINUE.
+      ENDIF.
+
       IF lines( worker_balances ) > 1 OR allocation_root-error_code IS NOT INITIAL.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -1281,11 +1353,13 @@ CLASS lhc_operationallocation IMPLEMENTATION.
 
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
-          (             OriginalTransactionUUID OriginalTransactionType SyncItemUUID ActorUserUUID VerifiedWorkerUserUUID WorkerVerifiedAt
+           ( OriginalTransactionUUID OriginalTransactionType SyncItemUUID ActorUserUUID
+             VerifiedWorkerUserUUID WorkerVerifiedAt
             InitiatorSessionID DeviceID VerificationMethod TransactionType
              WorkerID ToWorkerID WorkID PositionID OriginPositionID Quantity UnitOfMeasure ExecutionDate
              ShiftID WorkDate ExecutedAt ShiftStartAt ShiftEndAt ShiftTimeZone ShiftValidFrom
-            TransactionStatus SourceChannel )
+            TransactionStatus SourceChannel MachineID
+            PostingDate EntryDate EntryTime )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |TXN{ sy-tabix }|
             OriginalTransactionUUID = allocation_root-root_transaction_uuid
@@ -1303,9 +1377,12 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             ShiftEndAt = shift-shift_end_at
             ShiftTimeZone = shift-shift_time_zone
             ShiftValidFrom = shift-shift_valid_from
+                        PostingDate = shift-work_date
+            EntryDate = shift-entry_date EntryTime = shift-entry_time
             TransactionType = zcl_pp_txn_type=>initial_assign
             WorkerID = input-ToWorkerID ToWorkerID = input-ToWorkerID WorkID = input-WorkID
-            PositionID = input-PositionID
+                        PositionID = input-PositionID
+            MachineID =  input-machineid
             OriginPositionID = zcl_pp_position_api=>assigned_position(
               work_center = operation-WorkCenter worker_id = input-ToWorkerID )
             Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
@@ -1318,209 +1395,217 @@ CLASS lhc_operationallocation IMPLEMENTATION.
 
   " Xử lý điều chuyển sản lượng giữa hai công nhân và cập nhật các số dư liên quan.
   METHOD transfer.
-    LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
-      DATA(input) = <key>-%param.
-      TRY.
-          DATA(auth) = zcl_mob_token_validator=>validate_token(
-            token = CONV string( input-AccessToken ) device_id = input-DeviceID
-            required_func = func_transfer ).
-        CATCH cx_abap_message_digest zcx_mob_config.
-          report_instance_failure(
-            EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                      text = 'Không thể xác thực yêu cầu điều chuyển'
-            CHANGING failed = failed reported = reported ).
-          CONTINUE.
-      ENDTRY.
-      IF auth-is_valid = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = CONV string( auth-error_code )
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE ENTITY OperationAllocation ALL FIELDS
-        WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
-      IF operations IS INITIAL OR input-Quantity <= 0
-         OR input-WorkID IS INITIAL
-         OR input-FromWorkerID IS INITIAL OR input-ToWorkerID IS INITIAL
-         OR input-FromWorkerID = input-ToWorkerID OR input-SyncItemUUID IS INITIAL
-         OR ( input-ExecutionDate IS INITIAL AND input-ExecutedAt IS INITIAL ).
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'Thiếu hoặc sai dữ liệu điều chuyển'
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-      DATA(operation) = operations[ 1 ].
-      DATA(shift) = zcl_pp_shift_resolver=>resolve(
-        work_center = operation-WorkCenter shift_id = input-ShiftID
-        executed_at = input-ExecutedAt execution_date = input-ExecutionDate
-        sync_item_uuid = input-SyncItemUUID ).
-      IF shift-is_valid = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = CONV string( shift-error_code )
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-      input-ExecutionDate = shift-work_date.
-      IF zcl_mob_token_validator=>has_func_op_scope(
-           user_uuid = auth-user_uuid func_id = func_transfer
-           plant = operation-Plant
-           work_center = operation-WorkCenter
-           work_id = input-WorkID
-           ma_congdoan = operation-MaCongDoan
-           effective_date = shift-work_date ) = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'MANAGER_OPERATION_NOT_ALLOWED'
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-      TRY.
-          DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
-            worker_id = input-ToWorkerID password = CONV string( input-WorkerPassword ) ).
-        CATCH cx_abap_message_digest zcx_mob_config.
-          report_instance_failure(
-            EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                      text = 'WORKER_AUTH_FAILED'
-            CHANGING failed = failed reported = reported ).
-          CONTINUE.
-      ENDTRY.
-      IF worker_auth-is_valid = abap_false
-         OR input-UnitOfMeasure <> operation-UnitOfMeasure.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = COND string(
-                      WHEN worker_auth-is_valid = abap_false
-                      THEN 'WORKER_AUTH_FAILED'
-                      ELSE 'UNIT_OF_MEASURE_MISMATCH' )
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-      DATA(worker_access) = check_worker_access(
-        user_uuid = worker_auth-worker_user_uuid
-        worker_id = input-ToWorkerID
-        plant = operation-Plant
-        work_center = operation-WorkCenter
-        work_id = input-WorkID
-        ma_congdoan = operation-MaCongDoan
-        effective_date = input-ExecutionDate
-        position_id = input-PositionID ).
-      IF worker_access-is_valid = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = CONV string( worker_access-error_code )
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-
-      DATA(existing_txns) = read_operation_sync_receipts(
-        operation_uuid = operation-OperationUUID
-        sync_item_uuid = input-SyncItemUUID ).
-      IF lines( existing_txns ) > 1.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'SYNC_RECEIPT_DUPLICATE'
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-      IF existing_txns IS NOT INITIAL.
-        DATA(existing_txn) = existing_txns[ 1 ].
-        IF existing_txn-actor_user_uuid = auth-user_uuid
-           AND existing_txn-operation_uuid = operation-OperationUUID
-          AND existing_txn-transaction_type = zcl_pp_txn_type=>transfer
-          AND existing_txn-from_worker_id = input-FromWorkerID
-          AND existing_txn-to_worker_id = input-ToWorkerID
-          AND existing_txn-work_id = input-WorkID
-          AND existing_txn-position_id = input-PositionID
-          AND existing_txn-quantity = input-Quantity
-          AND existing_txn-uom = input-UnitOfMeasure
-          AND existing_txn-shift_id = input-ShiftID
-          AND existing_txn-executed_at = input-ExecutedAt
-          AND existing_txn-execution_date = input-ExecutionDate.
-          APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
-        ELSE.
-          report_instance_failure(
-            EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                      text = 'IDEMPOTENCY_KEY_REUSED'
-            CHANGING failed = failed reported = reported ).
-        ENDIF.
-        CONTINUE.
-      ENDIF.
-
-      DATA(balances) = read_worker_balances( operation-OperationUUID ).
-      DATA(source) = VALUE worker_balance(
-        balances[ worker_id = input-FromWorkerID ] OPTIONAL ).
-      DATA(target) = VALUE worker_balance(
-        balances[ worker_id = input-ToWorkerID ] OPTIONAL ).
-      IF source IS INITIAL OR source-uom <> input-UnitOfMeasure
-         OR source-remaining_qty < input-Quantity.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'SOURCE_BALANCE_INSUFFICIENT'
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
-
-      MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
-        ENTITY EmployeeAllocation UPDATE FIELDS
-          ( TransferredOutQuantity RemainingQuantity LastExecutionDate )
-        WITH VALUE #( ( EmployeeAllocationUUID = source-employee_allocation_uuid
-          TransferredOutQuantity = source-transferred_out_qty + input-Quantity
-          RemainingQuantity = source-remaining_qty - input-Quantity
-          LastExecutionDate = input-ExecutionDate ) ).
-      IF target IS INITIAL.
-        MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
-          ENTITY OperationAllocation CREATE BY \_Employees FIELDS
-            ( WorkerID TransferredInQuantity RemainingQuantity UnitOfMeasure LastExecutionDate )
-          WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
-            ( %cid = |TRG{ sy-tabix }| WorkerID = input-ToWorkerID
-              TransferredInQuantity = input-Quantity RemainingQuantity = input-Quantity
-              UnitOfMeasure = input-UnitOfMeasure LastExecutionDate = input-ExecutionDate ) ) ) ).
-      ELSE.
-        MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
-          ENTITY EmployeeAllocation UPDATE FIELDS
-            ( TransferredInQuantity RemainingQuantity LastExecutionDate )
-          WITH VALUE #( ( EmployeeAllocationUUID = target-employee_allocation_uuid
-            TransferredInQuantity = target-transferred_in_qty + input-Quantity
-            RemainingQuantity = target-remaining_qty + input-Quantity
-            LastExecutionDate = input-ExecutionDate ) ).
-      ENDIF.
-
-      MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
-        ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
-          ( SyncItemUUID ActorUserUUID VerifiedWorkerUserUUID WorkerVerifiedAt
-            InitiatorSessionID DeviceID VerificationMethod TransactionType
-             FromWorkerID ToWorkerID WorkID PositionID OriginPositionID Quantity UnitOfMeasure
-             ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt
-             ShiftEndAt ShiftTimeZone ShiftValidFrom
-            TransactionStatus SourceChannel )
-        WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
-          ( %cid = |TRN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
-            ActorUserUUID = auth-user_uuid
-            VerifiedWorkerUserUUID = worker_auth-worker_user_uuid
-            WorkerVerifiedAt = utclong_current( ) InitiatorSessionID = auth-session_id
-            DeviceID = input-DeviceID VerificationMethod = 'PASSWORD'
-            ShiftID = shift-shift_id
-            WorkDate = shift-work_date
-            ExecutedAt = shift-executed_at
-            ShiftStartAt = shift-shift_start_at
-            ShiftEndAt = shift-shift_end_at
-            ShiftTimeZone = shift-shift_time_zone
-            ShiftValidFrom = shift-shift_valid_from
-            TransactionType = zcl_pp_txn_type=>transfer
-            FromWorkerID = input-FromWorkerID ToWorkerID = input-ToWorkerID WorkID = input-WorkID
-            PositionID = input-PositionID
-            OriginPositionID = zcl_pp_position_api=>assigned_position(
-              work_center = operation-WorkCenter worker_id = input-ToWorkerID )
-            Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
-            ExecutionDate = input-ExecutionDate TransactionStatus = zcl_pp_txn_type=>posted
-            SourceChannel = zcl_pp_txn_type=>source_mobile ) ) ) ).
-      APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
-    ENDLOOP.
+*    LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
+*      DATA(input) = <key>-%param.
+*      TRY.
+*          DATA(auth) = zcl_mob_token_validator=>validate_token(
+*            token = CONV string( input-AccessToken ) device_id = input-DeviceID
+*            required_func = func_transfer ).
+*        CATCH cx_abap_message_digest zcx_mob_config.
+*          report_instance_failure(
+*            EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                      text = 'Không thể xác thực yêu cầu điều chuyển'
+*            CHANGING failed = failed reported = reported ).
+*          CONTINUE.
+*      ENDTRY.
+*      IF auth-is_valid = abap_false.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                    text = CONV string( auth-error_code )
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
+*      READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE ENTITY OperationAllocation ALL FIELDS
+*        WITH VALUE #( ( %tky = <key>-%tky ) ) RESULT DATA(operations).
+*      IF operations IS INITIAL OR input-Quantity <= 0
+*         OR input-WorkID IS INITIAL
+*         OR input-FromWorkerID IS INITIAL OR input-ToWorkerID IS INITIAL
+*         OR input-FromWorkerID = input-ToWorkerID OR input-SyncItemUUID IS INITIAL
+*         OR ( input-ExecutionDate IS INITIAL AND input-ExecutedAt IS INITIAL ).
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                    text = 'Thiếu hoặc sai dữ liệu điều chuyển'
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
+*      DATA(operation) = operations[ 1 ].
+*      DATA(shift) = zcl_pp_shift_resolver=>resolve(
+*        work_center = operation-WorkCenter shift_id = input-ShiftID
+*        executed_at = input-ExecutedAt execution_date = input-ExecutionDate
+*        sync_item_uuid = input-SyncItemUUID ).
+*      IF shift-is_valid = abap_false.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                    text = CONV string( shift-error_code )
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
+*      input-ExecutionDate = shift-work_date.
+**      IF zcl_mob_token_validator=>has_func_op_scope(
+**           user_uuid = auth-user_uuid func_id = func_transfer
+**           plant = operation-Plant
+**           work_center = operation-WorkCenter
+**           work_id = input-WorkID
+**           ma_congdoan = operation-MaCongDoan
+**           effective_date = shift-work_date ) = abap_false.
+**        report_instance_failure(
+**          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+**                    text = 'MANAGER_OPERATION_NOT_ALLOWED'
+**          CHANGING failed = failed reported = reported ).
+**        CONTINUE.
+**      ENDIF.
+*      TRY.
+*          DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
+*            worker_id = input-ToWorkerID password = CONV string( input-WorkerPassword ) ).
+*        CATCH cx_abap_message_digest zcx_mob_config.
+*          report_instance_failure(
+*            EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                      text = CONV string( worker_auth-error_code )
+*            CHANGING failed = failed reported = reported ).
+*          CONTINUE.
+*      ENDTRY.
+*      IF worker_auth-is_valid = abap_false
+*         OR input-UnitOfMeasure <> operation-UnitOfMeasure.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                    text = COND string(
+*                      WHEN worker_auth-is_valid = abap_false
+*                      THEN 'WORKER_AUTH_FAILED'
+*                      ELSE 'UNIT_OF_MEASURE_MISMATCH' )
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
+*      DATA(worker_access) = check_worker_access(
+*        user_uuid = worker_auth-worker_user_uuid
+*        worker_id = input-ToWorkerID
+*        plant = operation-Plant
+*        work_center = operation-WorkCenter
+*        work_id = input-WorkID
+*        ma_congdoan = operation-MaCongDoan
+*        effective_date = input-ExecutionDate
+*        position_id = input-PositionID ).
+*      IF worker_access-is_valid = abap_false.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                    text = CONV string( worker_access-error_code )
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
+*
+*      DATA(existing_txns) = read_operation_sync_receipts(
+*        operation_uuid = operation-OperationUUID
+*        sync_item_uuid = input-SyncItemUUID ).
+*      IF lines( existing_txns ) > 1.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                    text = 'SYNC_RECEIPT_DUPLICATE'
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
+*      IF existing_txns IS NOT INITIAL.
+*        DATA(existing_txn) = existing_txns[ 1 ].
+*        IF existing_txn-actor_user_uuid = auth-user_uuid
+*           AND existing_txn-operation_uuid = operation-OperationUUID
+*          AND existing_txn-transaction_type = zcl_pp_txn_type=>transfer
+*          AND existing_txn-from_worker_id = input-FromWorkerID
+*          AND existing_txn-to_worker_id = input-ToWorkerID
+*          AND existing_txn-work_id = input-WorkID
+*          AND existing_txn-position_id = input-PositionID
+*          AND existing_txn-quantity = input-Quantity
+*          AND existing_txn-uom = input-UnitOfMeasure
+*          AND existing_txn-shift_id = input-ShiftID
+*          AND existing_txn-executed_at = input-ExecutedAt
+*          AND existing_txn-execution_date = input-ExecutionDate.
+*          APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
+*        ELSE.
+*          report_instance_failure(
+*            EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                      text = 'IDEMPOTENCY_KEY_REUSED'
+*            CHANGING failed = failed reported = reported ).
+*        ENDIF.
+*        CONTINUE.
+*      ENDIF.
+*
+*      DATA(balances) = read_worker_balances( operation-OperationUUID ).
+*      DATA(source) = VALUE worker_balance(
+*        balances[ worker_id = input-FromWorkerID ] OPTIONAL ).
+*      DATA(target) = VALUE worker_balance(
+*        balances[ worker_id = input-ToWorkerID ] OPTIONAL ).
+*      IF source IS INITIAL OR source-uom <> input-UnitOfMeasure
+*         OR source-remaining_qty < input-Quantity.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                    text = 'SOURCE_BALANCE_INSUFFICIENT'
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
+*
+*      MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+*        ENTITY EmployeeAllocation UPDATE FIELDS
+*          ( TransferredOutQuantity RemainingQuantity LastExecutionDate )
+*        WITH VALUE #( ( EmployeeAllocationUUID = source-employee_allocation_uuid
+*          TransferredOutQuantity = source-transferred_out_qty + input-Quantity
+*          RemainingQuantity = source-remaining_qty - input-Quantity
+*          LastExecutionDate = input-ExecutionDate ) ).
+*      IF target IS INITIAL.
+*        MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+*          ENTITY OperationAllocation CREATE BY \_Employees FIELDS
+*            ( WorkerID TransferredInQuantity RemainingQuantity UnitOfMeasure LastExecutionDate )
+*          WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
+*            ( %cid = |TRG{ sy-tabix }| WorkerID = input-ToWorkerID
+*              TransferredInQuantity = input-Quantity RemainingQuantity = input-Quantity
+*              UnitOfMeasure = input-UnitOfMeasure LastExecutionDate = input-ExecutionDate ) ) ) ).
+*      ELSE.
+*        MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+*          ENTITY EmployeeAllocation UPDATE FIELDS
+*            ( TransferredInQuantity RemainingQuantity LastExecutionDate )
+*          WITH VALUE #( ( EmployeeAllocationUUID = target-employee_allocation_uuid
+*            TransferredInQuantity = target-transferred_in_qty + input-Quantity
+*            RemainingQuantity = target-remaining_qty + input-Quantity
+*            LastExecutionDate = input-ExecutionDate ) ).
+*      ENDIF.
+*
+*      MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+*        ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
+*          ( SyncItemUUID ActorUserUUID VerifiedWorkerUserUUID WorkerVerifiedAt
+*            InitiatorSessionID DeviceID VerificationMethod TransactionType
+*             FromWorkerID ToWorkerID WorkID PositionID OriginPositionID Quantity UnitOfMeasure
+*             ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt
+*             ShiftEndAt ShiftTimeZone ShiftValidFrom
+*            TransactionStatus SourceChannel
+*            PostingDate EntryDate EntryTime )
+*        WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
+*          ( %cid = |TRN{ sy-tabix }| SyncItemUUID = input-SyncItemUUID
+*            ActorUserUUID = auth-user_uuid
+*            VerifiedWorkerUserUUID = worker_auth-worker_user_uuid
+*            WorkerVerifiedAt = utclong_current( ) InitiatorSessionID = auth-session_id
+*            DeviceID = input-DeviceID VerificationMethod = 'PASSWORD'
+*            ShiftID = shift-shift_id
+*            WorkDate = shift-work_date
+*            ExecutedAt = shift-executed_at
+*            ShiftStartAt = shift-shift_start_at
+*            ShiftEndAt = shift-shift_end_at
+*            ShiftTimeZone = shift-shift_time_zone
+*            ShiftValidFrom = shift-shift_valid_from
+*                        PostingDate = shift-work_date
+*            EntryDate = shift-entry_date EntryTime = shift-entry_time
+*            TransactionType = zcl_pp_txn_type=>transfer
+*            FromWorkerID = input-FromWorkerID ToWorkerID = input-ToWorkerID WorkID = input-WorkID
+*                        PositionID = input-PositionID
+*                        MachineID = zcl_pp_position_api=>get_original_machine(
+*              operation_uuid = operation-OperationUUID
+*              transaction_uuid = input-OriginalTransactionUUID
+*              work_center = operation-WorkCenter )
+*            OriginPositionID = zcl_pp_position_api=>assigned_position(
+*              work_center = operation-WorkCenter worker_id = input-ToWorkerID )
+*            Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
+*            ExecutionDate = input-ExecutionDate TransactionStatus = zcl_pp_txn_type=>posted
+*            SourceChannel = zcl_pp_txn_type=>source_mobile ) ) ) ).
+*      APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
+*    ENDLOOP.
   ENDMETHOD.
 
+  " Xử lý thu hồi sản lượng đã giao và ghi nhận giao dịch ledger tương ứng.
   " Xử lý thu hồi sản lượng đã giao và ghi nhận giao dịch ledger tương ứng.
   METHOD recall.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
@@ -1568,33 +1653,33 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       input-ExecutionDate = shift-work_date.
-      IF zcl_mob_token_validator=>has_func_op_scope(
-           user_uuid = auth-user_uuid func_id = func_recall
-           plant = operation-Plant
-           work_center = operation-WorkCenter
-           work_id = input-WorkID
-           ma_congdoan = operation-MaCongDoan
-           effective_date = shift-work_date ) = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'MANAGER_OPERATION_NOT_ALLOWED'
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
+*      IF zcl_mob_token_validator=>has_func_op_scope(
+*           user_uuid = auth-user_uuid func_id = func_recall
+*           plant = operation-Plant
+*           work_center = operation-WorkCenter
+*           work_id = input-WorkID
+*           ma_congdoan = operation-MaCongDoan
+*           effective_date = shift-work_date ) = abap_false.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                    text = 'MANAGER_OPERATION_NOT_ALLOWED'
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
       TRY.
           DATA(worker_auth) = zcl_mob_token_validator=>verify_worker_password(
             worker_id = input-WorkerID password = CONV string( input-WorkerPassword ) ).
         CATCH cx_abap_message_digest zcx_mob_config.
           report_instance_failure(
             EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                      text = 'WORKER_AUTH_FAILED'
+                      text = CONV string( worker_auth-error_code )
             CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
       IF worker_auth-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORKER_AUTH_FAILED'
+                    text = CONV string( worker_auth-error_code )
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1606,7 +1691,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         work_id = input-WorkID
         ma_congdoan = operation-MaCongDoan
         effective_date = input-ExecutionDate
-        position_id = input-PositionID ).
+        manager_uuid = auth-user_uuid func_id = func_recall ).
       IF worker_access-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -1633,7 +1718,6 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND existing_txn-transaction_type = zcl_pp_txn_type=>recall
           AND existing_txn-worker_id = input-WorkerID
           AND existing_txn-work_id = input-WorkID
-          AND existing_txn-position_id = input-PositionID
           AND existing_txn-quantity = input-Quantity
           AND existing_txn-uom = input-UnitOfMeasure
           AND existing_txn-shift_id = input-ShiftID
@@ -1694,7 +1778,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             VerifiedWorkerUserUUID WorkerVerifiedAt InitiatorSessionID DeviceID
             VerificationMethod TransactionType WorkerID FromWorkerID WorkID PositionID OriginPositionID Quantity
              UnitOfMeasure ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt ShiftEndAt ShiftTimeZone
-             ShiftValidFrom TransactionStatus SourceChannel )
+             ShiftValidFrom TransactionStatus SourceChannel MachineID
+            PostingDate EntryDate EntryTime )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |RCL{ sy-tabix }| OriginalTransactionUUID = input-OriginalTransactionUUID
             OriginalTransactionType = lineage-source_transaction_type SyncItemUUID = input-SyncItemUUID
@@ -1709,18 +1794,29 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             ShiftEndAt = shift-shift_end_at
             ShiftTimeZone = shift-shift_time_zone
             ShiftValidFrom = shift-shift_valid_from
+                        PostingDate = shift-work_date
+            EntryDate = shift-entry_date EntryTime = shift-entry_time
             TransactionType = zcl_pp_txn_type=>recall WorkerID = input-WorkerID WorkID = input-WorkID
             FromWorkerID = input-WorkerID Quantity = input-Quantity
-            PositionID = input-PositionID
+            PositionID = get_original_position(
+              operation_uuid = operation-OperationUUID
+              transaction_uuid = input-OriginalTransactionUUID )
             OriginPositionID = zcl_pp_position_api=>assigned_position(
               work_center = operation-WorkCenter worker_id = input-WorkerID )
             UnitOfMeasure = input-UnitOfMeasure ExecutionDate = input-ExecutionDate
+
             TransactionStatus = zcl_pp_txn_type=>posted
-            SourceChannel = zcl_pp_txn_type=>source_mobile ) ) ) ).
+
+            SourceChannel = zcl_pp_txn_type=>source_mobile
+            MachineID = zcl_pp_position_api=>get_original_machine(
+              operation_uuid = operation-OperationUUID
+              work_center    = operation-WorkCenter
+              transaction_uuid = input-OriginalTransactionUUID ) ) ) ) ).
       APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
     ENDLOOP.
   ENDMETHOD.
 
+  " Xử lý xác nhận sản lượng của công nhân sau khi kiểm tra giao dịch gốc và quyền.
   " Xử lý xác nhận sản lượng của công nhân sau khi kiểm tra giao dịch gốc và quyền.
   METHOD confirm.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
@@ -1750,7 +1846,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         work_center = operation-WorkCenter shift_id = input-ShiftID
         executed_at = input-ExecutedAt execution_date = input-ExecutionDate
         sync_item_uuid = input-SyncItemUUID ).
-      IF operations IS INITIAL OR input-Quantity <= 0 OR input-WorkID IS INITIAL
+      IF operations IS INITIAL OR input-Quantity < 0 OR input-DefectQuantity < 0
+         OR input-Quantity + input-DefectQuantity <= 0 OR input-WorkID IS INITIAL
          OR input-WorkerID IS INITIAL
          OR input-SyncItemUUID IS INITIAL OR input-OriginalTransactionUUID IS INITIAL
          OR shift-is_valid = abap_false.
@@ -1761,19 +1858,19 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       input-ExecutionDate = shift-work_date.
-      IF zcl_mob_token_validator=>has_func_op_scope(
-           user_uuid = auth-user_uuid func_id = func_confirm
-           plant = operation-Plant
-           work_center = operation-WorkCenter
-           work_id = input-WorkID
-           ma_congdoan = operation-MaCongDoan
-           effective_date = shift-work_date ) = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                        text = 'MANAGER_OPERATION_NOT_ALLOWED'
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
+*      IF zcl_mob_token_validator=>has_func_op_scope(
+*           user_uuid = auth-user_uuid func_id = func_confirm
+*           plant = operation-Plant
+*           work_center = operation-WorkCenter
+*           work_id = input-WorkID
+*           ma_congdoan = operation-MaCongDoan
+*           effective_date = shift-work_date ) = abap_false.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                        text = 'MANAGER_OPERATION_NOT_ALLOWED'
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
       IF input-UnitOfMeasure <> operation-UnitOfMeasure.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -1787,14 +1884,14 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CATCH cx_abap_message_digest zcx_mob_config.
           report_instance_failure(
             EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                      text = 'WORKER_AUTH_FAILED'
+                      text = CONV string( worker_auth-error_code )
             CHANGING failed = failed reported = reported ).
           CONTINUE.
       ENDTRY.
       IF worker_auth-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                    text = 'WORKER_AUTH_FAILED'
+                    text = CONV string( worker_auth-error_code )
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
@@ -1816,8 +1913,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           AND existing_txn-transaction_type = zcl_pp_txn_type=>confirm
           AND existing_txn-worker_id = input-WorkerID
           AND existing_txn-work_id = input-WorkID
-          AND existing_txn-position_id = input-PositionID
           AND existing_txn-quantity = input-Quantity
+          AND existing_txn-defect_quantity = input-DefectQuantity
           AND existing_txn-uom = input-UnitOfMeasure
           AND existing_txn-shift_id = input-ShiftID
           AND existing_txn-executed_at = input-ExecutedAt
@@ -1834,10 +1931,13 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENDIF.
 
       DATA(worker_balances) = read_worker_balances( operation-OperationUUID ).
+      DATA total_confirm_quantity TYPE ztb_pp_alloc_txn-quantity.
+      CLEAR total_confirm_quantity.
+      total_confirm_quantity = input-Quantity + input-DefectQuantity.
       DATA(balance_check) = validate_worker_balance(
         balances = worker_balances
         worker_identifier = input-WorkerID
-        quantity = input-Quantity
+        quantity = total_confirm_quantity
         uom = input-UnitOfMeasure ).
       IF balance_check-is_valid = abap_false.
         report_instance_failure(
@@ -1854,7 +1954,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         worker_id = input-WorkerID
         uom = input-UnitOfMeasure ).
       DATA(lineage_error) = zcl_pp_alloc_lineage=>confirmation_error(
-        lineage = lineage work_id = input-WorkID shift_id = shift-shift_id quantity = input-Quantity ).
+        lineage = lineage work_id = input-WorkID shift_id = shift-shift_id
+        quantity = total_confirm_quantity ).
       IF lineage_error IS NOT INITIAL.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -1867,10 +1968,10 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         worker_id = input-WorkerID
         plant = operation-Plant
         work_center = operation-WorkCenter
-        work_id = input-WorkID
+        work_id = condense( input-WorkID )
+        manager_uuid = auth-user_uuid func_id = func_confirm
         ma_congdoan = operation-MaCongDoan
-        effective_date = input-ExecutionDate
-        position_id = input-PositionID ).
+        effective_date = input-ExecutionDate ).
       IF worker_access-is_valid = abap_false.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
@@ -1884,17 +1985,20 @@ CLASS lhc_operationallocation IMPLEMENTATION.
 
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY EmployeeAllocation UPDATE FIELDS
-          ( CompletedQuantity RemainingQuantity LastExecutionDate LastSyncAt )
+          ( CompletedQuantity DefectQuantity RemainingQuantity LastExecutionDate LastSyncAt )
         WITH VALUE #( ( EmployeeAllocationUUID = balance-employee_allocation_uuid
           CompletedQuantity = balance-completed_qty + input-Quantity
-          RemainingQuantity = balance-remaining_qty - input-Quantity
+          DefectQuantity = balance-defect_qty + input-DefectQuantity
+          RemainingQuantity = balance-remaining_qty - total_confirm_quantity
           LastExecutionDate = input-ExecutionDate LastSyncAt = utclong_current( ) ) )
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
           ( OriginalTransactionUUID OriginalTransactionType SyncItemUUID ActorUserUUID
             VerifiedWorkerUserUUID WorkerVerifiedAt InitiatorSessionID DeviceID
-            VerificationMethod TransactionType WorkerID WorkID PositionID OriginPositionID Quantity UnitOfMeasure
+             VerificationMethod TransactionType WorkerID WorkID PositionID OriginPositionID
+             Quantity DefectQuantity UnitOfMeasure
              ExecutionDate ShiftID WorkDate ExecutedAt ShiftStartAt ShiftEndAt ShiftTimeZone ShiftValidFrom
-             TransactionStatus SourceChannel )
+             TransactionStatus SourceChannel MachineID
+            PostingDate EntryDate EntryTime )
         WITH VALUE #( ( %tky = operation-%tky %target = VALUE #(
           ( %cid = |CFM{ sy-tabix }| OriginalTransactionUUID = input-OriginalTransactionUUID
             OriginalTransactionType = original_type SyncItemUUID = input-SyncItemUUID
@@ -1909,11 +2013,20 @@ CLASS lhc_operationallocation IMPLEMENTATION.
             ShiftEndAt = shift-shift_end_at
             ShiftTimeZone = shift-shift_time_zone
             ShiftValidFrom = shift-shift_valid_from
+                        PostingDate = shift-work_date
+            EntryDate = shift-entry_date EntryTime = shift-entry_time
             TransactionType = zcl_pp_txn_type=>confirm WorkerID = input-WorkerID WorkID = input-WorkID
-            PositionID = input-PositionID
+            PositionID = get_original_position(
+              operation_uuid = operation-OperationUUID
+              transaction_uuid = input-OriginalTransactionUUID )
             OriginPositionID = zcl_pp_position_api=>assigned_position(
               work_center = operation-WorkCenter worker_id = input-WorkerID )
-            Quantity = input-Quantity UnitOfMeasure = input-UnitOfMeasure
+            Quantity = input-Quantity DefectQuantity = input-DefectQuantity
+            UnitOfMeasure = input-UnitOfMeasure
+            MachineID = zcl_pp_position_api=>get_original_machine(
+              operation_uuid = operation-OperationUUID
+              work_center    = operation-WorkCenter
+              transaction_uuid = input-OriginalTransactionUUID )
             ExecutionDate = input-ExecutionDate TransactionStatus = zcl_pp_txn_type=>posted
             SourceChannel = zcl_pp_txn_type=>source_mobile ) ) ) ).
       APPEND VALUE #( %tky = operation-%tky %param = operation ) TO result.
@@ -1954,19 +2067,19 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       DATA(operation) = operations[ 1 ].
-      IF zcl_mob_token_validator=>has_func_op_scope(
-           user_uuid = auth-user_uuid func_id = func_reverse
-           plant = operation-Plant
-           work_center = operation-WorkCenter
-           work_id = input-WorkID
-           ma_congdoan = operation-MaCongDoan
-           effective_date = cl_abap_context_info=>get_system_date( ) ) = abap_false.
-        report_instance_failure(
-          EXPORTING operation_uuid = <key>-%tky-OperationUUID
-                        text = 'MANAGER_OPERATION_NOT_ALLOWED'
-          CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
+*      IF zcl_mob_token_validator=>has_func_op_scope(
+*           user_uuid = auth-user_uuid func_id = func_reverse
+*           plant = operation-Plant
+*           work_center = operation-WorkCenter
+*           work_id = input-WorkID
+*           ma_congdoan = operation-MaCongDoan
+*           effective_date = cl_abap_context_info=>get_system_date( ) ) = abap_false.
+*        report_instance_failure(
+*          EXPORTING operation_uuid = <key>-%tky-OperationUUID
+*                        text = 'MANAGER_OPERATION_NOT_ALLOWED'
+*          CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
 
       DATA(existing_receipts) = read_operation_sync_receipts(
         operation_uuid = operation-OperationUUID
@@ -1996,7 +2109,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENDIF.
 
       SELECT FROM ztb_pp_alloc_txn
-        FIELDS transaction_uuid, worker_id, work_id, position_id, origin_position_id, quantity, uom, execution_date,
+        FIELDS transaction_uuid, worker_id, work_id, position_id, origin_position_id,
+               quantity, defect_quantity, uom, execution_date, machine_id,
                shift_id, work_date, executed_at, shift_start_at, shift_end_at, shift_time_zone, shift_valid_from
         WHERE transaction_uuid = @input-TransactionUUID
           AND operation_uuid = @operation-OperationUUID
@@ -2034,21 +2148,24 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       ENDIF.
 
       SELECT FROM ztb_pp_alloc_txn
-        FIELDS SUM( quantity ) AS correction_qty
+        FIELDS SUM( quantity ) AS correction_qty,
+               SUM( defect_quantity ) AS correction_defect_qty
         WHERE original_transaction_uuid = @input-TransactionUUID
           AND transaction_type = @zcl_pp_txn_type=>correction
           AND transaction_status = @zcl_pp_txn_type=>posted
         INTO @DATA(corrections).
       DATA effective_qty TYPE ztb_pp_alloc_txn-quantity.
-      effective_qty = original-quantity + corrections.
-      IF effective_qty <= 0.
+      DATA effective_defect_qty TYPE ztb_pp_alloc_txn-defect_quantity.
+      effective_qty = original-quantity + corrections-correction_qty.
+      effective_defect_qty = original-defect_quantity + corrections-correction_defect_qty.
+      IF effective_qty < 0 OR effective_defect_qty < 0
+         OR effective_qty + effective_defect_qty <= 0.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = 'NOTHING_TO_REVERSE'
           CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
-
       DATA(worker_balances) = read_worker_balances( operation-OperationUUID ).
       DELETE worker_balances WHERE worker_id <> original-worker_id.
       IF lines( worker_balances ) <> 1.
@@ -2059,7 +2176,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       DATA(balance) = worker_balances[ 1 ].
-      IF balance-uom <> original-uom OR balance-completed_qty < effective_qty.
+      IF balance-uom <> original-uom OR balance-completed_qty < effective_qty
+         OR balance-defect_qty < effective_defect_qty.
         report_instance_failure(
           EXPORTING operation_uuid = <key>-%tky-OperationUUID
                     text = 'REVERSE_BALANCE_INCONSISTENT'
@@ -2069,16 +2187,17 @@ CLASS lhc_operationallocation IMPLEMENTATION.
 
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY EmployeeAllocation UPDATE FIELDS
-          ( CompletedQuantity RemainingQuantity LastExecutionDate LastSyncAt )
+          ( CompletedQuantity DefectQuantity RemainingQuantity LastExecutionDate LastSyncAt )
         WITH VALUE #( ( EmployeeAllocationUUID = balance-employee_allocation_uuid
           CompletedQuantity = balance-completed_qty - effective_qty
-          RemainingQuantity = balance-remaining_qty + effective_qty
+          DefectQuantity = balance-defect_qty - effective_defect_qty
+          RemainingQuantity = balance-remaining_qty + effective_qty + effective_defect_qty
           LastExecutionDate = cl_abap_context_info=>get_system_date( )
           LastSyncAt = utclong_current( ) ) )
         ENTITY OperationAllocation CREATE BY \_Transactions FIELDS
           ( OriginalTransactionUUID OriginalTransactionType SyncItemUUID ActorUserUUID
             InitiatorSessionID DeviceID VerificationMethod TransactionType WorkerID
-             WorkID PositionID OriginPositionID Quantity UnitOfMeasure ExecutionDate ShiftID WorkDate
+             WorkID PositionID OriginPositionID Quantity DefectQuantity UnitOfMeasure ExecutionDate ShiftID WorkDate
              ExecutedAt ShiftStartAt ShiftEndAt ShiftTimeZone
              ShiftValidFrom TransactionStatus ReasonCode ReasonText
             SourceChannel ReversalReason )
@@ -2096,13 +2215,15 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                                               work_center = operation-WorkCenter
                                               worker_id = original-worker_id )
                                        ELSE original-origin_position_id )
-            Quantity = effective_qty UnitOfMeasure = original-uom
+            Quantity = effective_qty DefectQuantity = effective_defect_qty
+            UnitOfMeasure = original-uom
             ExecutionDate = original-execution_date
             ShiftID = original-shift_id
             WorkDate = original-work_date
             ExecutedAt = original-executed_at
             ShiftStartAt = original-shift_start_at
             ShiftEndAt = original-shift_end_at
+            MachineID = original-machine_id
             ShiftTimeZone = original-shift_time_zone
             ShiftValidFrom = original-shift_valid_from
             TransactionStatus = zcl_pp_txn_type=>posted ReasonCode = 'USER_REVERSAL'
@@ -2117,6 +2238,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
       DATA(cid) = <key>-%cid.
+      input-ExecutionDate = COND #( WHEN input-PostingDate IS INITIAL
+                              THEN input-ExecutionDate ELSE input-PostingDate ).
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID
@@ -2143,6 +2266,12 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
+
+      input-ExecutedAt = zcl_pp_shift_resolver=>to_executed_at(
+      work_center = context-work_center shift_id = input-ShiftID
+      executed_at = input-ExecutedAt
+      entry_date = input-EntryDate entry_time = input-EntryTime ).
+
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE
         ENTITY OperationAllocation EXECUTE initialAssign
         FROM VALUE #( ( %tky = VALUE #( OperationUUID = context-operation_uuid )
@@ -2196,6 +2325,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
       DATA(cid) = <key>-%cid.
+      input-ExecutionDate = COND #( WHEN input-PostingDate IS INITIAL
+                              THEN input-ExecutionDate ELSE input-PostingDate ).
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID
@@ -2222,6 +2353,12 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
+
+      input-ExecutedAt = zcl_pp_shift_resolver=>to_executed_at(
+      work_center = context-work_center shift_id = input-ShiftID
+      executed_at = input-ExecutedAt
+      entry_date = input-EntryDate entry_time = input-EntryTime ).
+
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE ENTITY OperationAllocation EXECUTE transfer
         FROM VALUE #( ( %tky = VALUE #( OperationUUID = context-operation_uuid ) %param = input ) )
         FAILED DATA(action_failed)
@@ -2273,6 +2410,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
       DATA(cid) = <key>-%cid.
+      input-ExecutionDate = COND #( WHEN input-PostingDate IS INITIAL
+                              THEN input-ExecutionDate ELSE input-PostingDate ).
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID
@@ -2299,6 +2438,12 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
+
+      input-ExecutedAt = zcl_pp_shift_resolver=>to_executed_at(
+      work_center = context-work_center shift_id = input-ShiftID
+      executed_at = input-ExecutedAt
+      entry_date = input-EntryDate entry_time = input-EntryTime ).
+
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE ENTITY OperationAllocation EXECUTE recall
         FROM VALUE #( ( %tky = VALUE #( OperationUUID = context-operation_uuid ) %param = input ) )
         FAILED DATA(action_failed)
@@ -2350,6 +2495,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
       DATA(cid) = <key>-%cid.
+      input-ExecutionDate = COND #( WHEN input-PostingDate IS INITIAL
+                              THEN input-ExecutionDate ELSE input-PostingDate ).
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
             token = CONV string( input-AccessToken ) device_id = input-DeviceID
@@ -2376,6 +2523,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
+
       DATA(existing_receipts) = find_persisted_sync_receipts(
         input-SyncItemUUID ).
       IF lines( existing_receipts ) > 1.
@@ -2383,6 +2531,12 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
+
+      input-ExecutedAt = zcl_pp_shift_resolver=>to_executed_at(
+      work_center = context-work_center shift_id = input-ShiftID
+      executed_at = input-ExecutedAt
+      entry_date = input-EntryDate entry_time = input-EntryTime ).
+
       IF existing_receipts IS NOT INITIAL.
         DATA(existing_receipt) = existing_receipts[ 1 ].
         IF existing_receipt-actor_user_uuid = auth-user_uuid
@@ -2392,8 +2546,9 @@ CLASS lhc_operationallocation IMPLEMENTATION.
            AND existing_receipt-original_transaction_uuid = input-OriginalTransactionUUID
            AND existing_receipt-worker_id = input-WorkerID
            AND existing_receipt-work_id = input-WorkID
-           AND existing_receipt-position_id = input-PositionID
+*           AND existing_receipt-position_id = input-PositionID
            AND existing_receipt-quantity = input-Quantity
+           AND existing_receipt-defect_quantity = input-DefectQuantity
            AND existing_receipt-uom = input-UnitOfMeasure
            AND existing_receipt-shift_id = input-ShiftID
            AND existing_receipt-executed_at = input-ExecutedAt
@@ -2489,6 +2644,9 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                         CHANGING failed = failed reported = reported ).
         CONTINUE.
       ENDIF.
+
+
+
       MODIFY ENTITIES OF zr_pp_opalloc IN LOCAL MODE ENTITY OperationAllocation EXECUTE reverse
         FROM VALUE #( ( %tky = VALUE #( OperationUUID = context-operation_uuid ) %param = input ) )
         FAILED DATA(action_failed)
@@ -2559,8 +2717,9 @@ CLASS lhc_operationallocation IMPLEMENTATION.
       SELECT FROM ztb_pp_alloc_txn AS txn
         INNER JOIN ztb_pp_op_alloc AS op ON op~operation_uuid = txn~operation_uuid
         FIELDS txn~transaction_uuid, txn~transaction_type, txn~worker_id, txn~position_id,
-               txn~origin_position_id, txn~quantity, txn~uom, txn~execution_date,
+               txn~origin_position_id, txn~quantity, txn~defect_quantity, txn~uom, txn~execution_date,
                txn~shift_id, txn~work_date, txn~executed_at,
+                              txn~posting_date, txn~entry_date, txn~entry_time,
                txn~shift_start_at, txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from,
                op~production_order, op~operation_no
         WHERE txn~sync_item_uuid = @input-SyncItemUUID
@@ -2585,6 +2744,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         ProductionOrder = receipt-production_order Operation = receipt-operation_no
         WorkerID = receipt-worker_id PositionID = receipt-position_id
         OriginPositionID = receipt-origin_position_id Quantity = receipt-quantity
+        DefectQuantity = receipt-defect_quantity
         UnitOfMeasure = receipt-uom ExecutionDate = receipt-execution_date
         ShiftID = receipt-shift_id
         WorkDate = COND #( WHEN receipt-work_date IS INITIAL
@@ -2595,6 +2755,15 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         ShiftEndAt = receipt-shift_end_at
         ShiftTimeZone = receipt-shift_time_zone
         ShiftValidFrom = receipt-shift_valid_from
+                PostingDate = COND #( WHEN receipt-posting_date IS NOT INITIAL THEN receipt-posting_date
+                              WHEN receipt-work_date IS NOT INITIAL THEN receipt-work_date
+                              ELSE receipt-execution_date )
+        EntryDate = COND #( WHEN receipt-entry_date IS NOT INITIAL THEN receipt-entry_date
+                            ELSE zcl_pp_shift_resolver=>to_local_date(
+                                   utc = receipt-executed_at time_zone = receipt-shift_time_zone ) )
+        EntryTime = COND #( WHEN receipt-entry_date IS NOT INITIAL THEN receipt-entry_time
+                            ELSE zcl_pp_shift_resolver=>to_local_time(
+                                   utc = receipt-executed_at time_zone = receipt-shift_time_zone ) )
         Message = 'Request đã được commit vào ledger CASLA' ) ) ).
     ENDLOOP.
   ENDMETHOD.
@@ -2699,6 +2868,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           TransferredOutQuantity = summary-transferred_out
           RecalledQuantity = summary-recalled
           CompletedQuantity = summary-completed
+          DefectQuantity = summary-defect
           RemainingQuantity = summary-remaining UnitOfMeasure = summary-uom
           TransactionCount = summary-txn_count ) )
       _Entries = VALUE #( FOR entry IN history-entries
@@ -2711,6 +2881,8 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           ShiftEndAt = entry-shift_end_at
           ShiftTimeZone = entry-shift_time_zone
           ShiftValidFrom = entry-shift_valid_from
+                    PostingDate = entry-posting_date
+          EntryDate = entry-entry_date EntryTime = entry-entry_time
           WorkerID = entry-worker_id WorkerName = entry-worker_name
           ProductionOrder = entry-production_order Operation = entry-operation_no
           OperationName = entry-operation_name
@@ -2723,6 +2895,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
           WorkID = entry-work_id PositionID = entry-position_id
           OriginPositionID = entry-origin_position_id
           TransactionType = entry-transaction_type Quantity = entry-quantity
+          DefectQuantity = entry-defect_quantity
           UnitOfMeasure = entry-uom TransactionStatus = entry-transaction_status ) ) ) ) ).
   ENDMETHOD.
 
@@ -2734,13 +2907,14 @@ CLASS lhc_operationallocation IMPLEMENTATION.
     DATA transferred_out TYPE ztb_pp_emp_alloc-transferred_out_qty.
     DATA recalled TYPE ztb_pp_emp_alloc-recalled_qty.
     DATA completed TYPE ztb_pp_emp_alloc-completed_qty.
+    DATA defect TYPE ztb_pp_emp_alloc-defect_qty.
     DATA remaining TYPE ztb_pp_emp_alloc-remaining_qty.
 
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<key>).
       DATA(input) = <key>-%param.
       DATA(cid) = CONV string( <key>-%cid ).
       CLEAR: initial_assigned, transferred_in, transferred_out,
-             recalled, completed, remaining.
+             recalled, completed, defect, remaining.
 
       TRY.
           DATA(auth) = zcl_mob_token_validator=>validate_token(
@@ -2775,9 +2949,13 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
+      DATA(scanned_at) = zcl_pp_shift_resolver=>to_executed_at(
+  work_center = live-work_center shift_id = input-ShiftID
+  executed_at = input-ExecutedAt
+  entry_date = input-EntryDate entry_time = input-EntryTime ).
       DATA(executed_at) = COND utclong(
-        WHEN input-ExecutedAt IS INITIAL THEN utclong_current( )
-        ELSE input-ExecutedAt ).
+        WHEN scanned_at IS INITIAL THEN utclong_current( )
+        ELSE scanned_at ).
       DATA(shift) = zcl_pp_shift_resolver=>resolve(
         work_center = live-work_center
         shift_id = input-ShiftID
@@ -2789,18 +2967,18 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      IF zcl_mob_token_validator=>has_func_op_scope(
-           user_uuid = auth-user_uuid
-           func_id = func_initial_assign
-           plant = live-plant
-           work_center = live-work_center
-           work_id = input-WorkID
-           ma_congdoan = live-ma_congdoan
-           effective_date = shift-work_date ) = abap_false.
-        report_failure( EXPORTING cid = cid text = 'MANAGER_OPERATION_NOT_ALLOWED'
-                        CHANGING failed = failed reported = reported ).
-        CONTINUE.
-      ENDIF.
+*      IF zcl_mob_token_validator=>has_func_op_scope(
+*           user_uuid = auth-user_uuid
+*           func_id = func_initial_assign
+*           plant = live-plant
+*           work_center = live-work_center
+*           work_id = input-WorkID
+*           ma_congdoan = live-ma_congdoan
+*           effective_date = shift-work_date ) = abap_false.
+*        report_failure( EXPORTING cid = cid text = 'MANAGER_OPERATION_NOT_ALLOWED'
+*                        CHANGING failed = failed reported = reported ).
+*        CONTINUE.
+*      ENDIF.
 
       DATA(work_operation_context) = check_work_operation_context(
         work_id = input-WorkID
@@ -2835,6 +3013,7 @@ CLASS lhc_operationallocation IMPLEMENTATION.
                  SUM( transferred_out_qty ) AS transferred_out,
                  SUM( recalled_qty ) AS recalled,
                  SUM( completed_qty ) AS completed,
+                 SUM( defect_qty ) AS defect,
                  SUM( remaining_qty ) AS remaining
           WHERE operation_uuid = @operation_uuid
             AND uom = @live-uom
@@ -2844,10 +3023,11 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         transferred_out = totals-transferred_out.
         recalled = totals-recalled.
         completed = totals-completed.
+        defect = totals-defect.
         remaining = totals-remaining.
       ENDIF.
 
-      DATA(current_assigned) = remaining + completed.
+      DATA(current_assigned) = remaining + completed + defect.
       DATA(unassigned) = live-operation_qty - current_assigned.
       result = VALUE #( BASE result ( %cid = cid %param = VALUE #(
         IsAllowed = abap_true
@@ -2871,12 +3051,15 @@ CLASS lhc_operationallocation IMPLEMENTATION.
         TransferredOutQuantity = transferred_out
         RecalledQuantity = recalled
         CompletedQuantity = completed
+        DefectQuantity = defect
         RemainingQuantity = remaining
         CurrentAssignedQuantity = current_assigned
         UnassignedQuantity = unassigned
         UnitOfMeasure = live-uom
         ShiftID = shift-shift_id
         WorkDate = shift-work_date
+                PostingDate = shift-work_date
+        EntryDate = shift-entry_date EntryTime = shift-entry_time
         ExecutedAt = shift-executed_at ) ) ).
     ENDLOOP.
   ENDMETHOD.
@@ -2916,5 +3099,28 @@ CLASS lhc_operationallocation IMPLEMENTATION.
 
 
 
+  " Vị trí làm việc đã ghi trên giao dịch gốc; thu hồi và xác nhận dùng lại vị
+  " trí này. Dòng gốc không có vị trí (ví dụ REASSIGN qua đêm) thì lần ngược
+  " theo OriginalTransactionUUID. Đọc qua EML để thấy cả dòng trong buffer.
+  METHOD get_original_position.
+    READ ENTITIES OF zr_pp_opalloc IN LOCAL MODE
+      ENTITY OperationAllocation BY \_Transactions
+        FIELDS ( TransactionUUID OriginalTransactionUUID PositionID )
+        WITH VALUE #( ( %key-OperationUUID = operation_uuid ) )
+        RESULT DATA(transactions).
+    DATA(current_uuid) = transaction_uuid.
+    DO 5 TIMES.
+      DATA(transaction) = VALUE #( transactions[ TransactionUUID = current_uuid ] OPTIONAL ).
+      IF transaction-PositionID IS NOT INITIAL
+         OR transaction-OriginalTransactionUUID IS INITIAL
+         OR transaction-OriginalTransactionUUID = current_uuid.
+        result = transaction-PositionID.
+        RETURN.
+      ENDIF.
+      current_uuid = transaction-OriginalTransactionUUID.
+    ENDDO.
+  ENDMETHOD.
+
 ENDCLASS.
+
 

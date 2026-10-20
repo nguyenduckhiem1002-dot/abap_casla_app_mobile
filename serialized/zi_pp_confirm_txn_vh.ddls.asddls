@@ -24,6 +24,9 @@ define view entity ZI_PP_CONFIRM_TXN_VH
   @EndUserText.label: 'Sản lượng xác nhận'
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   txn.quantity as Quantity,
+  @EndUserText.label: 'Số lượng lỗi'
+  @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+  txn.defect_quantity as DefectQuantity,
   @EndUserText.label: 'Đơn vị tính'
   txn.uom as UnitOfMeasure,
   @EndUserText.label: 'Ngày làm việc'

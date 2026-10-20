@@ -148,12 +148,14 @@ CLASS zcl_pp_reassign_job IMPLEMENTATION.
       ENDIF.
       CASE row-transaction_type.
         WHEN zcl_pp_txn_type=>initial_assign OR zcl_pp_txn_type=>reassign
-          OR zcl_pp_txn_type=>allocation_adjustment OR zcl_pp_txn_type=>reverse.
+          OR zcl_pp_txn_type=>allocation_adjustment.
           <balance>-quantity += row-quantity.
+        WHEN zcl_pp_txn_type=>reverse.
+          <balance>-quantity += row-quantity + row-defect_quantity.
         WHEN zcl_pp_txn_type=>confirm OR zcl_pp_txn_type=>recall
           OR zcl_pp_txn_type=>correction OR zcl_pp_txn_type=>recall_adjustment
           OR zcl_pp_txn_type=>confirm_adjustment.
-          <balance>-quantity -= row-quantity.
+          <balance>-quantity -= row-quantity + row-defect_quantity.
         WHEN zcl_pp_txn_type=>transfer.
           <balance>-quantity += row-quantity.
           COLLECT VALUE debit( worker_id = row-from_worker_id uom = row-uom
@@ -220,6 +222,8 @@ CLASS zcl_pp_reassign_job IMPLEMENTATION.
         original_transaction_type = balance-source-transaction_type
         worker_id = balance-source-worker_id to_worker_id = balance-source-worker_id
         work_id = balance-source-work_id shift_id = balance-source-shift_id
+        position_id = balance-source-position_id
+
         transaction_type = zcl_pp_txn_type=>reassign quantity = delta uom = balance-source-uom
         execution_date = target_date work_date = target_date
         transaction_status = zcl_pp_txn_type=>posted source_channel = zcl_pp_txn_type=>source_system

@@ -14,7 +14,7 @@ etag master LocalLastChangedAt
   field ( mandatory ) ProductionOrder, Operation, MaCongDoan, Plant, WorkCenter,
                       OperationQuantity, UnitOfMeasure;
   field ( readonly ) TotalAssignedQuantity, TotalRecalledQuantity,
-                     TotalCompletedQuantity, TotalRemainingQuantity;
+                     TotalCompletedQuantity, TotalDefectQuantity, TotalRemainingQuantity;
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy,
                      LocalLastChangedAt;
 
@@ -106,6 +106,7 @@ etag master LocalLastChangedAt
     TransferredOutQuantity  = transferred_out_qty;
     RecalledQuantity        = recalled_qty;
     CompletedQuantity       = completed_qty;
+    DefectQuantity          = defect_qty;
     RemainingQuantity       = remaining_qty;
     UnitOfMeasure           = uom;
     LastExecutionDate       = last_execution_date;
@@ -129,7 +130,7 @@ authorization dependent by _Operation
                      InitiatorSessionID, DeviceID, VerificationMethod,
                      TransactionType, OriginalTransactionType, FromWorkerID,
                      ToWorkerID, WorkerID, WorkID, PositionID, OriginPositionID,
-                     Quantity, UnitOfMeasure,
+                     Quantity, DefectQuantity, UnitOfMeasure,
                      ExecutionDate, ShiftID, WorkDate, ExecutedAt, ShiftStartAt, ShiftEndAt,
                      ShiftTimeZone, ShiftValidFrom, TransactionStatus,
                      ReasonCode, ReasonText, SourceChannel,
@@ -157,9 +158,11 @@ authorization dependent by _Operation
     ToWorkerID              = to_worker_id;
     WorkerID                = worker_id;
     WorkID                  = work_id;
-    PositionID              = position_id;
+        PositionID              = position_id;
+    MachineID               = machine_id;
     OriginPositionID        = origin_position_id;
     Quantity                = quantity;
+    DefectQuantity          = defect_quantity;
     UnitOfMeasure           = uom;
     ExecutionDate           = execution_date;
     ShiftID = shift_id;
@@ -181,5 +184,8 @@ authorization dependent by _Operation
     CreatedBy               = created_by;
     CreatedAt               = created_at;
     LocalLastChangedAt      = local_last_changed_at;
+        PostingDate = posting_date;
+    EntryDate = entry_date;
+    EntryTime = entry_time;
   }
 }

@@ -37,53 +37,58 @@ CLASS zcl_pp_work_history DEFINITION
       max_entry_rows  TYPE i VALUE 1000.
 
     TYPES: BEGIN OF worker_summary,
-             worker_id   TYPE ztb_pp_alloc_txn-worker_id,
-             worker_name TYPE zi_pp_workerref-workername,
-             work_id     TYPE ztb_mob_work-work_id,
-             work_name   TYPE ztb_mob_work-work_name,
-             bo_phan     TYPE ztb_mob_work-bo_phan,
-             location    TYPE ztb_mob_work-location,
-             assigned    TYPE ztb_pp_alloc_txn-quantity,
+             worker_id       TYPE ztb_pp_alloc_txn-worker_id,
+             worker_name     TYPE zi_pp_workerref-workername,
+             work_id         TYPE ztb_mob_work-work_id,
+             work_name       TYPE ztb_mob_work-work_name,
+             bo_phan         TYPE ztb_mob_work-bo_phan,
+             location        TYPE ztb_mob_work-location,
+             assigned        TYPE ztb_pp_alloc_txn-quantity,
              transferred_in  TYPE ztb_pp_alloc_txn-quantity,
              transferred_out TYPE ztb_pp_alloc_txn-quantity,
-             recalled    TYPE ztb_pp_alloc_txn-quantity,
-             completed   TYPE ztb_pp_alloc_txn-quantity,
-             remaining   TYPE ztb_pp_alloc_txn-quantity,
-             uom         TYPE ztb_pp_alloc_txn-uom,
-             txn_count   TYPE i,
+             recalled        TYPE ztb_pp_alloc_txn-quantity,
+             completed       TYPE ztb_pp_alloc_txn-quantity,
+             defect          TYPE ztb_pp_alloc_txn-defect_quantity,
+             remaining       TYPE ztb_pp_alloc_txn-quantity,
+             uom             TYPE ztb_pp_alloc_txn-uom,
+             txn_count       TYPE i,
            END OF worker_summary,
            worker_summaries TYPE SORTED TABLE OF worker_summary
                             WITH UNIQUE KEY worker_id work_id uom.
 
     TYPES: BEGIN OF history_entry,
-             transaction_uuid   TYPE ztb_pp_alloc_txn-transaction_uuid,
+             transaction_uuid          TYPE ztb_pp_alloc_txn-transaction_uuid,
              original_transaction_uuid TYPE ztb_pp_alloc_txn-original_transaction_uuid,
-             execution_date     TYPE ztb_pp_alloc_txn-execution_date,
-             shift_id TYPE ztb_pp_alloc_txn-shift_id,
-             work_date TYPE ztb_pp_alloc_txn-work_date,
-             executed_at TYPE ztb_pp_alloc_txn-executed_at,
-             shift_start_at TYPE ztb_pp_alloc_txn-shift_start_at,
-             shift_end_at TYPE ztb_pp_alloc_txn-shift_end_at,
-             shift_time_zone TYPE ztb_pp_alloc_txn-shift_time_zone,
-             shift_valid_from TYPE ztb_pp_alloc_txn-shift_valid_from,
-             worker_id          TYPE ztb_pp_alloc_txn-worker_id,
-             worker_name        TYPE zi_pp_workerref-workername,
-             production_order   TYPE ztb_pp_op_alloc-production_order,
-             operation_no       TYPE ztb_pp_op_alloc-operation_no,
-             operation_name     TYPE string,
-             sales_order        TYPE string,
-             sales_order_item   TYPE string,
-             product            TYPE string,
-             product_name      TYPE string,
-             plant              TYPE ztb_pp_op_alloc-plant,
-             work_center        TYPE ztb_pp_op_alloc-work_center,
-             work_id            TYPE ztb_mob_work-work_id,
-             position_id        TYPE ztb_pp_alloc_txn-position_id,
-             origin_position_id TYPE ztb_pp_alloc_txn-origin_position_id,
-             transaction_type   TYPE ztb_pp_alloc_txn-transaction_type,
-             quantity           TYPE ztb_pp_alloc_txn-quantity,
-             uom                TYPE ztb_pp_alloc_txn-uom,
-             transaction_status TYPE ztb_pp_alloc_txn-transaction_status,
+             execution_date            TYPE ztb_pp_alloc_txn-execution_date,
+             shift_id                  TYPE ztb_pp_alloc_txn-shift_id,
+             work_date                 TYPE ztb_pp_alloc_txn-work_date,
+             executed_at               TYPE ztb_pp_alloc_txn-executed_at,
+             shift_start_at            TYPE ztb_pp_alloc_txn-shift_start_at,
+             shift_end_at              TYPE ztb_pp_alloc_txn-shift_end_at,
+             shift_time_zone           TYPE ztb_pp_alloc_txn-shift_time_zone,
+             shift_valid_from          TYPE ztb_pp_alloc_txn-shift_valid_from,
+             posting_date              TYPE ztb_pp_alloc_txn-posting_date,
+             entry_date                TYPE ztb_pp_alloc_txn-entry_date,
+             entry_time                TYPE ztb_pp_alloc_txn-entry_time,
+             worker_id                 TYPE ztb_pp_alloc_txn-worker_id,
+             worker_name               TYPE zi_pp_workerref-workername,
+             production_order          TYPE ztb_pp_op_alloc-production_order,
+             operation_no              TYPE ztb_pp_op_alloc-operation_no,
+             operation_name            TYPE string,
+             sales_order               TYPE string,
+             sales_order_item          TYPE string,
+             product                   TYPE string,
+             product_name              TYPE string,
+             plant                     TYPE ztb_pp_op_alloc-plant,
+             work_center               TYPE ztb_pp_op_alloc-work_center,
+             work_id                   TYPE ztb_mob_work-work_id,
+             position_id               TYPE ztb_pp_alloc_txn-position_id,
+             origin_position_id        TYPE ztb_pp_alloc_txn-origin_position_id,
+             transaction_type          TYPE ztb_pp_alloc_txn-transaction_type,
+             quantity                  TYPE ztb_pp_alloc_txn-quantity,
+             defect_quantity           TYPE ztb_pp_alloc_txn-defect_quantity,
+             uom                       TYPE ztb_pp_alloc_txn-uom,
+             transaction_status        TYPE ztb_pp_alloc_txn-transaction_status,
            END OF history_entry,
            history_entries TYPE STANDARD TABLE OF history_entry
                            WITH EMPTY KEY.
@@ -102,27 +107,27 @@ CLASS zcl_pp_work_history DEFINITION
            END OF history.
 
     CLASS-METHODS read
-      IMPORTING access_token    TYPE string
-                device_id       TYPE ztb_mob_session-device_id
-                range_code      TYPE range_selection
-                date_from       TYPE d
-                date_to         TYPE d
-                worker_id       TYPE ztb_pp_alloc_txn-worker_id OPTIONAL
+      IMPORTING access_token     TYPE string
+                device_id        TYPE ztb_mob_session-device_id
+                range_code       TYPE range_selection
+                date_from        TYPE d
+                date_to          TYPE d
+                worker_id        TYPE ztb_pp_alloc_txn-worker_id OPTIONAL
                 production_order TYPE ztb_pp_op_alloc-production_order OPTIONAL
-                operation_no    TYPE ztb_pp_op_alloc-operation_no OPTIONAL
-                shift_id TYPE ztb_pp_shift-shift_id OPTIONAL
-                work_id TYPE ztb_mob_work-work_id OPTIONAL
-                include_entries TYPE abap_bool DEFAULT abap_true
-      RETURNING VALUE(result)   TYPE history
+                operation_no     TYPE ztb_pp_op_alloc-operation_no OPTIONAL
+                shift_id         TYPE ztb_pp_shift-shift_id OPTIONAL
+                work_id          TYPE ztb_mob_work-work_id OPTIONAL
+                include_entries  TYPE abap_bool DEFAULT abap_true
+      RETURNING VALUE(result)    TYPE history
       RAISING   cx_abap_message_digest zcx_mob_config.
 
-protected section.
+  PROTECTED SECTION.
   PRIVATE SECTION.
     TYPES: BEGIN OF team_context,
              operation_uuid TYPE ztb_pp_alloc_txn-operation_uuid,
-             work_id TYPE ztb_mob_work-work_id,
-             work_center TYPE ztb_pp_op_alloc-work_center,
-             ma_congdoan TYPE ztb_pp_op_alloc-ma_congdoan,
+             work_id        TYPE ztb_mob_work-work_id,
+             work_center    TYPE ztb_pp_op_alloc-work_center,
+             ma_congdoan    TYPE ztb_pp_op_alloc-ma_congdoan,
            END OF team_context,
            team_contexts TYPE SORTED TABLE OF team_context
                          WITH UNIQUE KEY operation_uuid work_id.
@@ -135,56 +140,60 @@ protected section.
       RETURNING VALUE(result) TYPE team_contexts.
     TYPES: BEGIN OF root_key,
              transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid,
-             worker_id TYPE ztb_pp_alloc_txn-worker_id,
-             work_id TYPE ztb_mob_work-work_id,
+             worker_id        TYPE ztb_pp_alloc_txn-worker_id,
+             work_id          TYPE ztb_mob_work-work_id,
            END OF root_key,
            root_keys TYPE SORTED TABLE OF root_key
                       WITH UNIQUE KEY transaction_uuid worker_id work_id.
     TYPES: BEGIN OF txn_link,
-             transaction_uuid TYPE ztb_pp_alloc_txn-transaction_uuid,
+             transaction_uuid          TYPE ztb_pp_alloc_txn-transaction_uuid,
              original_transaction_uuid TYPE ztb_pp_alloc_txn-original_transaction_uuid,
-             worker_id TYPE ztb_pp_alloc_txn-worker_id,
-             work_id TYPE ztb_mob_work-work_id,
+             worker_id                 TYPE ztb_pp_alloc_txn-worker_id,
+             work_id                   TYPE ztb_mob_work-work_id,
            END OF txn_link,
            txn_links TYPE STANDARD TABLE OF txn_link WITH EMPTY KEY.
     CLASS-METHODS expand_roots
       IMPORTING derived TYPE txn_links
-      CHANGING roots TYPE root_keys.
+      CHANGING  roots   TYPE root_keys.
 
     TYPES: BEGIN OF ledger_row,
-             transaction_uuid   TYPE ztb_pp_alloc_txn-transaction_uuid,
+             transaction_uuid          TYPE ztb_pp_alloc_txn-transaction_uuid,
              original_transaction_type TYPE ztb_pp_alloc_txn-original_transaction_type,
              original_transaction_uuid
                TYPE ztb_pp_alloc_txn-original_transaction_uuid,
-             execution_date     TYPE ztb_pp_alloc_txn-execution_date,
-             shift_id TYPE ztb_pp_alloc_txn-shift_id,
-             work_date TYPE ztb_pp_alloc_txn-work_date,
-             executed_at TYPE ztb_pp_alloc_txn-executed_at,
-             shift_start_at TYPE ztb_pp_alloc_txn-shift_start_at,
-             shift_end_at TYPE ztb_pp_alloc_txn-shift_end_at,
-             shift_time_zone TYPE ztb_pp_alloc_txn-shift_time_zone,
-             shift_valid_from TYPE ztb_pp_alloc_txn-shift_valid_from,
-             work_id           TYPE ztb_mob_work-work_id,
-             position_id        TYPE ztb_pp_alloc_txn-position_id,
-             origin_position_id TYPE ztb_pp_alloc_txn-origin_position_id,
-             report_worker_id   TYPE ztb_pp_alloc_txn-worker_id,
-             worker_id          TYPE ztb_pp_alloc_txn-worker_id,
-             from_worker_id     TYPE ztb_pp_alloc_txn-from_worker_id,
-             to_worker_id       TYPE ztb_pp_alloc_txn-to_worker_id,
-             transaction_type   TYPE ztb_pp_alloc_txn-transaction_type,
-             quantity           TYPE ztb_pp_alloc_txn-quantity,
-             uom                TYPE ztb_pp_alloc_txn-uom,
-             transaction_status TYPE ztb_pp_alloc_txn-transaction_status,
-             production_order   TYPE ztb_pp_op_alloc-production_order,
-             operation_no       TYPE ztb_pp_op_alloc-operation_no,
-             ma_congdoan        TYPE ztb_pp_op_alloc-ma_congdoan,
-             operation_name     TYPE string,
-             sales_order        TYPE string,
-             sales_order_item   TYPE string,
-             product            TYPE string,
-             product_name       TYPE string,
-             plant              TYPE ztb_pp_op_alloc-plant,
-             work_center        TYPE ztb_pp_op_alloc-work_center,
+             execution_date            TYPE ztb_pp_alloc_txn-execution_date,
+             shift_id                  TYPE ztb_pp_alloc_txn-shift_id,
+             work_date                 TYPE ztb_pp_alloc_txn-work_date,
+             executed_at               TYPE ztb_pp_alloc_txn-executed_at,
+             shift_start_at            TYPE ztb_pp_alloc_txn-shift_start_at,
+             shift_end_at              TYPE ztb_pp_alloc_txn-shift_end_at,
+             shift_time_zone           TYPE ztb_pp_alloc_txn-shift_time_zone,
+             shift_valid_from          TYPE ztb_pp_alloc_txn-shift_valid_from,
+             posting_date              TYPE ztb_pp_alloc_txn-posting_date,
+             entry_date                TYPE ztb_pp_alloc_txn-entry_date,
+             entry_time                TYPE ztb_pp_alloc_txn-entry_time,
+             work_id                   TYPE ztb_mob_work-work_id,
+             position_id               TYPE ztb_pp_alloc_txn-position_id,
+             origin_position_id        TYPE ztb_pp_alloc_txn-origin_position_id,
+             report_worker_id          TYPE ztb_pp_alloc_txn-worker_id,
+             worker_id                 TYPE ztb_pp_alloc_txn-worker_id,
+             from_worker_id            TYPE ztb_pp_alloc_txn-from_worker_id,
+             to_worker_id              TYPE ztb_pp_alloc_txn-to_worker_id,
+             transaction_type          TYPE ztb_pp_alloc_txn-transaction_type,
+             quantity                  TYPE ztb_pp_alloc_txn-quantity,
+             defect_quantity           TYPE ztb_pp_alloc_txn-defect_quantity,
+             uom                       TYPE ztb_pp_alloc_txn-uom,
+             transaction_status        TYPE ztb_pp_alloc_txn-transaction_status,
+             production_order          TYPE ztb_pp_op_alloc-production_order,
+             operation_no              TYPE ztb_pp_op_alloc-operation_no,
+             ma_congdoan               TYPE ztb_pp_op_alloc-ma_congdoan,
+             operation_name            TYPE string,
+             sales_order               TYPE string,
+             sales_order_item          TYPE string,
+             product                   TYPE string,
+             product_name              TYPE string,
+             plant                     TYPE ztb_pp_op_alloc-plant,
+             work_center               TYPE ztb_pp_op_alloc-work_center,
            END OF ledger_row,
            ledger_rows TYPE STANDARD TABLE OF ledger_row WITH EMPTY KEY.
 
@@ -214,25 +223,25 @@ protected section.
       RETURNING VALUE(result) TYPE ztb_pp_alloc_txn-worker_id.
 
     CLASS-METHODS select_self
-      IMPORTING worker        TYPE ztb_pp_alloc_txn-worker_id
-                date_from     TYPE d
-                date_to       TYPE d
-                shift_id TYPE ztb_pp_shift-shift_id
-                work_id TYPE ztb_mob_work-work_id OPTIONAL
+      IMPORTING worker           TYPE ztb_pp_alloc_txn-worker_id
+                date_from        TYPE d
+                date_to          TYPE d
+                shift_id         TYPE ztb_pp_shift-shift_id
+                work_id          TYPE ztb_mob_work-work_id OPTIONAL
                 production_order TYPE ztb_pp_op_alloc-production_order OPTIONAL
-                operation_no TYPE ztb_pp_op_alloc-operation_no OPTIONAL
-      RETURNING VALUE(result) TYPE ledger_rows.
+                operation_no     TYPE ztb_pp_op_alloc-operation_no OPTIONAL
+      RETURNING VALUE(result)    TYPE ledger_rows.
 
     CLASS-METHODS select_team
-      IMPORTING user_uuid     TYPE sysuuid_x16
-                worker        TYPE ztb_pp_alloc_txn-worker_id
-                date_from     TYPE d
-                date_to       TYPE d
-                shift_id TYPE ztb_pp_shift-shift_id
-                work_id TYPE ztb_mob_work-work_id OPTIONAL
+      IMPORTING user_uuid        TYPE sysuuid_x16
+                worker           TYPE ztb_pp_alloc_txn-worker_id
+                date_from        TYPE d
+                date_to          TYPE d
+                shift_id         TYPE ztb_pp_shift-shift_id
+                work_id          TYPE ztb_mob_work-work_id OPTIONAL
                 production_order TYPE ztb_pp_op_alloc-production_order OPTIONAL
-                operation_no TYPE ztb_pp_op_alloc-operation_no OPTIONAL
-      RETURNING VALUE(result) TYPE ledger_rows.
+                operation_no     TYPE ztb_pp_op_alloc-operation_no OPTIONAL
+      RETURNING VALUE(result)    TYPE ledger_rows.
 
     CLASS-METHODS summarize
       IMPORTING rows          TYPE ledger_rows
@@ -252,7 +261,8 @@ protected section.
                 transferred_out TYPE ztb_pp_alloc_txn-quantity DEFAULT 0
                 recalled        TYPE ztb_pp_alloc_txn-quantity DEFAULT 0
                 completed       TYPE ztb_pp_alloc_txn-quantity DEFAULT 0
-      CHANGING  summaries TYPE worker_summaries.
+                defect          TYPE ztb_pp_alloc_txn-defect_quantity DEFAULT 0
+      CHANGING  summaries       TYPE worker_summaries.
 
     CLASS-METHODS enrich_work_context
       CHANGING summaries TYPE worker_summaries.
@@ -317,8 +327,8 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
              user_uuid = auth-user_uuid
              func_id = history_func
              work_id = work_id ) = abap_false.
-        result-error_code = 'WORK_CONTEXT_NOT_ALLOWED'.
-        RETURN.
+      result-error_code = 'WORK_CONTEXT_NOT_ALLOWED'.
+      RETURN.
     ENDIF.
     "Team checks each concrete WorkID below, including unfiltered requests.
     "An empty WorkID must not become an ambiguous broad operation-scope check.
@@ -503,10 +513,12 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
       FIELDS txn~transaction_uuid, txn~original_transaction_uuid, txn~original_transaction_type,
              txn~execution_date, txn~shift_id, txn~work_date, txn~executed_at, txn~shift_start_at,
              txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from, txn~worker_id,
+                          txn~posting_date, txn~entry_date, txn~entry_time,
              txn~work_id, txn~position_id, txn~origin_position_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
-             txn~quantity, txn~uom, txn~transaction_status,
+             txn~quantity, txn~defect_quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~ma_congdoan,
+
              op~plant, op~work_center
       WHERE ( txn~work_date BETWEEN @date_from AND @date_to
            OR ( txn~work_date = '00000000' AND txn~execution_date BETWEEN @date_from AND @date_to ) )
@@ -547,7 +559,8 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
       INNER JOIN ztb_mob_rol_fnc AS role_func
         ON role_func~role_id = role_header~role_id
       WHERE txn~transaction_status = @zcl_pp_txn_type=>posted
-        AND assignment~user_uuid = @user_uuid AND role_header~status = 'A'
+*        AND assignment~user_uuid = @user_uuid
+        AND role_header~status = 'A'
         AND role_func~func_id = @func_team
         AND txn~work_id <> ' '
         AND ( txn~work_date BETWEEN @date_from AND @date_to
@@ -563,11 +576,11 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
       GROUP BY txn~operation_uuid, txn~work_id, op~work_center, op~ma_congdoan
       INTO TABLE @DATA(contexts).
     TYPES: BEGIN OF permission,
-             work_id TYPE ztb_mob_work-work_id,
-             work_center TYPE ztb_pp_op_alloc-work_center,
-             ma_congdoan TYPE ztb_pp_op_alloc-ma_congdoan,
+             work_id        TYPE ztb_mob_work-work_id,
+             work_center    TYPE ztb_pp_op_alloc-work_center,
+             ma_congdoan    TYPE ztb_pp_op_alloc-ma_congdoan,
              effective_date TYPE d,
-             allowed TYPE abap_bool,
+             allowed        TYPE abap_bool,
            END OF permission.
     DATA permissions TYPE HASHED TABLE OF permission
                      WITH UNIQUE KEY work_id work_center ma_congdoan effective_date.
@@ -598,6 +611,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
   ENDMETHOD.
+
 
   METHOD select_team.
     DATA(contexts) = authorized_team_contexts(
@@ -695,7 +709,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
              txn~shift_start_at, txn~shift_end_at, txn~shift_time_zone, txn~shift_valid_from, txn~worker_id,
              txn~work_id, txn~position_id, txn~origin_position_id,
              txn~from_worker_id, txn~to_worker_id, txn~transaction_type,
-             txn~quantity, txn~uom, txn~transaction_status,
+             txn~quantity, txn~defect_quantity, txn~uom, txn~transaction_status,
              op~production_order, op~operation_no, op~ma_congdoan,
              op~plant, op~work_center,
              scope_row~worker_id AS report_worker_id
@@ -723,14 +737,14 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
         APPEND CORRESPONDING #( <candidate> ) TO result.
         CONTINUE.
       ENDIF.
-        IF NOT line_exists( roots[
-           transaction_uuid = <candidate>-transaction_uuid
-           worker_id = <candidate>-report_worker_id
-           work_id = <candidate>-work_id ] )
-         AND NOT line_exists( roots[
-           transaction_uuid = <candidate>-original_transaction_uuid
-           worker_id = <candidate>-report_worker_id
-           work_id = <candidate>-work_id ] ).
+      IF NOT line_exists( roots[
+         transaction_uuid = <candidate>-transaction_uuid
+         worker_id = <candidate>-report_worker_id
+         work_id = <candidate>-work_id ] )
+       AND NOT line_exists( roots[
+         transaction_uuid = <candidate>-original_transaction_uuid
+         worker_id = <candidate>-report_worker_id
+         work_id = <candidate>-work_id ] ).
         "Derived row phải trỏ về assignment/transfer trong phạm vi được cấp quyền.
         "Không nhận dòng mồ côi hoặc tham chiếu sang worker/WorkID ngoài phạm vi.
         CONTINUE.
@@ -812,6 +826,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
                                   work_id = <row>-work_id
                                   uom = <row>-uom
                                   completed = <row>-quantity
+                                  defect = <row>-defect_quantity
                         CHANGING summaries = result ).
         WHEN zcl_pp_txn_type=>reverse.
           IF <row>-worker_id <> <row>-report_worker_id.
@@ -821,6 +836,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
                                   work_id = <row>-work_id
                                   uom = <row>-uom
                                   completed = <row>-quantity * -1
+                                  defect = <row>-defect_quantity * -1
                         CHANGING summaries = result ).
         WHEN zcl_pp_txn_type=>allocation_adjustment.
           IF <row>-worker_id <> <row>-report_worker_id.
@@ -848,6 +864,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
                                   work_id = <row>-work_id
                                   uom = <row>-uom
                                   completed = <row>-quantity
+                                  defect = <row>-defect_quantity
                         CHANGING summaries = result ).
         WHEN OTHERS.
           "Transaction type chưa biết vẫn được tính số transaction nhưng không cộng
@@ -863,7 +880,8 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
                           + <summary>-transferred_in
                           - <summary>-transferred_out
                           - <summary>-recalled
-                          - <summary>-completed.
+                          - <summary>-completed
+                          - <summary>-defect.
     ENDLOOP.
   ENDMETHOD.
 
@@ -883,6 +901,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
     <summary>-transferred_out = <summary>-transferred_out + transferred_out.
     <summary>-recalled = <summary>-recalled + recalled.
     <summary>-completed = <summary>-completed + completed.
+    <summary>-defect = <summary>-defect + defect.
     <summary>-txn_count = <summary>-txn_count + 1.
   ENDMETHOD.
 
@@ -926,6 +945,15 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
         shift_end_at = <row>-shift_end_at
         shift_time_zone = <row>-shift_time_zone
         shift_valid_from = <row>-shift_valid_from
+                posting_date = COND #( WHEN <row>-posting_date IS NOT INITIAL THEN <row>-posting_date
+                               WHEN <row>-work_date IS NOT INITIAL THEN <row>-work_date
+                               ELSE <row>-execution_date )
+        entry_date = COND #( WHEN <row>-entry_date IS NOT INITIAL THEN <row>-entry_date
+                             ELSE zcl_pp_shift_resolver=>to_local_date(
+                                    utc = <row>-executed_at time_zone = <row>-shift_time_zone ) )
+        entry_time = COND #( WHEN <row>-entry_date IS NOT INITIAL THEN <row>-entry_time
+                             ELSE zcl_pp_shift_resolver=>to_local_time(
+                                    utc = <row>-executed_at time_zone = <row>-shift_time_zone ) )
         worker_id = <row>-report_worker_id
         production_order = <row>-production_order
         operation_no = <row>-operation_no
@@ -941,6 +969,7 @@ CLASS ZCL_PP_WORK_HISTORY IMPLEMENTATION.
         origin_position_id = <row>-origin_position_id
         transaction_type = <row>-transaction_type
         quantity = <row>-quantity
+        defect_quantity = <row>-defect_quantity
         original_transaction_uuid = <row>-original_transaction_uuid
         uom = <row>-uom
         transaction_status = <row>-transaction_status ) TO result.

@@ -19,10 +19,15 @@ etag master LocalLastChangedAt
   field ( mandatory ) TenCongDoan, ValidTo;
   field ( readonly ) WorkName, Plant, WorkCenter;
   field ( readonly ) CreatedBy, CreatedAt, LastChangedBy,
-                     LastChangedAt, LocalLastChangedAt;
+  LastChangedAt, LocalLastChangedAt;
+
+
+  static action uploadExcel
+    parameter zabs_file_crud_poc
+    result [1] ZA_MD_UploadCdResult;
 
   validation validateMaster on save
-    { create; update; field MaCongDoan, ValidFrom, BoPhan, ValidTo, TenCongDoan, DonGiaXM, DonGiaGC; }
+  { create; update; field MaCongDoan, ValidFrom, BoPhan, ValidTo, TenCongDoan, DonGiaXM, DonGiaGC; }
 
   draft action Edit;
   draft action Activate optimized;
@@ -31,18 +36,18 @@ etag master LocalLastChangedAt
   draft determine action Prepare { validation validateMaster; }
 
   mapping for ztb_md_congdoan
-  {
-    MaCongDoan         = ma_congdoan;
-    ValidFrom          = valid_from;
-    TenCongDoan        = ten_congdoan;
-    BoPhan             = bo_phan;
-    DonGiaXM           = dongia_xm;
-    DonGiaGC           = dongia_gc;
-    ValidTo            = valid_to;
-    CreatedBy          = created_by;
-    CreatedAt          = created_at;
-    LastChangedBy      = last_changed_by;
-    LastChangedAt      = last_changed_at;
-    LocalLastChangedAt = local_last_changed_at;
-  }
+    {
+      MaCongDoan         = ma_congdoan;
+      ValidFrom          = valid_from;
+      TenCongDoan        = ten_congdoan;
+      BoPhan             = bo_phan;
+      DonGiaXM           = dongia_xm;
+      DonGiaGC           = dongia_gc;
+      ValidTo            = valid_to;
+      CreatedBy          = created_by;
+      CreatedAt          = created_at;
+      LastChangedBy      = last_changed_by;
+      LastChangedAt      = last_changed_at;
+      LocalLastChangedAt = local_last_changed_at;
+    }
 }

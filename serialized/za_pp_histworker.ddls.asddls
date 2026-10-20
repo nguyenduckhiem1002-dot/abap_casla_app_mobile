@@ -23,7 +23,11 @@ define abstract entity ZA_PP_HistWorker {
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   RecalledQuantity : abap.quan(15,3);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+  @EndUserText.label: 'Tổng số lượng đạt'
   CompletedQuantity : abap.quan(15,3);
+  @EndUserText.label: 'Tổng số lượng lỗi'
+  @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+  DefectQuantity : abap.quan(15,3);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   RemainingQuantity : abap.quan(15,3);
   UnitOfMeasure : abap.unit(3);

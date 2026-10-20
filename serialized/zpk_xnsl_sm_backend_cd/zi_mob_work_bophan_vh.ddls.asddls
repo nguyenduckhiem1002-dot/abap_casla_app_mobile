@@ -4,11 +4,11 @@
 define view entity ZI_MOB_Work_BoPhan_VH
   as select distinct from ztb_mob_work
 {
-      @EndUserText.label: 'Bộ phận'
+      @EndUserText.label: 'Mã Xưởng'
       @Search.defaultSearchElement: true
       @UI.lineItem: [{ position: 10 }]
   key bo_phan as BoPhan,
-  @EndUserText.label: 'Tên Bộ Phận'
+  @EndUserText.label: 'Tên Xưởng'
   work_name as WorkName
 }
 where

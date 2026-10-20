@@ -5,12 +5,11 @@
    <VSEOCLASS>
     <CLSNAME>ZCL_PP_SHIFT_RESOLVER</CLSNAME>
     <LANGU>E</LANGU>
-    <DESCRIPT>Resolve shift business date and UTC bounds</DESCRIPT>
+    <DESCRIPT>zcl_pp_shift_resolver</DESCRIPT>
     <STATE>1</STATE>
     <CLSCCINCL>X</CLSCCINCL>
     <FIXPT>X</FIXPT>
     <UNICODE>X</UNICODE>
-    <WITH_UNIT_TESTS>X</WITH_UNIT_TESTS>
    </VSEOCLASS>
   </asx:values>
  </asx:abap>

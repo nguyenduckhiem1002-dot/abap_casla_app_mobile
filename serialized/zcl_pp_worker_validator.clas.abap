@@ -18,6 +18,7 @@ CLASS zcl_pp_worker_validator DEFINITION
       CHANGING checks TYPE worker_checks.
 
     CLASS-METHODS is_worker_active
+      "Plant chỉ giữ để tương thích caller; hiệu lực kiểm tra theo Work Center/ngày.
       IMPORTING
         worker_id      TYPE zi_pp_workerref-WorkerID
         plant          TYPE zi_pp_workerref-Plant
@@ -28,7 +29,7 @@ CLASS zcl_pp_worker_validator DEFINITION
 protected section.
   PRIVATE SECTION.
     TYPES worker_refs TYPE SORTED TABLE OF zi_pp_workerref
-      WITH NON-UNIQUE KEY WorkerID Plant WorkCenter ValidFrom.
+      WITH NON-UNIQUE KEY WorkerID WorkCenter ValidFrom.
 ENDCLASS.
 
 
@@ -42,31 +43,30 @@ CLASS ZCL_PP_WORKER_VALIDATOR IMPLEMENTATION.
     ENDIF.
 
     DATA worker_range TYPE RANGE OF zi_pp_workerref-WorkerID.
-    DATA plant_range TYPE RANGE OF zi_pp_workerref-Plant.
+    DATA work_center_range TYPE RANGE OF zi_pp_workerref-WorkCenter.
 
     LOOP AT checks ASSIGNING FIELD-SYMBOL(<check>).
       INSERT VALUE #( sign = 'I' option = 'EQ' low = <check>-worker_id )
         INTO TABLE worker_range.
-      INSERT VALUE #( sign = 'I' option = 'EQ' low = <check>-plant )
-        INTO TABLE plant_range.
+      INSERT VALUE #( sign = 'I' option = 'EQ' low = <check>-work_center )
+        INTO TABLE work_center_range.
     ENDLOOP.
     SORT worker_range BY low.
     DELETE ADJACENT DUPLICATES FROM worker_range COMPARING low.
-    SORT plant_range BY low.
-    DELETE ADJACENT DUPLICATES FROM plant_range COMPARING low.
+    SORT work_center_range BY low.
+    DELETE ADJACENT DUPLICATES FROM work_center_range COMPARING low.
 
     DATA valid_workers TYPE worker_refs.
     SELECT FROM zi_pp_workerref
-      FIELDS WorkerID, Plant, WorkCenter, ValidFrom, ValidTo
+      FIELDS WorkerID, WorkCenter, ValidFrom, ValidTo
       WHERE WorkerID IN @worker_range
-        AND Plant IN @plant_range
+        AND WorkCenter IN @work_center_range
       INTO CORRESPONDING FIELDS OF TABLE @valid_workers.
 
     LOOP AT checks ASSIGNING <check>.
       CLEAR <check>-is_active.
       LOOP AT valid_workers TRANSPORTING NO FIELDS
         WHERE WorkerID = <check>-worker_id
-          AND Plant = <check>-plant
           AND WorkCenter = <check>-work_center
           AND ValidFrom <= <check>-execution_date
           AND ValidTo >= <check>-execution_date.

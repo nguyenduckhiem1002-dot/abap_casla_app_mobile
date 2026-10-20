@@ -21,11 +21,15 @@ define view entity ZR_PP_AllocTxn
       worker_id                 as WorkerID,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       quantity                  as Quantity,
+      @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+      defect_quantity           as DefectQuantity,
       uom                       as UnitOfMeasure,
       execution_date            as ExecutionDate,
       work_id                   as WorkID,
-      @EndUserText.label: 'Vị trí hiện tại'
+            @EndUserText.label: 'Vị trí hiện tại'
       position_id               as PositionID,
+      @EndUserText.label: 'Mã máy'
+      machine_id                as MachineID,
       @EndUserText.label: 'Vị trí gốc'
       origin_position_id        as OriginPositionID,
       @EndUserText.label: 'Mã ca'
@@ -42,6 +46,12 @@ define view entity ZR_PP_AllocTxn
       shift_time_zone           as ShiftTimeZone,
       @EndUserText.label: 'Phiên bản ca hiệu lực từ'
       shift_valid_from          as ShiftValidFrom,
+            @EndUserText.label: 'Posting Date'
+      posting_date              as PostingDate,
+      @EndUserText.label: 'Entry Date'
+      entry_date                as EntryDate,
+      @EndUserText.label: 'Entry Time'
+      entry_time                as EntryTime,
       transaction_status        as TransactionStatus,
       reason_code               as ReasonCode,
       reason_text               as ReasonText,

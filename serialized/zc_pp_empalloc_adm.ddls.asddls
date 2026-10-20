@@ -40,9 +40,12 @@ define view entity ZC_PP_EmpAlloc_Adm
   @EndUserText.label: 'Sản lượng đã thu hồi'
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   RecalledQuantity,
-  @EndUserText.label: 'Sản lượng đã xác nhận'
+  @EndUserText.label: 'Số lượng đạt'
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   CompletedQuantity,
+  @EndUserText.label: 'Số lượng lỗi'
+  @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+  DefectQuantity,
   @EndUserText.label: 'Sản lượng còn lại'
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   RemainingQuantity,

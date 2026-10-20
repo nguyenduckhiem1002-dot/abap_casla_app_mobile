@@ -1,9 +1,0 @@
-CLASS zbp_r_pp_posassign DEFINITION
-  PUBLIC
-  ABSTRACT
-  FINAL
-  FOR BEHAVIOR OF zr_pp_posassign.
-ENDCLASS.
-
-CLASS zbp_r_pp_posassign IMPLEMENTATION.
-ENDCLASS.

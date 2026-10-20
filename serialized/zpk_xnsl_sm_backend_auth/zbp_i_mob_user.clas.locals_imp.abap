@@ -6,12 +6,27 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
     CONSTANTS c_max_failed_logins TYPE i VALUE 5.
     CONSTANTS c_failure_window_minutes TYPE i VALUE 1.
     CONSTANTS c_lock_minutes TYPE i VALUE 10.
+    CONSTANTS c_default_password TYPE string VALUE '123456'.
+    TYPES ty_user_create TYPE TABLE FOR CREATE zi_mob_user\\MobileUser.
+    TYPES ty_cred_create TYPE TABLE FOR CREATE zi_mob_user\_Credential.
+    TYPES ty_role_create TYPE TABLE FOR CREATE zi_mob_user\_Roles.
     TYPES reported_response TYPE RESPONSE FOR REPORTED zi_mob_user.
     TYPES failed_response TYPE RESPONSE FOR FAILED zi_mob_user.
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
       IMPORTING REQUEST requested_authorizations FOR MobileUser RESULT result.
     METHODS createuser FOR MODIFY
       IMPORTING keys FOR ACTION MobileUser~createUser RESULT result.
+    METHODS uploadexcel FOR MODIFY
+      IMPORTING keys FOR ACTION MobileUser~uploadExcel RESULT result.
+    METHODS prepare_upload_row
+      IMPORTING row    TYPE zcl_mob_user_parser=>ty_row
+                now    TYPE utclong
+      CHANGING  users       TYPE ty_user_create
+                credentials TYPE ty_cred_create
+                roles       TYPE ty_role_create
+                failed      TYPE failed_response
+                reported    TYPE reported_response
+      RETURNING VALUE(result) TYPE abap_bool.
     METHODS login FOR MODIFY
       IMPORTING keys FOR ACTION MobileUser~login RESULT result.
     METHODS logout FOR MODIFY IMPORTING keys FOR ACTION MobileUser~logout.
@@ -47,6 +62,7 @@ CLASS lhc_mobileuser DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS validate_worker_for_create
       IMPORTING cid       TYPE string
                 worker_id TYPE ztb_mob_user-worker_id
+                prefix    TYPE string OPTIONAL
       CHANGING  failed    TYPE failed_response
                 reported  TYPE reported_response
       RETURNING VALUE(result) TYPE abap_bool.
@@ -64,6 +80,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     "Service quản trị Fiori được bảo vệ bằng IAM app/business catalog.
     IF requested_authorizations-%action-createUser = if_abap_behv=>mk-on.
       result-%action-createUser = if_abap_behv=>auth-allowed.
+    ENDIF.
+    IF requested_authorizations-%action-uploadExcel = if_abap_behv=>mk-on.
+      result-%action-uploadExcel = if_abap_behv=>auth-allowed.
     ENDIF.
     IF requested_authorizations-%action-login = if_abap_behv=>mk-on.
       result-%action-login = if_abap_behv=>auth-allowed.
@@ -157,7 +176,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
 
     DATA(worker_ref_id) = CONV zi_pp_workerref-workerid( worker_id ).
     IF CONV string( worker_ref_id ) <> worker_id.
-      report_error( EXPORTING cid = cid text = 'Mã nhân công không đúng định dạng'
+      report_error( EXPORTING cid = cid text = prefix && 'Mã nhân công không đúng định dạng'
                     CHANGING failed = failed reported = reported ).
       result = abap_false.
       RETURN.
@@ -173,7 +192,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       UP TO 1 ROWS.
     IF active_workers IS INITIAL.
       report_error( EXPORTING cid = cid
-                              text = 'Nhân công không tồn tại hoặc không còn hiệu lực'
+                              text = prefix && 'Nhân công không tồn tại hoặc không còn hiệu lực'
                     CHANGING failed = failed reported = reported ).
       result = abap_false.
       RETURN.
@@ -186,7 +205,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
       UP TO 1 ROWS.
     IF worker_accounts IS NOT INITIAL.
       report_error( EXPORTING cid = cid
-                              text = 'Nhân công đã được liên kết với tài khoản khác'
+                              text = prefix && 'Nhân công đã được liên kết với tài khoản khác'
                     CHANGING failed = failed reported = reported ).
       result = abap_false.
     ENDIF.
@@ -302,6 +321,122 @@ CLASS lhc_mobileuser IMPLEMENTATION.
     "CORRESPONDING để loại các %-component khỏi kết quả READ.
     result = VALUE #( FOR user IN users
       ( %cid = cid %param = CORRESPONDING #( user ) ) ).
+  ENDMETHOD.
+
+  METHOD prepare_upload_row.
+    result = abap_false.
+    DATA(label) = |Dòng { row-excel_row }: |.
+    DATA(normalized) = to_lower( row-username ).
+    DATA(role_id) = CONV ztb_mob_role-role_id( row-role_id ).
+    IF password_is_acceptable( password = c_default_password username = normalized ) = abap_false.
+      report_error( EXPORTING cid = row-cid text = label && 'Tên đăng nhập chứa mật khẩu mặc định'
+                    CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    SELECT FROM ztb_mob_user FIELDS user_uuid
+      WHERE normalized_username = @normalized
+      INTO TABLE @DATA(existing_users)
+      UP TO 1 ROWS.
+    IF existing_users IS NOT INITIAL.
+      report_error( EXPORTING cid = row-cid text = label && 'Tên đăng nhập đã tồn tại'
+                    CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    IF role_id IS NOT INITIAL AND role_is_active( role_id ) = abap_false.
+      report_error( EXPORTING cid = row-cid
+                              text = label && 'Chức danh không tồn tại hoặc không còn hiệu lực'
+                    CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    DATA(worker_is_valid) = abap_true.
+    CALL METHOD validate_worker_for_create
+      EXPORTING cid = row-cid worker_id = CONV ztb_mob_user-worker_id( row-worker_id ) prefix = label
+      CHANGING failed = failed reported = reported
+      RECEIVING result = worker_is_valid.
+    IF worker_is_valid = abap_false.
+      RETURN.
+    ENDIF.
+    TRY.
+        DATA(salt) = cl_system_uuid=>create_uuid_c36_static( ).
+        DATA(password_hash) = hash_password(
+          password = c_default_password salt = CONV string( salt ) iterations = c_iterations ).
+      CATCH cx_uuid_error cx_abap_message_digest zcx_mob_config.
+        report_error( EXPORTING cid = row-cid text = label && 'Không thể xử lý mật khẩu'
+                      CHANGING failed = failed reported = reported ).
+        RETURN.
+    ENDTRY.
+    APPEND VALUE #( %cid = row-cid Username = row-username NormalizedUsername = normalized
+      FullName = row-full_name Email = row-email WorkerID = row-worker_id
+      Status = 'A' FailedLoginCount = 0 PasswordChangeRequired = abap_true ) TO users.
+    APPEND VALUE #( %cid_ref = row-cid
+      %target = VALUE #( ( %cid = |CRD_{ row-cid }| PasswordHash = password_hash
+        PasswordSalt = salt HashAlgorithm = 'SHA256-ITER' HashIterations = c_iterations
+        PasswordChangedAt = now CredentialStatus = 'A' ) ) ) TO credentials.
+    IF role_id IS NOT INITIAL.
+      APPEND VALUE #( %cid_ref = row-cid
+        %target = VALUE #( ( %cid = |ROL_{ row-cid }| RoleID = role_id ) ) ) TO roles.
+    ENDIF.
+    result = abap_true.
+  ENDMETHOD.
+
+  METHOD uploadexcel.
+    IF keys IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
+    IF lines( keys ) > 1.
+      report_error( EXPORTING cid = cid text = 'Mỗi yêu cầu chỉ được tải một file'
+                    CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    IF keys[ 1 ]-%param-fileContent IS INITIAL.
+      report_error( EXPORTING cid = cid text = 'Nội dung file Excel là bắt buộc'
+                    CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+    zcl_mob_user_parser=>parse( EXPORTING content = keys[ 1 ]-%param-fileContent
+                                IMPORTING rows = DATA(rows) error = DATA(parse_error) ).
+    IF parse_error IS NOT INITIAL.
+      report_error( EXPORTING cid = cid text = parse_error
+                    CHANGING failed = failed reported = reported ).
+      RETURN.
+    ENDIF.
+
+    "Kiểm tra toàn bộ dòng trước khi ghi để báo hết lỗi một lần; có lỗi thì không tạo gì.
+    DATA users TYPE ty_user_create.
+    DATA credentials TYPE ty_cred_create.
+    DATA roles TYPE ty_role_create.
+    DATA(now) = utclong_current( ).
+    DATA(all_valid) = abap_true.
+    LOOP AT rows ASSIGNING FIELD-SYMBOL(<row>).
+      IF prepare_upload_row( EXPORTING row = <row> now = now
+           CHANGING users = users credentials = credentials roles = roles
+                    failed = failed reported = reported ) = abap_false.
+        all_valid = abap_false.
+      ENDIF.
+    ENDLOOP.
+    IF all_valid = abap_false.
+      RETURN.
+    ENDIF.
+
+    MODIFY ENTITIES OF zi_mob_user IN LOCAL MODE
+      ENTITY MobileUser CREATE FIELDS
+        ( Username NormalizedUsername FullName Email WorkerID
+          Status FailedLoginCount PasswordChangeRequired )
+      WITH users
+      ENTITY MobileUser CREATE BY \_Credential FIELDS
+        ( PasswordHash PasswordSalt HashAlgorithm HashIterations
+          PasswordChangedAt CredentialStatus )
+      WITH credentials
+      ENTITY MobileUser CREATE BY \_Roles FIELDS ( RoleID )
+      WITH roles
+      FAILED DATA(failed_create) REPORTED DATA(reported_create).
+    IF failed_create IS NOT INITIAL.
+      failed = CORRESPONDING #( failed_create ).
+      reported = CORRESPONDING #( reported_create ).
+      RETURN.
+    ENDIF.
+    result = VALUE #( ( %cid = cid %param-CreatedCount = lines( users ) ) ).
   ENDMETHOD.
 
   METHOD revoke_login_sessions.
@@ -521,6 +656,7 @@ CLASS lhc_mobileuser IMPLEMENTATION.
           Plant = work_context-plant
           plantName = work_context-plant_name
           WorkCenter = work_context-workcenter
+          WorkCenterName = work_context-workcenter_name
           BoPhan = work_context-bo_phan
           Location = work_context-location ) ) ) ) ).
   ENDMETHOD.
@@ -666,7 +802,9 @@ CLASS lhc_mobileuser IMPLEMENTATION.
         ( WorkID = work_context-work_id
           WorkName = work_context-work_name
           Plant = work_context-plant
+          plantName = work_context-plant_name
           WorkCenter = work_context-workcenter
+          WorkCenterName = work_context-workcenter_name
           BoPhan = work_context-bo_phan
           Location = work_context-location ) ) ) ) ).
   ENDMETHOD.
@@ -1146,3 +1284,4 @@ CLASS lhc_mobileuserrole IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 ENDCLASS.
+

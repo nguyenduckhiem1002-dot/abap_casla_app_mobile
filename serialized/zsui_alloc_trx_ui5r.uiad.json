@@ -15,7 +15,7 @@
   },
   "navigation": {
     "targetMappingId": "ZSUI_ALLOC_TRX_UI5R_TM",
-    "semanticObject": "ZSO_PP_ALLOC_TRX",
+    "semanticObject": "ZSO_TRANSACTION_XNSL",
     "action": "display",
     "desktop": true,
     "tablet": true,

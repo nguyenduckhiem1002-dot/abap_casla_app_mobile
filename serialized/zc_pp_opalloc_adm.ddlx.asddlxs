@@ -77,10 +77,15 @@ annotate entity ZC_PP_OpAlloc_Adm with
   @EndUserText.label: 'Tổng đã thu hồi'
   TotalRecalledQuantity;
 
-  @UI.lineItem: [ { position: 75, label: 'Tổng đã xác nhận' } ]
+  @UI.lineItem: [ { position: 75, label: 'Tổng số lượng đạt' } ]
   @UI.identification: [{ position: 75 }]
-  @EndUserText.label: 'Tổng đã xác nhận'
+  @EndUserText.label: 'Tổng số lượng đạt'
   TotalCompletedQuantity;
+
+  @UI.lineItem: [ { position: 77, label: 'Tổng số lượng lỗi' } ]
+  @UI.identification: [{ position: 77 }]
+  @EndUserText.label: 'Tổng số lượng lỗi'
+  TotalDefectQuantity;
 
   @UI.lineItem: [ { position: 80, label: 'Tổng còn lại' } ]
   @UI.identification: [{ position: 80 }]

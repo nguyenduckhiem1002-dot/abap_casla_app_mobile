@@ -2,8 +2,8 @@ CLASS zcl_mob_token_validator DEFINITION
   PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     TYPES: BEGIN OF validation_result,
-             is_valid  TYPE abap_bool,
-             user_uuid TYPE sysuuid_x16,
+             is_valid   TYPE abap_bool,
+             user_uuid  TYPE sysuuid_x16,
              session_id TYPE sysuuid_x16,
              error_code TYPE c LENGTH 40,
            END OF validation_result.
@@ -14,116 +14,129 @@ CLASS zcl_mob_token_validator DEFINITION
              error_code       TYPE c LENGTH 40,
            END OF worker_verification_result.
     TYPES: BEGIN OF permission,
-             func_id   TYPE ztb_mob_func-func_id,
-             func_name TYPE ztb_mob_func-func_name,
+             func_id    TYPE ztb_mob_func-func_id,
+             func_name  TYPE ztb_mob_func-func_name,
              app_module TYPE ztb_mob_func-app_module,
            END OF permission,
            permissions TYPE SORTED TABLE OF permission WITH UNIQUE KEY func_id.
     TYPES: BEGIN OF work_context,
-             work_id    TYPE ztb_mob_work-work_id,
-             work_name  TYPE ztb_mob_work-work_name,
-             plant      TYPE ztb_mob_work-plant,
-             plant_name TYPE c LENGTH 100,
-             workcenter TYPE ztb_mob_work-workcenter,
-             bo_phan    TYPE ztb_mob_work-bo_phan,
-             location   TYPE ztb_mob_work-location,
+             work_id         TYPE ztb_mob_work-work_id,
+             work_name       TYPE ztb_mob_work-work_name,
+             plant           TYPE ztb_mob_work-plant,
+             plant_name      TYPE c LENGTH 100,
+             workcenter      TYPE ztb_mob_work-workcenter,
+             workcenter_name TYPE c LENGTH 100,
+             bo_phan         TYPE ztb_mob_work-bo_phan,
+             location        TYPE ztb_mob_work-location,
            END OF work_context,
            work_contexts TYPE SORTED TABLE OF work_context WITH UNIQUE KEY work_id.
     "Đây là nguồn logic duy nhất để hash token. Mọi entry point nhận mobile token
     "phải gọi method này thay vì tự hash inline để tránh lệch implementation và
     "tránh việc đổi thuật toán làm một flow vô hiệu session còn flow khác vẫn nhận.
+    TYPES work_centers TYPE SORTED TABLE OF ztb_mob_work-workcenter
+                      WITH UNIQUE KEY table_line.
     CLASS-METHODS hash_token
-      IMPORTING token TYPE string
+      IMPORTING token       TYPE string
       RETURNING VALUE(hash) TYPE ztb_mob_session-access_token_hash
-      RAISING cx_abap_message_digest zcx_mob_config.
+      RAISING   cx_abap_message_digest zcx_mob_config.
+
+    CLASS-METHODS get_func_work_centers
+      IMPORTING user_uuid     TYPE sysuuid_x16
+                func_id       TYPE ztb_mob_func-func_id
+      RETURNING VALUE(result) TYPE work_centers.
+
     "Entry point ưu tiên cho caller đang giữ token dạng plain text. Truyền
     "required_func nếu muốn reject caller không có function tương ứng.
     CLASS-METHODS validate_token
-      IMPORTING token TYPE string
-                device_id TYPE ztb_mob_session-device_id
+      IMPORTING token                 TYPE string
+                device_id             TYPE ztb_mob_session-device_id
                 allow_password_change TYPE abap_bool DEFAULT abap_false
-                required_func TYPE ztb_mob_func-func_id OPTIONAL
-      RETURNING VALUE(result) TYPE validation_result
-      RAISING cx_abap_message_digest zcx_mob_config.
+                required_func         TYPE ztb_mob_func-func_id OPTIONAL
+      RETURNING VALUE(result)         TYPE validation_result
+      RAISING   cx_abap_message_digest zcx_mob_config.
     "Dùng cho caller đã có token hash để tránh hash lặp lần thứ hai.
     CLASS-METHODS validate_hash
-      IMPORTING token_hash TYPE ztb_mob_session-access_token_hash
-                device_id TYPE ztb_mob_session-device_id
+      IMPORTING token_hash            TYPE ztb_mob_session-access_token_hash
+                device_id             TYPE ztb_mob_session-device_id
                 allow_password_change TYPE abap_bool DEFAULT abap_false
-                required_func TYPE ztb_mob_func-func_id OPTIONAL
-      RETURNING VALUE(result) TYPE validation_result.
+                required_func         TYPE ztb_mob_func-func_id OPTIONAL
+      RETURNING VALUE(result)         TYPE validation_result.
     "Danh sách function hiệu lực của user gồm mọi function được cấp bởi các
     "role active đang gán cho user. Đây cũng là danh sách trả cho device lúc
     "login để UI và backend cùng được suy ra từ một nguồn query.
     CLASS-METHODS get_permissions
-      IMPORTING user_uuid TYPE sysuuid_x16
+      IMPORTING user_uuid     TYPE sysuuid_x16
       RETURNING VALUE(result) TYPE permissions.
     CLASS-METHODS get_work_contexts
-      IMPORTING user_uuid TYPE sysuuid_x16
+      IMPORTING user_uuid     TYPE sysuuid_x16
       RETURNING VALUE(result) TYPE work_contexts.
     CLASS-METHODS has_work_scope
-      IMPORTING user_uuid TYPE sysuuid_x16
-                plant TYPE ztb_mob_work-plant
-                work_center TYPE ztb_mob_work-workcenter
+      "Plant được giữ trong chữ ký cho caller cũ; phạm vi quyền chỉ theo Work Center.
+      IMPORTING user_uuid     TYPE sysuuid_x16
+                plant         TYPE ztb_mob_work-plant
+                work_center   TYPE ztb_mob_work-workcenter
       RETURNING VALUE(result) TYPE abap_bool.
-    "Function và vị trí Plant/Work Center phải được cấp bởi cùng một role.
+    "Function và vị trí Work Center phải được cấp bởi cùng một role.
+    "Plant được giữ trong chữ ký cho caller cũ, không dùng để kiểm tra quyền.
     CLASS-METHODS has_func_op_scope
-      IMPORTING user_uuid TYPE sysuuid_x16
-                func_id TYPE ztb_mob_func-func_id
-                plant TYPE ztb_mob_work-plant
-                work_center TYPE ztb_mob_work-workcenter
-                work_id TYPE ztb_mob_work-work_id OPTIONAL
-                ma_congdoan TYPE ztb_md_congdoan-ma_congdoan
+      IMPORTING user_uuid      TYPE sysuuid_x16
+                func_id        TYPE ztb_mob_func-func_id
+                plant          TYPE ztb_mob_work-plant
+                work_center    TYPE ztb_mob_work-workcenter
+                work_id        TYPE ztb_mob_work-work_id OPTIONAL
+                ma_congdoan    TYPE ztb_md_congdoan-ma_congdoan
                 effective_date TYPE d
-      RETURNING VALUE(result) TYPE abap_bool.
+      RETURNING VALUE(result)  TYPE abap_bool.
     "Kiểm tra function và WorkID thuộc cùng một role, dùng khi chưa có
-    "operation để suy ra Plant/Work Center.
+    "operation để suy ra Work Center.
     CLASS-METHODS has_func_work_scope
-      IMPORTING user_uuid TYPE sysuuid_x16
-                func_id TYPE ztb_mob_func-func_id
-                work_id TYPE ztb_mob_work-work_id
+      IMPORTING user_uuid     TYPE sysuuid_x16
+                func_id       TYPE ztb_mob_func-func_id
+                work_id       TYPE ztb_mob_work-work_id
       RETURNING VALUE(result) TYPE abap_bool.
-    TYPES work_centers TYPE SORTED TABLE OF ztb_mob_work-workcenter
-                       WITH UNIQUE KEY table_line.
-    "Các Work Center mà tài khoản được cấp function, với function và Work
-    "Center do cùng một role cấp. Dùng cho chức năng không gắn Plant/công đoạn
-    "(quản lý vị trí ngồi của công nhân).
-    CLASS-METHODS get_func_work_centers
-      IMPORTING user_uuid TYPE sysuuid_x16
-                func_id TYPE ztb_mob_func-func_id
-      RETURNING VALUE(result) TYPE work_centers.
     "Kiểm tra tài khoản công nhân, vị trí làm việc và bộ phận công đoạn.
+    "Plant được giữ trong chữ ký cho caller cũ, không dùng để kiểm tra quyền.
     "Hiệu lực ngày của master nhân công vẫn do zcl_pp_worker_validator kiểm tra.
     CLASS-METHODS has_worker_op_scope
-      IMPORTING user_uuid TYPE sysuuid_x16
-                worker_id TYPE ztb_mob_user-worker_id
-                plant TYPE ztb_mob_work-plant
-                work_center TYPE ztb_mob_work-workcenter
-                work_id TYPE ztb_mob_work-work_id OPTIONAL
-                ma_congdoan TYPE ztb_md_congdoan-ma_congdoan
+      IMPORTING user_uuid      TYPE sysuuid_x16
+                worker_id      TYPE ztb_mob_user-worker_id
+                plant          TYPE ztb_mob_work-plant
+                work_center    TYPE ztb_mob_work-workcenter
+                work_id        TYPE ztb_mob_work-work_id OPTIONAL
+                ma_congdoan    TYPE ztb_md_congdoan-ma_congdoan
                 effective_date TYPE d
-      RETURNING VALUE(result) TYPE abap_bool.
+      RETURNING VALUE(result)  TYPE abap_bool.
     CLASS-METHODS has_function
-      IMPORTING user_uuid TYPE sysuuid_x16
-                func_id TYPE ztb_mob_func-func_id
+      IMPORTING user_uuid     TYPE sysuuid_x16
+                func_id       TYPE ztb_mob_func-func_id
       RETURNING VALUE(result) TYPE abap_bool.
     "Password KDF được gom về một chỗ. Trước đây logic nằm riêng trong
     "lhc_mobileuser và bị copy sang verify_worker_password; hai bản copy có thể
     "lệch nhau khi đổi salt/iterations và gây kết quả xác thực không nhất quán.
     CLASS-METHODS hash_password
-      IMPORTING password   TYPE string
-                salt       TYPE string
-                iterations TYPE i
+      IMPORTING password    TYPE string
+                salt        TYPE string
+                iterations  TYPE i
       RETURNING VALUE(hash) TYPE ztb_mob_cred-password_hash
-      RAISING cx_abap_message_digest zcx_mob_config.
+      RAISING   cx_abap_message_digest zcx_mob_config.
     CLASS-METHODS verify_worker_password
-      IMPORTING worker_id TYPE ztb_mob_user-worker_id
-                password  TYPE string
+      IMPORTING worker_id     TYPE ztb_mob_user-worker_id
+                password      TYPE string
       RETURNING VALUE(result) TYPE worker_verification_result
-      RAISING cx_abap_message_digest zcx_mob_config.
+      RAISING   cx_abap_message_digest zcx_mob_config.
+
+    CLASS-METHODS manager_covers_worker
+      IMPORTING manager_uuid  TYPE sysuuid_x16
+                func_id       TYPE ztb_mob_func-func_id
+                worker_uuid   TYPE sysuuid_x16
+      RETURNING VALUE(result) TYPE abap_bool.
 ENDCLASS.
 
+
+
 CLASS zcl_mob_token_validator IMPLEMENTATION.
+
+
   METHOD hash_token.
     IF token IS INITIAL.
       RAISE EXCEPTION NEW zcx_mob_config( config_key = 'EMPTY_TOKEN' ).
@@ -134,6 +147,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       hasher->calculate_hash( token ) ).
   ENDMETHOD.
 
+
   METHOD validate_token.
     result = validate_hash(
       token_hash = hash_token( token )
@@ -141,6 +155,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       allow_password_change = allow_password_change
       required_func = required_func ).
   ENDMETHOD.
+
 
   METHOD get_permissions.
     "Dùng DISTINCT vì nhiều role có thể cấp cùng một function. Role inactive
@@ -160,6 +175,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       INTO CORRESPONDING FIELDS OF TABLE @result.
   ENDMETHOD.
 
+
   METHOD get_work_contexts.
     SELECT FROM ztb_mob_usr_rol AS assignment
       INNER JOIN ztb_mob_role AS role_hdr
@@ -178,7 +194,24 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
         AND work~is_active = 'A'
       ORDER BY work~work_id
       INTO CORRESPONDING FIELDS OF TABLE @result.
+
+    LOOP AT result ASSIGNING FIELD-SYMBOL(<work_context>).
+      SELECT FROM I_WorkCenter AS work_center
+        INNER JOIN I_WorkCenterText AS work_center_text
+          ON work_center_text~WorkCenterInternalID = work_center~WorkCenterInternalID
+        FIELDS DISTINCT work_center_text~WorkCenterText
+        WHERE work_center~WorkCenter = @<work_context>-workcenter
+          AND ( @<work_context>-plant IS INITIAL
+                OR work_center~Plant = @<work_context>-plant )
+          AND work_center_text~Language = @sy-langu
+        INTO TABLE @DATA(work_center_names)
+        UP TO 2 ROWS.
+      IF lines( work_center_names ) = 1.
+        <work_context>-workcenter_name = work_center_names[ 1 ]-WorkCenterText.
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
+
 
   METHOD has_work_scope.
     SELECT FROM ztb_mob_usr_rol AS assignment
@@ -192,24 +225,23 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       WHERE assignment~user_uuid = @user_uuid
         AND role_hdr~status = 'A'
         AND work~is_active = 'A'
-        AND work~plant = @plant
         AND work~workcenter = @work_center
       INTO TABLE @DATA(scopes)
       UP TO 1 ROWS.
     result = xsdbool( scopes IS NOT INITIAL ).
   ENDMETHOD.
 
+
   METHOD has_func_op_scope.
-    IF user_uuid IS INITIAL OR func_id IS INITIAL OR plant IS INITIAL
+    IF user_uuid IS INITIAL OR func_id IS INITIAL
        OR work_center IS INITIAL OR ma_congdoan IS INITIAL
        OR effective_date IS INITIAL.
       RETURN.
     ENDIF.
 
     SELECT FROM ztb_mob_work
-      FIELDS bo_phan
-      WHERE plant = @plant
-        AND workcenter = @work_center
+      FIELDS DISTINCT bo_phan
+      WHERE workcenter = @work_center
         AND is_active = 'A'
         AND ( @work_id IS INITIAL OR work_id = @work_id )
       INTO TABLE @DATA(work_contexts)
@@ -220,18 +252,6 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
 
     DATA(operation_department) = work_contexts[ 1 ]-bo_phan.
     IF operation_department IS INITIAL.
-      RETURN.
-    ENDIF.
-
-    SELECT FROM ztb_md_congdoan
-      FIELDS bo_phan
-      WHERE ma_congdoan = @ma_congdoan
-        AND bo_phan = @operation_department
-        AND valid_from <= @effective_date
-        AND valid_to >= @effective_date
-      INTO TABLE @DATA(operation_masters)
-      UP TO 2 ROWS.
-    IF lines( operation_masters ) <> 1.
       RETURN.
     ENDIF.
 
@@ -249,7 +269,6 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
         AND role_hdr~status = 'A'
         AND role_func~func_id = @func_id
         AND work~is_active = 'A'
-        AND work~plant = @plant
         AND work~workcenter = @work_center
         AND ( @operation_department IS INITIAL
               OR work~bo_phan = @operation_department )
@@ -259,28 +278,6 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
     result = xsdbool( grants IS NOT INITIAL ).
   ENDMETHOD.
 
-  METHOD get_func_work_centers.
-    IF user_uuid IS INITIAL OR func_id IS INITIAL.
-      RETURN.
-    ENDIF.
-
-    SELECT FROM ztb_mob_usr_rol AS assignment
-      INNER JOIN ztb_mob_role AS role_hdr
-        ON role_hdr~role_id = assignment~role_id
-      INNER JOIN ztb_mob_rol_fnc AS role_func
-        ON role_func~role_id = assignment~role_id
-      INNER JOIN ztb_mob_rol_wrk AS role_work
-        ON role_work~role_id = assignment~role_id
-      INNER JOIN ztb_mob_work AS work
-        ON work~work_id = role_work~work_id
-      FIELDS DISTINCT work~workcenter
-      WHERE assignment~user_uuid = @user_uuid
-        AND role_hdr~status = 'A'
-        AND role_func~func_id = @func_id
-        AND work~is_active = 'A'
-        AND work~workcenter <> ' '
-      INTO TABLE @result.
-  ENDMETHOD.
 
   METHOD has_func_work_scope.
     IF user_uuid IS INITIAL OR func_id IS INITIAL OR work_id IS INITIAL.
@@ -307,17 +304,17 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
     result = xsdbool( grants IS NOT INITIAL ).
   ENDMETHOD.
 
+
   METHOD has_worker_op_scope.
-    IF user_uuid IS INITIAL OR worker_id IS INITIAL OR plant IS INITIAL
+    IF user_uuid IS INITIAL OR worker_id IS INITIAL
        OR work_center IS INITIAL OR ma_congdoan IS INITIAL
        OR effective_date IS INITIAL.
       RETURN.
     ENDIF.
 
     SELECT FROM ztb_mob_work
-      FIELDS bo_phan
-      WHERE plant = @plant
-        AND workcenter = @work_center
+      FIELDS DISTINCT bo_phan
+      WHERE workcenter = @work_center
         AND is_active = 'A'
         AND ( @work_id IS INITIAL OR work_id = @work_id )
       INTO TABLE @DATA(work_contexts)
@@ -358,7 +355,6 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
         AND account~status = 'A'
         AND role_hdr~status = 'A'
         AND work~is_active = 'A'
-        AND work~plant = @plant
         AND work~workcenter = @work_center
         AND work~bo_phan = @operation_department
         AND ( @work_id IS INITIAL OR work~work_id = @work_id )
@@ -366,6 +362,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       UP TO 1 ROWS.
     result = xsdbool( grants IS NOT INITIAL ).
   ENDMETHOD.
+
 
   METHOD has_function.
     "Khi kiểm tra quyền chỉ query tối đa một grant cần thiết. Không dựng toàn bộ
@@ -386,6 +383,7 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
       UP TO 1 ROWS.
     result = xsdbool( grants IS NOT INITIAL ).
   ENDMETHOD.
+
 
   METHOD validate_hash.
     DATA(now) = utclong_current( ).
@@ -431,12 +429,12 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
                       session_id = session-session_id ).
   ENDMETHOD.
 
+
   METHOD hash_password.
     IF iterations < 10000 OR iterations > 100000 OR salt IS INITIAL.
       "Giá trị iterations bị hỏng không được phép biến xác thực mật khẩu thành
       "bypass 0 vòng hoặc gây denial-of-service CPU không giới hạn.
-      RAISE EXCEPTION NEW zcx_mob_config(
-        config_key = 'INVALID_PASSWORD_KDF' ).
+      RAISE EXCEPTION NEW zcx_mob_config( config_key = 'INVALID_PASSWORD_KDF' ).
     ENDIF.
     DATA(hasher) = NEW zcl_mob_hasher(
       iv_secret_key = zcl_mob_sec_config=>get_password_secret( ) ).
@@ -447,19 +445,26 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
     hash = hash_value.
   ENDMETHOD.
 
+
   METHOD verify_worker_password.
     SELECT FROM ztb_mob_user
       FIELDS user_uuid, worker_id, status
       WHERE worker_id = @worker_id
       INTO TABLE @DATA(matched_users)
       UP TO 2 ROWS.
+    "Công nhân chưa có tài khoản mobile là lỗi dữ liệu quản trị, không phải sai
+    "mật khẩu: app báo riêng để giám sát không yêu cầu nhập lại mật khẩu.
+    IF matched_users IS INITIAL.
+      result-error_code = 'WORKER_NO_ACCOUNT'.
+      RETURN.
+    ENDIF.
     IF lines( matched_users ) <> 1.
       result-error_code = 'WORKER_AUTH_FAILED'.
       RETURN.
     ENDIF.
     DATA(user) = matched_users[ 1 ].
     IF user-status <> 'A'.
-      result-error_code = 'WORKER_AUTH_FAILED'.
+      result-error_code = 'WORKER_IS_INACTIVE'.
       RETURN.
     ENDIF.
 
@@ -493,5 +498,66 @@ CLASS zcl_mob_token_validator IMPLEMENTATION.
                       worker_user_uuid = user-user_uuid
                       worker_id = user-worker_id ).
   ENDMETHOD.
-ENDCLASS.
 
+
+  METHOD get_func_work_centers.
+    IF user_uuid IS INITIAL OR func_id IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM ztb_mob_usr_rol AS assignment
+      INNER JOIN ztb_mob_role AS role_hdr
+        ON role_hdr~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_fnc AS role_func
+        ON role_func~role_id = assignment~role_id
+      INNER JOIN ztb_mob_rol_wrk AS role_work
+        ON role_work~role_id = assignment~role_id
+      INNER JOIN ztb_mob_work AS work
+        ON work~work_id = role_work~work_id
+      FIELDS DISTINCT work~workcenter
+      WHERE assignment~user_uuid = @user_uuid
+        AND role_hdr~status = 'A'
+        AND role_func~func_id = @func_id
+        AND work~is_active = 'A'
+        AND work~workcenter <> ' '
+      INTO TABLE @result.
+  ENDMETHOD.
+
+  METHOD manager_covers_worker.
+    IF manager_uuid IS INITIAL OR func_id IS INITIAL OR worker_uuid IS INITIAL.
+      RETURN.
+    ENDIF.
+    "Bộ phận của quản lý: WorkID trong role đang cấp function của lệnh.
+    "Bộ phận của công nhân: WorkID trong bất kỳ role Active nào của tài khoản.
+    SELECT FROM ztb_mob_usr_rol AS mgr_assignment
+      INNER JOIN ztb_mob_role AS mgr_role
+        ON mgr_role~role_id = mgr_assignment~role_id
+      INNER JOIN ztb_mob_rol_fnc AS mgr_func
+        ON mgr_func~role_id = mgr_assignment~role_id
+      INNER JOIN ztb_mob_rol_wrk AS mgr_work
+        ON mgr_work~role_id = mgr_assignment~role_id
+      INNER JOIN ztb_mob_work AS mgr_scope
+        ON mgr_scope~work_id = mgr_work~work_id
+      INNER JOIN ztb_mob_work AS wrk_scope
+        ON wrk_scope~bo_phan = mgr_scope~bo_phan
+      INNER JOIN ztb_mob_rol_wrk AS wrk_work
+        ON wrk_work~work_id = wrk_scope~work_id
+      INNER JOIN ztb_mob_usr_rol AS wrk_assignment
+        ON wrk_assignment~role_id = wrk_work~role_id
+      INNER JOIN ztb_mob_role AS wrk_role
+        ON wrk_role~role_id = wrk_assignment~role_id
+      FIELDS mgr_scope~bo_phan
+      WHERE mgr_assignment~user_uuid = @manager_uuid
+        AND mgr_role~status = 'A'
+        AND mgr_func~func_id = @func_id
+        AND mgr_scope~is_active = 'A'
+        AND mgr_scope~bo_phan <> ' '
+        AND wrk_assignment~user_uuid = @worker_uuid
+        AND wrk_role~status = 'A'
+        AND wrk_scope~is_active = 'A'
+      INTO TABLE @DATA(shared_departments)
+      UP TO 1 ROWS.
+    result = xsdbool( shared_departments IS NOT INITIAL ).
+  ENDMETHOD.
+
+ENDCLASS.

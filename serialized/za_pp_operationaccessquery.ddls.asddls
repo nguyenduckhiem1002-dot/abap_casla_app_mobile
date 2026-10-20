@@ -15,4 +15,8 @@ define abstract entity ZA_PP_OperationAccessQuery
   ShiftID : abap.char(10);
   @EndUserText.label: 'Thời điểm quét UTC'
   ExecutedAt : abap.utclong;
+    @EndUserText.label: 'Ngày quét (giờ địa phương)'
+  EntryDate : abap.dats;
+  @EndUserText.label: 'Giờ quét (giờ địa phương)'
+  EntryTime : abap.tims;
 }

@@ -14,6 +14,8 @@ define abstract entity ZA_PP_OperationAccessResult
   Plant                   : abap.char(4);
   @EndUserText.label      : 'Trung tâm làm việc'
   WorkCenter              : abap.char(8);
+  @EndUserText.label      : 'Tên trung tâm làm việc'
+  WorkCenterName          : abap.char(100);
   @EndUserText.label      : 'Vị trí làm việc'
   WorkID                  : abap.char(30);
   @EndUserText.label      : 'Sản lượng công đoạn'
@@ -41,9 +43,12 @@ define abstract entity ZA_PP_OperationAccessResult
   @EndUserText.label      : 'Thu hồi'
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   RecalledQuantity        : abap.quan(15,3);
-  @EndUserText.label      : 'Đã xác nhận'
+  @EndUserText.label      : 'Số lượng đạt'
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   CompletedQuantity       : abap.quan(15,3);
+  @EndUserText.label      : 'Số lượng lỗi'
+  @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+  DefectQuantity          : abap.quan(15,3);
   @EndUserText.label      : 'Còn phải hoàn thành'
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   RemainingQuantity       : abap.quan(15,3);
@@ -61,6 +66,13 @@ define abstract entity ZA_PP_OperationAccessResult
   WorkDate                : abap.dats;
   @EndUserText.label      : 'Thời điểm quét UTC'
   ExecutedAt              : abap.utclong;
+
+  @EndUserText.label      : 'Ngày hạch toán'
+  PostingDate             : abap.dats;
+  @EndUserText.label      : 'Ngày nhập'
+  EntryDate               : abap.dats;
+  @EndUserText.label      : 'Giờ nhập'
+  EntryTime               : abap.tims;
 
 
 }

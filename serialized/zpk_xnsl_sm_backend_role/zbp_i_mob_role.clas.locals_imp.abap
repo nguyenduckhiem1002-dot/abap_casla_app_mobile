@@ -4,6 +4,8 @@ CLASS lhc_mobilerole DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING REQUEST requested_authorizations FOR MobileRole RESULT result.
     METHODS validateRole FOR VALIDATE ON SAVE
       IMPORTING keys FOR MobileRole~validateRole.
+    METHODS uploadExcel FOR MODIFY
+      IMPORTING keys FOR ACTION MobileRole~uploadExcel RESULT result.
 ENDCLASS.
 
 CLASS lhc_mobilerole IMPLEMENTATION.
@@ -20,6 +22,78 @@ CLASS lhc_mobilerole IMPLEMENTATION.
     IF requested_authorizations-%delete = if_abap_behv=>mk-on.
       result-%delete = if_abap_behv=>auth-unauthorized.
     ENDIF.
+    IF requested_authorizations-%action-uploadExcel = if_abap_behv=>mk-on.
+      result-%action-uploadExcel = if_abap_behv=>auth-allowed.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD uploadExcel.
+    IF keys IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
+    DATA(parsed) = VALUE zcl_mob_role_upload=>ty_result( ).
+    IF lines( keys ) > 1.
+      APPEND 'Mỗi yêu cầu chỉ được tải một file' TO parsed-errors.
+    ELSEIF keys[ 1 ]-%param-fileContent IS INITIAL.
+      APPEND 'Nội dung file Excel là bắt buộc' TO parsed-errors.
+    ELSE.
+      parsed = zcl_mob_role_upload=>parse( keys[ 1 ]-%param-fileContent ).
+    ENDIF.
+    IF parsed-errors IS NOT INITIAL.
+      APPEND VALUE #( %cid = cid ) TO failed-mobilerole.
+      LOOP AT parsed-errors INTO DATA(error_text).
+        APPEND VALUE #( %cid = cid
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error text = error_text ) )
+          TO reported-mobilerole.
+      ENDLOOP.
+      RETURN.
+    ENDIF.
+
+    "Chức danh đã có thì chỉ cập nhật tên/trạng thái; RoleID không đổi được.
+    DATA role_creates TYPE TABLE FOR CREATE zi_mob_role.
+    DATA role_updates TYPE TABLE FOR UPDATE zi_mob_role.
+    LOOP AT parsed-roles ASSIGNING FIELD-SYMBOL(<role>).
+      IF <role>-is_existing = abap_true.
+        APPEND VALUE #( RoleID = <role>-role_id RoleName = <role>-role_name
+          Status = <role>-status ) TO role_updates.
+      ELSE.
+        APPEND VALUE #( %cid = <role>-cid RoleID = <role>-role_id RoleName = <role>-role_name
+          Status = <role>-status ) TO role_creates.
+      ENDIF.
+    ENDLOOP.
+
+    "Chức danh mới tham chiếu bằng %cid_ref, chức danh đã có tham chiếu bằng RoleID.
+    MODIFY ENTITIES OF zi_mob_role IN LOCAL MODE
+      ENTITY MobileRole
+        CREATE FIELDS ( RoleID RoleName Status )
+        WITH role_creates
+      ENTITY MobileRole
+        UPDATE FIELDS ( RoleName Status )
+        WITH role_updates
+      ENTITY MobileRole
+        CREATE BY \_Functions FIELDS ( FuncID )
+        WITH VALUE #( FOR func IN parsed-functions
+          ( %cid_ref = COND #( WHEN func-role_is_new = abap_true THEN func-role_cid )
+            RoleID = COND #( WHEN func-role_is_new = abap_false THEN func-role_id )
+            %target = VALUE #( ( %cid = func-cid FuncID = func-item_id ) ) ) )
+      ENTITY MobileRole
+        CREATE BY \_WorkAssignments FIELDS ( WorkID )
+        WITH VALUE #( FOR work IN parsed-works
+          ( %cid_ref = COND #( WHEN work-role_is_new = abap_true THEN work-role_cid )
+            RoleID = COND #( WHEN work-role_is_new = abap_false THEN work-role_id )
+            %target = VALUE #( ( %cid = work-cid WorkID = work-item_id ) ) ) )
+      FAILED DATA(failed_upload) REPORTED DATA(reported_upload).
+    IF failed_upload IS NOT INITIAL.
+      failed = CORRESPONDING #( failed_upload ).
+      reported = CORRESPONDING #( reported_upload ).
+      RETURN.
+    ENDIF.
+    result = VALUE #( ( %cid = cid %param = VALUE #(
+      RoleCount = lines( parsed-roles )
+      FunctionCount = lines( parsed-functions )
+      WorkCount = lines( parsed-works ) ) ) ).
   ENDMETHOD.
 
   METHOD validateRole.
@@ -145,3 +219,4 @@ CLASS lhc_mobilerolework IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 ENDCLASS.
+

@@ -20,6 +20,8 @@ define view entity ZR_PP_EmpAlloc
       completed_qty        as CompletedQuantity,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       remaining_qty        as RemainingQuantity,
+      @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+      defect_qty        as DefectQuantity,
       uom                  as UnitOfMeasure,
       last_execution_date  as LastExecutionDate,
       last_sync_at         as LastSyncAt,

@@ -27,8 +27,10 @@ define root view entity ZC_PP_OpAlloc_Adm
       TotalAssignedQuantity,
       @EndUserText.label: 'Tổng đã thu hồi'
       TotalRecalledQuantity,
-      @EndUserText.label: 'Tổng đã xác nhận'
+      @EndUserText.label: 'Tổng số lượng đạt'
       TotalCompletedQuantity,
+      @EndUserText.label: 'Tổng số lượng lỗi'
+      TotalDefectQuantity,
       @EndUserText.label: 'Tổng còn lại'
       TotalRemainingQuantity,
       @EndUserText.label: 'Đơn vị tính'

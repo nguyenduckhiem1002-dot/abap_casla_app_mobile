@@ -10,6 +10,7 @@ use etag
   use update;
   use action Edit;
   use action Activate;
+  use action uploadExcel;
   use action Discard;
   use action Resume;
   use action Prepare;

@@ -14,6 +14,9 @@ define abstract entity ZA_PP_SyncStatusResult
   OriginPositionID : abap.char(10);
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   Quantity : abap.quan(15,3);
+  @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+  @EndUserText.label: 'Số lượng lỗi'
+  DefectQuantity : abap.quan(15,3);
   UnitOfMeasure : abap.unit(3);
   ExecutionDate : abap.dats;
   @EndUserText.label: 'Mã ca'
@@ -32,4 +35,10 @@ define abstract entity ZA_PP_SyncStatusResult
   ShiftValidFrom : abap.dats;
   ErrorCode : abap.char(40);
   Message : abap.char(255);
+    @EndUserText.label: 'Ngày hạch toán'
+  PostingDate : abap.dats;
+  @EndUserText.label: 'Ngày nhập'
+  EntryDate : abap.dats;
+  @EndUserText.label: 'Giờ nhập'
+  EntryTime : abap.tims;
 }

@@ -30,7 +30,7 @@ authorization master ( global )
   LastChangedAt,
   LocalLastChangedAt;
 
-//  field ( readonly : update ) WorkerID;
+  //  field ( readonly : update ) WorkerID;
 
   association _Credential
   {
@@ -73,6 +73,10 @@ authorization master ( global )
 
   static action changePassword
     parameter ZA_MOB_ChangePwd;
+
+    static action uploadExcel
+    parameter zabs_file_crud_poc
+    result [1] ZA_MOB_UploadUsersResult;
 
   draft action Edit;
   draft action Activate optimized;

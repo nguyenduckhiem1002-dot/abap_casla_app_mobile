@@ -20,6 +20,11 @@ etag master LocalLastChangedAt
   association _Functions { create; with draft; }
   association _WorkAssignments { create; with draft; }
   validation validateRole on save { create; update; field RoleID, RoleName, Status; }
+
+  static action uploadExcel
+    parameter zabs_file_crud_poc
+    result [1] ZA_MOB_UploadRoleResult;
+
   draft action Edit;
   draft action Activate optimized;
   draft action Discard;

@@ -43,6 +43,9 @@ define abstract entity ZA_PP_HistEntry
   @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
   @EndUserText.label      : 'Số lượng'
   Quantity                : abap.quan(15,3);
+  @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+  @EndUserText.label      : 'Số lượng lỗi'
+  DefectQuantity          : abap.quan(15,3);
   @EndUserText.label      : 'Đơn vị tính'
   UnitOfMeasure           : abap.unit(3);
   @EndUserText.label      : 'Trạng thái giao dịch'
@@ -61,4 +64,11 @@ define abstract entity ZA_PP_HistEntry
   ShiftTimeZone           : abap.char(6);
   @EndUserText.label      : 'Phiên bản ca hiệu lực từ'
   ShiftValidFrom          : abap.dats;
+
+  @EndUserText.label      : 'Ngày hạch toán'
+  PostingDate             : abap.dats;
+  @EndUserText.label      : 'Ngày nhập'
+  EntryDate               : abap.dats;
+  @EndUserText.label      : 'Giờ nhập'
+  EntryTime               : abap.tims;
 }

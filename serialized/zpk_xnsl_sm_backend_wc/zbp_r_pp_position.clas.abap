@@ -1,9 +1,0 @@
-CLASS zbp_r_pp_position DEFINITION
-  PUBLIC
-  ABSTRACT
-  FINAL
-  FOR BEHAVIOR OF zr_pp_position.
-ENDCLASS.
-
-CLASS zbp_r_pp_position IMPLEMENTATION.
-ENDCLASS.

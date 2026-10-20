@@ -22,6 +22,8 @@ define root view entity ZR_PP_OpAlloc
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       _EmployeeAllocationSummary.TotalCompletedQuantity as TotalCompletedQuantity,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+      _EmployeeAllocationSummary.TotalDefectQuantity    as TotalDefectQuantity,
+      @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       _EmployeeAllocationSummary.TotalRemainingQuantity as TotalRemainingQuantity,
       uom                                               as UnitOfMeasure,
       operation_status                                  as OperationStatus,

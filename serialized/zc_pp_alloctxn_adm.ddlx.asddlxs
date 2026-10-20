@@ -17,6 +17,7 @@ annotate entity ZC_PP_AllocTxn_Adm with
     position: 10
   }]
 
+
   @EndUserText.label: 'Lệnh sản xuất'
   @UI.lineItem: [{ position: 10 }]
   @UI.selectionField: [{ position: 10 }]
@@ -35,23 +36,36 @@ annotate entity ZC_PP_AllocTxn_Adm with
   @UI.identification: [{ position: 30 }]
   MaCongDoan;
 
-  @EndUserText.label: 'Nhà máy'
-  @UI.lineItem: [{ position: 40 }]
-  @UI.selectionField: [{ position: 40 }]
-  @UI.identification: [{ position: 40 }]
-  Plant;
+  //  @EndUserText.label: 'Nhà máy'
+  //  @UI.lineItem: [{ position: 40 }]
+  //  @UI.selectionField: [{ position: 40 }]
+  //  @UI.identification: [{ position: 40 }]
+  //  Plant;
 
-  @EndUserText.label: 'Trung tâm làm việc'
+  @EndUserText.label: 'WorkCenter'
   @UI.lineItem: [{ position: 50 }]
   @UI.selectionField: [{ position: 50 }]
   @UI.identification: [{ position: 50 }]
   WorkCenter;
+
+  @EndUserText.label: 'Bộ Phận'
+  @UI.lineItem: [{ position: 60 }]
+  @UI.selectionField: [{ position: 60 }]
+  @UI.identification: [{ position: 60 }]
+  WorkID;
+
 
   @EndUserText.label: 'Loại giao dịch'
   @UI.lineItem: [{ position: 60 }]
   @UI.selectionField: [{ position: 90 }]
   @UI.identification: [{ position: 60 }]
   TransactionType;
+
+  @EndUserText.label: 'Người tạo'
+  @UI.lineItem: [{ position: 60 }]
+  @UI.selectionField: [{ position: 60 }]
+  @UI.identification: [{ position: 60 }]
+  ActorWorkerID;
 
   @EndUserText.label: 'Mã nhân công'
   @UI.lineItem: [{ position: 70 }]
@@ -64,15 +78,21 @@ annotate entity ZC_PP_AllocTxn_Adm with
   @UI.identification: [{ position: 75 }]
   PositionID;
 
-  @EndUserText.label: 'Vị trí gốc'
-  @UI.lineItem: [{ position: 76 }]
-  @UI.identification: [{ position: 76 }]
-  OriginPositionID;
+  @EndUserText.label: 'Mã máy'
+  @UI.lineItem: [{ position: 77 }]
+  @UI.identification: [{ position: 77 }]
+  MachineID;
+
 
   @EndUserText.label: 'Số lượng'
   @UI.lineItem: [{ position: 80 }]
   @UI.identification: [{ position: 80 }]
   Quantity;
+
+  @EndUserText.label: 'Số lượng lỗi'
+  @UI.lineItem: [{ position: 85 }]
+  @UI.identification: [{ position: 85 }]
+  DefectQuantity;
 
   @EndUserText.label: 'Đơn vị tính'
   @UI.lineItem: [{ position: 90 }]
@@ -131,6 +151,8 @@ annotate entity ZC_PP_AllocTxn_Adm with
   @UI.identification: [{ position: 190 }]
   ReasonCode;
 
+
+
   @EndUserText.label: 'Loại giao dịch gốc'
   @UI.identification: [{ position: 200 }]
   OriginalTransactionType;
@@ -167,9 +189,20 @@ annotate entity ZC_PP_AllocTxn_Adm with
   @UI.identification: [{ position: 280 }]
   ShiftValidFrom;
 
-  @EndUserText.label: 'Người thực hiện'
-  @UI.identification: [{ position: 290 }]
-  ActorUserUUID;
+  @EndUserText.label: 'Posting Date'
+  @UI.lineItem: [{ position: 101 }]
+  @UI.identification: [{ position: 101 }]
+  PostingDate;
+
+  @EndUserText.label: 'Entry Date'
+  @UI.lineItem: [{ position: 102 }]
+  @UI.identification: [{ position: 102 }]
+  EntryDate;
+
+  @EndUserText.label: 'Entry Time'
+  @UI.lineItem: [{ position: 103 }]
+  @UI.identification: [{ position: 103 }]
+  EntryTime;
 
   @EndUserText.label: 'Phiên thực hiện'
   @UI.identification: [{ position: 300 }]

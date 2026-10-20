@@ -28,12 +28,6 @@ annotate entity ZC_MOB_Work_Adm with
   @UI.identification: [{ position: 20 }]
   WorkName;
 
-  @EndUserText.label: 'Plant'
-  @UI.selectionField: [{ position: 30 }]
-  @UI.lineItem: [{ position: 30 }]
-  @UI.identification: [{ position: 30 }]
-  Plant;
-
   @EndUserText.label: 'Work Center'
   @UI.selectionField: [{ position: 40 }]
   @UI.lineItem: [{ position: 40 }]

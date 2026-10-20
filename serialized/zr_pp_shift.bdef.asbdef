@@ -14,11 +14,12 @@ etag master LocalLastChangedAt
   update;
   delete;
   field ( mandatory : create, readonly : update )
-  Plant, ShiftID, ValidFrom;
+  WorkCenter, ShiftID, ValidFrom;
 
   field ( mandatory : create )
   ShiftName, SAPTimeZone, ValidTo, IsActive;
 
+  // Derived from WorkCenter; not part of the shift key or lookup.
   field ( readonly )
   CreatedBy,
   CreatedAt,
@@ -30,7 +31,7 @@ etag master LocalLastChangedAt
   {
     create;
     update;
-    field Plant, ShiftID, ValidFrom, ShiftName,
+    field WorkCenter, ShiftID, ValidFrom, ShiftName,
     StartTime, EndTime, EndDayOffset,
     SAPTimeZone, ValidTo, IsActive;
   }
@@ -47,7 +48,7 @@ etag master LocalLastChangedAt
 
   mapping for ztb_pp_shift
     {
-      Plant              = plant;
+      WorkCenter         = work_center;
       ShiftID            = shift_id;
       ValidFrom          = valid_from;
       ShiftName          = shift_name;

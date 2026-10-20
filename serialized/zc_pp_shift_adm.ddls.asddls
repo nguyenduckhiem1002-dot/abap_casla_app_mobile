@@ -6,13 +6,13 @@ define root view entity ZC_PP_Shift_Adm
   provider contract transactional_query
   as projection on ZR_PP_Shift
 {
-  @EndUserText.label: 'Nhà máy'
-  @Consumption.valueHelpDefinition: [{ entity: { name: 'I_Plant', element: 'Plant' } }]
+  @EndUserText.label: 'Xưởng'
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'I_Workcenter', element: 'WorkCenter' } }]
   @UI.selectionField: [{ position: 10 }]
-  key Plant,
+  key WorkCenter,
   @EndUserText.label: 'Mã ca'
   @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Shift', element: 'ShiftID' },
-    additionalBinding: [{ localElement: 'Plant', element: 'Plant', usage: #FILTER }] }]
+    additionalBinding: [{ localElement: 'WorkCenter', element: 'WorkCenter', usage: #FILTER }] }]
   @Search.defaultSearchElement: true
   @ObjectModel.text.element: ['ShiftName']
   @UI.selectionField: [{ position: 20 }]

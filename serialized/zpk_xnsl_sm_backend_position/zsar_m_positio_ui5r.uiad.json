@@ -1,0 +1,34 @@
+{
+  "formatVersion": "2",
+  "header": {
+    "description": "An SAP Fiori application.",
+    "originalLanguage": "vi",
+    "abapLanguageVersion": "cloudDevelopment"
+  },
+  "generalInformation": {
+    "appType": "ui5",
+    "catalogId": "SAP_TC_UI5_REPO_UIAD",
+    "targetMappingTitle": "Quản Lý Vị Trí"
+  },
+  "ui5AppDetails": {
+    "appId": "manageposison"
+  },
+  "navigation": {
+    "targetMappingId": "ZSAR_M_POSITIO_UI5R_TM",
+    "semanticObject": "ZSO_M_POSITION",
+    "action": "display",
+    "desktop": true,
+    "tablet": true,
+    "phone": true
+  },
+  "tiles": [
+    {
+      "id": "ZSAR_M_POSITIO_UI5R_AL",
+      "tileType": "static",
+      "isDefault": true,
+      "standard": {
+        "title": "Quản Lý Vị Trí"
+      }
+    }
+  ]
+}

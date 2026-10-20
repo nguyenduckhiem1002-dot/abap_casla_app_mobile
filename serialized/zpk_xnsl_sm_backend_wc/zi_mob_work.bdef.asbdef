@@ -14,10 +14,15 @@ etag master LocalLastChangedAt
   create;
   update;
   delete;
+
+  static action uploadExcel
+    parameter zabs_file_crud_poc
+    result [1] ZA_MOB_UploadWorkResult;
+
   field ( mandatory : create, readonly : update ) WorkID;
   field ( readonly ) LastChangedAt, LocalLastChangedAt;
   validation validateWork on save
-  { create; update; field WorkID, WorkName, Plant, WorkCenter, IsActive; }
+  { create; update; field WorkID, WorkName, WorkCenter, IsActive; }
   draft action Edit;
   draft action Activate optimized;
   draft action Discard;

@@ -13,6 +13,8 @@ define view entity ZI_PP_EmpAlloc_Agg
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       sum( completed_qty )           as TotalCompletedQuantity,
       @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
+      sum( defect_qty )              as TotalDefectQuantity,
+      @Semantics.quantity.unitOfMeasure: 'UnitOfMeasure'
       sum( remaining_qty )           as TotalRemainingQuantity
 }
 group by

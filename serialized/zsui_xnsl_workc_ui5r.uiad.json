@@ -8,7 +8,7 @@
   "generalInformation": {
     "appType": "ui5",
     "catalogId": "SAP_TC_UI5_REPO_UIAD",
-    "targetMappingTitle": "Quản lý vị trí làm việc"
+    "targetMappingTitle": "Quản lý bộ phận"
   },
   "ui5AppDetails": {
     "appId": "manageworkcontext"
@@ -27,7 +27,7 @@
       "tileType": "static",
       "isDefault": true,
       "standard": {
-        "title": "Quản lý vị trí làm việc"
+        "title": "Quản lý bộ phận"
       }
     }
   ]

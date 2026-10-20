@@ -15,8 +15,7 @@ define root view entity ZC_MOB_Work_Adm
   @Consumption.valueHelpDefinition: [{ entity: { name: 'I_Plant', element: 'Plant' } }]
       Plant,
   @EndUserText.label: 'Trung tâm làm việc'
-  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_WorkCenter_VH', element: 'WorkCenter' },
-    additionalBinding: [{ localElement: 'Plant', element: 'Plant', usage: #FILTER_AND_RESULT }] }]
+  @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_WorkCenter_VH', element: 'WorkCenter' }}]
       WorkCenter,
   @EndUserText.label: 'Bộ phận'
       BoPhan,

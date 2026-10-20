@@ -7,6 +7,7 @@ define abstract entity ZA_MOB_WorkContext
   Plant : abap.char(4);
   plantName: abap.string( 0 );
   WorkCenter : abap.char(8);
+  WorkCenterName:abap.string( 0 );
   BoPhan : abap.char(60);
   Location : abap.char(100);
 }

@@ -13,9 +13,6 @@ define view entity ZI_MOB_Work_VH
       @Search.defaultSearchElement: true
       @UI.lineItem: [{ position: 20 }]
       work_name  as WorkName,
-      @EndUserText.label: 'Plant'
-      @UI.lineItem: [{ position: 30 }]
-      plant      as Plant,
       @EndUserText.label: 'Work Center'
       @UI.lineItem: [{ position: 40 }]
       workcenter as WorkCenter,

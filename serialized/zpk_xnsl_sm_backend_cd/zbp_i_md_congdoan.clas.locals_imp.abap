@@ -2,6 +2,8 @@ CLASS lhc_congdoan DEFINITION INHERITING FROM cl_abap_behavior_handler.
   PRIVATE SECTION.
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
       IMPORTING REQUEST requested_authorizations FOR CongDoan RESULT result.
+    METHODS uploadExcel FOR MODIFY
+      IMPORTING keys FOR ACTION CongDoan~uploadExcel RESULT result.
     METHODS validateMaster FOR VALIDATE ON SAVE
       IMPORTING keys FOR CongDoan~validateMaster.
 ENDCLASS.
@@ -19,6 +21,50 @@ CLASS lhc_congdoan IMPLEMENTATION.
     IF requested_authorizations-%delete = if_abap_behv=>mk-on.
       result-%delete = if_abap_behv=>auth-allowed.
     ENDIF.
+    IF requested_authorizations-%action-uploadExcel = if_abap_behv=>mk-on.
+      result-%action-uploadExcel = if_abap_behv=>auth-allowed.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD uploadExcel.
+    IF keys IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA(cid) = CONV string( keys[ 1 ]-%cid ).
+    DATA(upload_errors) = VALUE string_table( ).
+    IF lines( keys ) > 1.
+      APPEND 'Mỗi yêu cầu chỉ được tải một file' TO upload_errors.
+    ELSEIF keys[ 1 ]-%param-fileContent IS INITIAL.
+      APPEND 'Nội dung file Excel là bắt buộc' TO upload_errors.
+    ELSE.
+      zcl_md_cd_upload=>parse( EXPORTING content = keys[ 1 ]-%param-fileContent
+                               IMPORTING rows = DATA(rows) errors = upload_errors ).
+    ENDIF.
+    IF upload_errors IS NOT INITIAL.
+      APPEND VALUE #( %cid = cid ) TO failed-congdoan.
+      LOOP AT upload_errors INTO DATA(error_text).
+        APPEND VALUE #( %cid = cid
+          %msg = new_message_with_text(
+            severity = if_abap_behv_message=>severity-error text = error_text ) )
+          TO reported-congdoan.
+      ENDLOOP.
+      RETURN.
+    ENDIF.
+
+    MODIFY ENTITIES OF zi_md_congdoan IN LOCAL MODE
+      ENTITY CongDoan
+        CREATE FIELDS ( MaCongDoan ValidFrom BoPhan TenCongDoan DonGiaXM DonGiaGC ValidTo )
+        WITH VALUE #( FOR row IN rows
+          ( %cid = row-cid MaCongDoan = row-ma_congdoan ValidFrom = row-valid_from
+            BoPhan = row-bo_phan TenCongDoan = row-ten_congdoan
+            DonGiaXM = row-dongia_xm DonGiaGC = row-dongia_gc ValidTo = row-valid_to ) )
+      FAILED DATA(failed_create) REPORTED DATA(reported_create).
+    IF failed_create IS NOT INITIAL.
+      failed = CORRESPONDING #( failed_create ).
+      reported = CORRESPONDING #( reported_create ).
+      RETURN.
+    ENDIF.
+    result = VALUE #( ( %cid = cid %param-CreatedCount = lines( rows ) ) ).
   ENDMETHOD.
 
   METHOD validateMaster.
@@ -83,4 +129,5 @@ CLASS lhc_congdoan IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 ENDCLASS.
+
 

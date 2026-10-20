@@ -11,8 +11,6 @@ define view entity ZI_MOB_Work_Hist_VH
   @EndUserText.label: 'Tên vị trí làm việc'
   @Search.defaultSearchElement: true
   work_name as WorkName,
-  @EndUserText.label: 'Nhà máy'
-  plant as Plant,
   @EndUserText.label: 'Trung tâm làm việc'
   workcenter as WorkCenter,
   @EndUserText.label: 'Bộ phận'

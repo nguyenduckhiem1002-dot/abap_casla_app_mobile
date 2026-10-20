@@ -8,14 +8,14 @@
   "generalInformation": {
     "appType": "ui5",
     "catalogId": "SAP_TC_UI5_REPO_UIAD",
-    "targetMappingTitle": "Quản Lý Tài Khoản XNSL"
+    "targetMappingTitle": "Quản lý phân quyền XNSL"
   },
   "ui5AppDetails": {
     "appId": "manageaccount"
   },
   "navigation": {
     "targetMappingId": "ZSUI_USER_XNSL_UI5R_TM",
-    "semanticObject": "ZSO_USER_MOBILE_XNSL",
+    "semanticObject": "ZSO_ROLE_XNSL",
     "action": "display",
     "desktop": true,
     "tablet": true,
@@ -27,7 +27,7 @@
       "tileType": "static",
       "isDefault": true,
       "standard": {
-        "title": "Quản Lý Tài Khoản XNSL"
+        "title": "Quản lý phân quyền XNSL"
       }
     }
   ]
