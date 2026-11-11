@@ -73,6 +73,12 @@ annotate entity ZC_PP_AllocTxn_Adm with
   @UI.identification: [{ position: 70 }]
   WorkerID;
 
+  @EndUserText.label: 'Bộ phận công nhân'
+  @UI.lineItem: [{ position: 72 }]
+  @UI.selectionField: [{ position: 65 }]
+  @UI.identification: [{ position: 72 }]
+  WorkerBoPhan;
+
   @EndUserText.label: 'Vị trí hiện tại'
   @UI.lineItem: [{ position: 75 }]
   @UI.identification: [{ position: 75 }]
@@ -81,7 +87,7 @@ annotate entity ZC_PP_AllocTxn_Adm with
   @EndUserText.label: 'Mã máy'
   @UI.lineItem: [{ position: 77 }]
   @UI.identification: [{ position: 77 }]
-  MachineID;
+  PositionMachineID;
 
 
   @EndUserText.label: 'Số lượng'

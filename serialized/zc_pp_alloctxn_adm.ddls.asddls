@@ -7,6 +7,26 @@ define root view entity ZC_PP_AllocTxn_Adm
   // Tài khoản mobile chỉ dùng để hiển thị mã nhân công; không lọc quyền xem.
     left outer join ztb_mob_user     as actor    on actor.user_uuid = txn.actor_user_uuid
     left outer join ztb_mob_user     as verifier on verifier.user_uuid = txn.verified_worker_user_uuid
+
+  // Máy chạy ở vị trí đúng lúc ghi giao dịch (CREATED_AT, UTC) theo lịch sử
+  // ZTB_PP_MACH_HIST: đoạn bắt đầu trước/đúng lúc đó và chưa kết thúc tại lúc
+  // đó. Các đoạn của một vị trí không chồng nhau nên join ra tối đa một dòng.
+    left outer join ztb_pp_mach_hist as machine_hist on  machine_hist.work_center = op.work_center
+                                                     and machine_hist.position_id = txn.position_id
+                                                     and machine_hist.valid_from <= txn.created_at
+                                                     and ( machine_hist.valid_to  = 0
+                                                        or machine_hist.valid_to  > txn.created_at )
+
+  // Bộ phận công nhân theo Bảng khai báo nhân công theo xưởng: cùng Work Center,
+  // Plant, mã công nhân và Posting Date trong khoảng Từ ngày - Đến ngày (Đến ngày
+  // trống = còn hiệu lực). BO khai báo chặn chồng hiệu lực theo Work Center +
+  // Plant + mã công nhân nên join ra tối đa một dòng; không khớp thì để trống.
+    left outer join ztb_kb_nhancong  as worker_decl  on  worker_decl.work_center = op.work_center
+                                                     and worker_decl.plant       = op.plant
+                                                     and worker_decl.worker_id   = txn.worker_id
+                                                     and worker_decl.from_date  <= txn.posting_date
+                                                     and ( worker_decl.to_date   = abap.dats'00000000'
+                                                        or worker_decl.to_date  >= txn.posting_date )
 {
       @EndUserText.label: 'Mã giao dịch'
   key txn.transaction_uuid          as TransactionUUID,
@@ -17,8 +37,11 @@ define root view entity ZC_PP_AllocTxn_Adm
       @EndUserText.label: 'Mã đồng bộ'
       txn.sync_item_uuid            as SyncItemUUID,
       @EndUserText.label: 'Lệnh sản xuất'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_ProductionOrder_VH', element: 'ProductionOrder' } }]
       op.production_order           as ProductionOrder,
       @EndUserText.label: 'Công đoạn lệnh sản xuất'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_OrderOperation_VH', element: 'Operation' },
+        additionalBinding: [{ localElement: 'ProductionOrder', element: 'ProductionOrder', usage: #FILTER }] }]
       op.operation_no               as Operation,
       @EndUserText.label: 'Mã công đoạn'
       @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MD_CongDoan_Hist_VH', element: 'MaCongDoan' } }]
@@ -31,8 +54,10 @@ define root view entity ZC_PP_AllocTxn_Adm
         additionalBinding: [{ localElement: 'Plant', element: 'Plant', usage: #FILTER }] }]
       op.work_center                as WorkCenter,
       @EndUserText.label: 'Loại giao dịch'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_TxnType_VH', element: 'TransactionType' } }]
       txn.transaction_type          as TransactionType,
       @EndUserText.label: 'Loại giao dịch gốc'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_TxnType_VH', element: 'TransactionType' } }]
       txn.original_transaction_type as OriginalTransactionType,
       @EndUserText.label: 'Nhân công chuyển'
       @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Worker_Hist_VH', element: 'WorkerID' } }]
@@ -43,6 +68,8 @@ define root view entity ZC_PP_AllocTxn_Adm
       @EndUserText.label: 'Mã nhân công'
       @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Worker_Hist_VH', element: 'WorkerID' } }]
       txn.worker_id                 as WorkerID,
+      @EndUserText.label: 'Bộ phận công nhân'
+      worker_decl.bo_phan           as WorkerBoPhan,
       @EndUserText.label: 'Vị trí làm việc'
       @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_MOB_Work_Hist_VH', element: 'WorkID' } }]
       txn.work_id                   as WorkID,
@@ -84,12 +111,14 @@ define root view entity ZC_PP_AllocTxn_Adm
       @EndUserText.label: 'Entry Time'
       txn.entry_time                as EntryTime,
       @EndUserText.label: 'Trạng thái giao dịch'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_TxnStatus_VH', element: 'TransactionStatus' } }]
       txn.transaction_status        as TransactionStatus,
       @EndUserText.label: 'Mã lý do'
       txn.reason_code               as ReasonCode,
       @EndUserText.label: 'Nội dung lý do'
       txn.reason_text               as ReasonText,
       @EndUserText.label: 'Nguồn giao dịch'
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_SourceChannel_VH', element: 'SourceChannel' } }]
       txn.source_channel            as SourceChannel,
       @EndUserText.label: 'Người thực hiện'
       @Consumption.valueHelpDefinition: [{ entity: { name: 'ZI_PP_Worker_Hist_VH', element: 'WorkerID' } }]
@@ -114,8 +143,10 @@ define root view entity ZC_PP_AllocTxn_Adm
       @Semantics.systemDateTime.createdAt: true
       @EndUserText.label: 'Thời điểm tạo'
       txn.created_at                as CreatedAt,
-      txn.machine_id                as MachineID
-      
-      
-
+      @EndUserText.label: 'Mã máy đồng bộ'
+      txn.machine_id                as MachineID,
+      // Máy theo lịch sử vị trí; giao dịch trước khi có lịch sử (hoặc không có
+      // vị trí) thì lấy máy đóng dấu lúc post trên chính dòng ledger.
+      @EndUserText.label: 'Mã máy'
+      coalesce( machine_hist.machine_id, txn.machine_id ) as PositionMachineID
 }
